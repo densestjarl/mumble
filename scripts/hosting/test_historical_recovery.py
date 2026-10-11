@@ -146,6 +146,7 @@ class HistoricalTests(unittest.TestCase):
             secure.getpeercert.return_value = b'archived-leaf'
             history.local_tls_ready(64738, certificate)
         self.assertFalse(context.check_hostname)
+        self.assertEqual(context.minimum_version, history.ssl.TLSVersion.TLSv1_2)
 
     def test_failed_listener_never_qualifies_readiness(self):
         with patch.object(history.ssl, 'create_default_context'), \

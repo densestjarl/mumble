@@ -1,7 +1,6 @@
 {
   "integration_head_before_summary": "0be4ff3b9570a1263b1113f8ff5a69e222f8b490",
   "qualified_runtime_source": "5eadce0753b634147f97746e192ddef613019a02",
-  "all_non_document_inputs_match_qualified_source": true,
   "base": "master",
   "base_head": "7fc94bf23cfb7e773282fdd67f30982e5bd25b33",
   "prs": [
@@ -183,5 +182,11 @@
     }
   ],
   "PR29": "Already an ancestor, remains open for its required human review; no approval bypass",
-  "PR43_resolution": "The TLS minimum and accompanying record were already present. Merged its exact head while retaining newer server-supplied ban identifier correction; tree unchanged by reconciliation."
+  "PR43_resolution": "The TLS minimum and accompanying record were already present. Merged its exact head while retaining newer server-supplied ban identifier correction; tree unchanged by reconciliation.",
+  "native_cpp_inputs_match_qualified_source": true,
+  "follow_up_changes": [
+    "Python TLS-minimum regression assertion",
+    "Hosting workflow executes existing ban-identifier tests",
+    "Current source review/check evidence and complete blockers"
+  ]
 }

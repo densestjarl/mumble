@@ -1,0 +1,20 @@
+{
+  "source_head": "5eadce0753b634147f97746e192ddef613019a02",
+  "consolidated_head": "b4a3ced7041446bf92772d686397ef0a10e1f034",
+  "client_binary_sha256": "f3d832a0a3aa371ec764c6227d1ddee682c155dd2de9fc20047ddd38384e890f",
+  "authorization": "User explicitly approved built-in camera test in this chat",
+  "camera": "FaceTime HD Camera",
+  "observations": [
+    "Coordinate toolbar click opened Choose what to share; earlier AX checkbox click alone did not invoke the picker",
+    "Camera tab enumerated built-in and virtual/continuity sources",
+    "Keyboard selected FaceTime HD Camera; heading confirmed selection",
+    "Start camera opened Your camera; Camera is on and visible live image observed",
+    "Stop sharing closed preview; Share video unchecked; client remained muted and deafened"
+  ],
+  "limits": [
+    "Local physical camera capture/self-preview and stop only; no independently verified remote decoder/relay result",
+    "Existing loopback server process source not reverified in this UI session",
+    "No shipping signing, supported OS matrix, latency, endurance or hardware hot-swap qualification",
+    "No camera image or user face retained in public evidence; only textual observations recorded"
+  ]
+}
