@@ -152,9 +152,11 @@ void Connection::socketRead() {
 		bool rejected        = false;
 		if (admission == ReadAdmission::Defer) {
 			if (!m_readPauseClock.isValid()
-				|| (m_lastReadDeferral.isValid() && m_lastReadDeferral.elapsed() > m_readPauseTimeout))
+				|| (!m_frameDeferred && m_lastReadDeferral.isValid()
+					&& m_lastReadDeferral.elapsed() > m_readPauseTimeout))
 				m_readPauseClock.start();
 			m_lastReadDeferral.restart();
+			m_frameDeferred = true;
 			if (m_readPauseClock.elapsed() < m_readPauseTimeout) {
 				m_readRetry.start(20);
 				return;
@@ -165,6 +167,7 @@ void Connection::socketRead() {
 			m_lastReadDeferral.invalidate();
 		}
 		m_readRetry.stop();
+		m_frameDeferred      = false;
 		QByteArray qbaBuffer = qtsSocket->read(iPacketLength);
 		iPacketLength        = -1;
 

@@ -182,7 +182,11 @@ void TestConnectionOutputQueue::congestionDeadlineRecoversAfterIdle() {
 	QVERIFY(Connection::messageToNetwork(data, Mumble::Protocol::TCPMessageType::FileData, wire));
 	QCOMPARE(peer->write(wire), qint64(wire.size()));
 	peer->flush();
-	QTRY_COMPARE(rejected, 1);
+	QTRY_VERIFY_WITH_TIMEOUT(connection.readPaused(), 100);
+	// A delayed event loop must not renew the deadline of the same held frame.
+	QTest::qSleep(150);
+	QCoreApplication::processEvents();
+	QCOMPARE(rejected, 1);
 	QTest::qWait(150);
 	QCOMPARE(peer->write(wire), qint64(wire.size()));
 	peer->flush();

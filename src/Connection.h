@@ -50,6 +50,7 @@ private:
 	QElapsedTimer m_readPauseClock;
 	QElapsedTimer m_lastReadDeferral;
 	int m_readPauseTimeout = 2000;
+	bool m_frameDeferred = false;
 
 protected:
 	QSslSocket *qtsSocket;
