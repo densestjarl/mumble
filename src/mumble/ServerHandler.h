@@ -83,6 +83,7 @@ private:
 	Database *database;
 	std::shared_ptr< std::atomic< qint64 > > m_fileInboundBytes = std::make_shared< std::atomic< qint64 > >(0);
 	std::shared_ptr< std::atomic< qint64 > > m_fileWorkerInboundBytes;
+	QMutex m_fileReceiveBudgetMutex;
 	std::atomic< qint64 > m_fileQueuedBytes{ 0 };
 	std::atomic< qint64 > m_fileControlQueuedBytes{ 0 };
 	std::atomic< qint64 > m_fileSocketBytes{ 0 };
@@ -204,7 +205,8 @@ public:
 	void sendUserTextMessage(unsigned int uiSession, const QString &message_);
 	void sendChannelTextMessage(unsigned int channel, const QString &message_, bool tree);
 	void setFileTransferReceiveBudget(std::shared_ptr< std::atomic< qint64 > > budget) {
-		std::atomic_store(&m_fileWorkerInboundBytes, std::move(budget));
+		QMutexLocker lock(&m_fileReceiveBudgetMutex);
+		m_fileWorkerInboundBytes = std::move(budget);
 	}
 	void sendFileTransferControl(const QList< unsigned int > &targetSessions, const QByteArray &payload);
 	bool queueFileTransferControl(unsigned int target, const QByteArray &payload, int expectedConnectionID);
@@ -240,6 +242,8 @@ signals:
 	void abortRequested();
 protected slots:
 	void message(Mumble::Protocol::TCPMessageType type, const QByteArray &);
+	void fileMessageRejected(Mumble::Protocol::TCPMessageType type, const QByteArray &);
+	void handleMessage(Mumble::Protocol::TCPMessageType type, const QByteArray &, bool admissionExpired);
 	void serverConnectionConnected();
 	void serverConnectionTimeoutOnConnect();
 	void serverConnectionStateChanged(QAbstractSocket::SocketState);

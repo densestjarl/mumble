@@ -37,16 +37,18 @@ namespace protobuf {
 } // namespace google
 
 class Connection : public QObject {
+public:
+	enum class ReadAdmission { Ready, Defer, Bypass };
+
 private:
 	Q_OBJECT
 	Q_DISABLE_COPY(Connection)
 	qint64 m_maxPendingSendBytes = 0;
 	bool m_sendQueueBlocked      = false;
-	std::function< bool(Mumble::Protocol::TCPMessageType, qint64) > m_readAdmission;
+	std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > m_readAdmission;
 	QTimer m_readRetry;
 	QElapsedTimer m_readPauseClock;
-	int m_readPauseTimeout       = 60000;
-	bool m_readAdmissionTimedOut = false;
+	int m_readPauseTimeout = 2000;
 
 protected:
 	QSslSocket *qtsSocket;
@@ -69,6 +71,7 @@ signals:
 	void outputProgress(qint64 pendingBytes);
 	void connectionClosed(QAbstractSocket::SocketError, const QString &reason);
 	void message(Mumble::Protocol::TCPMessageType type, const QByteArray &);
+	void messageRejected(Mumble::Protocol::TCPMessageType type, const QByteArray &);
 	void handleSslErrors(const QList< QSslError > &);
 
 public:
@@ -84,10 +87,11 @@ public:
 	void setMaxPendingSendBytes(qint64 bytes);
 	qint64 pendingSendBytes() const;
 	/// Retain an unadmitted frame in the bounded socket buffer and retry when queues drain.
-	/// On timeout deliver once so the receiver can fail it and notify its peer.
-	void setReadAdmission(std::function< bool(Mumble::Protocol::TCPMessageType, qint64) > admission,
-						  int timeoutMSecs = 60000);
-	bool readAdmissionTimedOut() const { return m_readAdmissionTimedOut; }
+	/// Reject stalled frames after one brief pause per congestion episode.
+	/// Bypass frames preserve the episode deadline; Ready ends the episode.
+	void setReadAdmission(std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > admission,
+						  int timeoutMSecs = 2000);
+	bool readPaused() const { return m_readRetry.isActive(); }
 	void disconnectSocket(bool force = false);
 	void forceFlush();
 	qint64 activityTime() const;

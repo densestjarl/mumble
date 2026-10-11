@@ -498,11 +498,17 @@ void ServerHandler::run() {
 			cConnection = connection;
 			connection->setReadAdmission([this](Mumble::Protocol::TCPMessageType type, qint64 size) {
 				if (type != Mumble::Protocol::TCPMessageType::FileData || size <= 512)
-					return true; // Keep admission responses and other controls moving.
+					return Connection::ReadAdmission::Bypass; // Do not renew a stalled file deadline.
 				const qint64 queued = m_fileInboundBytes->load();
-				const auto worker   = std::atomic_load(&m_fileWorkerInboundBytes);
+				std::shared_ptr< std::atomic< qint64 > > worker;
+				{
+					QMutexLocker lock(&m_fileReceiveBudgetMutex);
+					worker = m_fileWorkerInboundBytes;
+				}
 				return queued + size <= 4 * 1024 * 1024
-					   && queued + size + (worker ? worker->load() : 0) <= 8 * 1024 * 1024;
+							   && queued + size + (worker ? worker->load() : 0) <= 8 * 1024 * 1024
+						   ? Connection::ReadAdmission::Ready
+						   : Connection::ReadAdmission::Defer;
 			});
 			connect(connection.get(), &Connection::outputProgress, this,
 					[this](qint64 pending) { m_fileSocketBytes.store(pending); });
@@ -520,6 +526,7 @@ void ServerHandler::run() {
 			QObject::connect(connection.get(), &Connection::connectionClosed, this,
 							 &ServerHandler::serverConnectionClosed);
 			QObject::connect(connection.get(), &Connection::message, this, &ServerHandler::message);
+			QObject::connect(connection.get(), &Connection::messageRejected, this, &ServerHandler::fileMessageRejected);
 			QObject::connect(connection.get(), &Connection::handleSslErrors, this, &ServerHandler::setSslErrors);
 		}
 		bUdp = false;
@@ -660,6 +667,9 @@ void ServerHandler::sendPingInternal() {
 		return;
 	}
 
+	// An intentional local read pause is not evidence of a dead server.
+	if (connection->readPaused())
+		iInFlightTCPPings = 0;
 	if (Global::get().s.iMaxInFlightTCPPings > 0 && iInFlightTCPPings >= Global::get().s.iMaxInFlightTCPPings) {
 		serverConnectionClosed(QAbstractSocket::UnknownSocketError, tr("Server is not responding to TCP pings"));
 		return;
@@ -701,10 +711,20 @@ void ServerHandler::sendPingInternal() {
 
 	sendMessage(mpp);
 
-	iInFlightTCPPings += 1;
+	if (!connection->readPaused())
+		iInFlightTCPPings += 1;
 }
 
-void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteArray &qbaMsg) {
+void ServerHandler::fileMessageRejected(Mumble::Protocol::TCPMessageType type, const QByteArray &data) {
+	handleMessage(type, data, true);
+}
+
+void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteArray &data) {
+	handleMessage(type, data, false);
+}
+
+void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const QByteArray &qbaMsg,
+								  bool admissionExpired) {
 	const char *ptr = qbaMsg.constData();
 	if (type == Mumble::Protocol::TCPMessageType::UDPTunnel) {
 		// audio tunneled through tcp.
@@ -777,7 +797,7 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 								   && (response.has_relay_accepted() || response.has_relay_retry_after_ms());
 			const bool control   = type == Mumble::Protocol::TCPMessageType::FileTransferControl;
 			const qint64 limit   = 4 * 1024 * 1024 + ((admission || control) ? 64 * 1024 : 0);
-			if (previous + delivery.size() > limit || (cConnection && cConnection->readAdmissionTimedOut())) {
+			if (previous + delivery.size() > limit || admissionExpired) {
 				m_fileInboundBytes->fetch_sub(delivery.size());
 				MumbleProto::FileData incoming;
 				if (type != Mumble::Protocol::TCPMessageType::FileData

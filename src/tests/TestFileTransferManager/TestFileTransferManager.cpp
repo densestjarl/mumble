@@ -91,6 +91,30 @@ private slots:
 		QCOMPARE(manager.m_pinCache.value(99), QByteArray("cache sentinel"));
 	}
 
+	void unavailablePeerRecoversWithoutChannelScan() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		m_trustDb.close();
+		manager.refreshPinCache();
+		QVERIFY(manager.m_unavailablePeers.contains(42));
+		manager.m_pinCache.insert(99, "cache sentinel");
+		deliverControl(manager, m_oldM1);
+		QVERIFY(manager.m_unavailablePeers.contains(42));
+		QVERIFY(m_trustDb.open());
+		QVERIFY(PQFT::FileTransferIdentity::ensureSchema(m_trustDb));
+		// Floods cannot bypass the retry interval after the failed lookup.
+		for (int i = 0; i < 32; ++i)
+			deliverControl(manager, m_oldM1);
+		QVERIFY(manager.m_unavailablePeers.contains(42));
+		QTest::qWait(1100);
+		QSignalSpy prompts(&manager, &FileTransferManager::firstContact);
+		deliverControl(manager, m_oldM1);
+		QTRY_COMPARE(prompts.count(), 1);
+		QVERIFY(!manager.m_unavailablePeers.contains(42));
+		QMutexLocker lock(&manager.m_pinCacheMutex);
+		QCOMPARE(manager.m_pinCache.value(99), QByteArray("cache sentinel"));
+	}
+
 	void duplicateSessionPromptsAcceptSameIdentity() {
 		FileTransferManager manager;
 		QVERIFY(setupTrustFixture(manager));

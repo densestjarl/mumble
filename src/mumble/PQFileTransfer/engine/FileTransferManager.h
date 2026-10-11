@@ -18,6 +18,7 @@
 #include <Mumble.pb.h>
 
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QMutex>
 #include <QObject>
@@ -188,6 +189,7 @@ private:
 	QHash< quint64, QList< SendRecipient > > m_sendSelections;
 	quint64 m_nextSendContext = 0;
 	QSet< unsigned int > m_unavailablePeers;
+	QElapsedTimer m_unavailablePeerRetryClock;
 	quint64 m_nextPromptToken = 0;
 	// GUI-thread state for rechecking save requests and preserving rejection diagnostics until abort.
 	QHash< QByteArray, PQFT::FTTransferInfo > m_readyReceived;

@@ -4,6 +4,7 @@
 // Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
 #include "PQFileTransfer/engine/FileTransferManager.h"
+#include "PQFileTransfer/engine/FTMessages.h"
 #include "PQFileTransfer/engine/FileTransferTransport.h"
 
 #include "Channel.h"
@@ -323,13 +324,44 @@ void FileTransferManager::handleControlMessage(const MumbleProto::FileTransferCo
 		m_inboundBytes->fetch_sub(charge);
 		return;
 	}
+	const QByteArray payload(msg.payload().data(), static_cast< int >(msg.payload().size()));
+	quint8 frameType = 0;
+	if (PQFT::FTFrame::decodeHeader(payload, frameType) && frameType == PQFT::FTFrame::TypeM1 && m_trustStore
+		&& Global::get().s.bFTEnabled
+		&& (!m_unavailablePeerRetryClock.isValid() || m_unavailablePeerRetryClock.elapsed() >= 1000)) {
+		bool unavailable;
+		{
+			QMutexLocker lock(&m_pinCacheMutex);
+			unavailable = m_unavailablePeers.contains(actor);
+		}
+		const auto *user        = ClientUser::get(actor);
+		const auto *self        = ClientUser::get(Global::get().uiSession);
+		const QByteArray digest = serverDigest();
+		if (unavailable && user && self && self->cChannel && user->cChannel == self->cChannel
+			&& user->bFileTransferCapable && !digest.isEmpty()) {
+			// Recover a failed lookup with at most one database query per second,
+			// regardless of channel size or the volume of untrusted controls.
+			m_unavailablePeerRetryClock.restart();
+			PQFT::PinnedPeer peer;
+			bool succeeded    = false;
+			const bool pinned = m_trustStore->lookup(peer, digest, user->qsName, &succeeded);
+			if (succeeded) {
+				QMutexLocker lock(&m_pinCacheMutex);
+				m_peerNameCache.insert(actor, user->qsName);
+				if (pinned)
+					m_pinCache.insert(actor, peer.fingerprint);
+				else
+					m_pinCache.remove(actor);
+				m_unavailablePeers.remove(actor);
+			}
+		}
+	}
 	PQFT::FileTransferEngine::PeerSnapshot snapshot;
 	{
 		QMutexLocker lock(&m_pinCacheMutex);
 		snapshot = { m_peerNameCache.value(actor), m_pinCache.value(actor),
 					 m_peerNameCache.contains(actor) && !m_unavailablePeers.contains(actor) };
 	}
-	const QByteArray payload(msg.payload().data(), static_cast< int >(msg.payload().size()));
 	QMetaObject::invokeMethod(
 		m_engine,
 		[this, actor, payload, snapshot, charge, generation = m_connectionGeneration]() {

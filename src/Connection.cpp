@@ -106,7 +106,7 @@ void Connection::resetActivityTime() {
 	qtLastPacket.restart();
 }
 
-void Connection::setReadAdmission(std::function< bool(Mumble::Protocol::TCPMessageType, qint64) > admission,
+void Connection::setReadAdmission(std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > admission,
 								  int timeoutMSecs) {
 	m_readAdmission    = std::move(admission);
 	m_readPauseTimeout = qMax(1, timeoutMSecs);
@@ -148,23 +148,27 @@ void Connection::socketRead() {
 		if (iAvailable < iPacketLength)
 			return;
 
-		if (m_readAdmission && !m_readAdmission(m_type, iPacketLength)) {
+		const auto admission = m_readAdmission ? m_readAdmission(m_type, iPacketLength) : ReadAdmission::Ready;
+		bool rejected        = false;
+		if (admission == ReadAdmission::Defer) {
 			if (!m_readPauseClock.isValid())
 				m_readPauseClock.start();
 			if (m_readPauseClock.elapsed() < m_readPauseTimeout) {
 				m_readRetry.start(20);
 				return;
 			}
-			m_readAdmissionTimedOut = true;
+			rejected = true;
+		} else if (admission == ReadAdmission::Ready) {
+			m_readPauseClock.invalidate();
 		}
-		m_readPauseClock.invalidate();
 		m_readRetry.stop();
 		QByteArray qbaBuffer = qtsSocket->read(iPacketLength);
 		iPacketLength        = -1;
-		iAvailable -= iPacketLength;
 
-		emit message(m_type, qbaBuffer);
-		m_readAdmissionTimedOut = false;
+		if (rejected)
+			emit messageRejected(m_type, qbaBuffer);
+		else
+			emit message(m_type, qbaBuffer);
 	}
 }
 
