@@ -1,0 +1,49 @@
+Windows PR40 frozen protocol-rate portability validation: 80ae9813aa12cf92e1f74f36686aef11c7301d79
+MSVC 19.51.36257.0; Qt 6.10.0 static (dependency built with MSVC 2022); Windows 10 Pro 10.0.19045 x64.
+Strict Release/C++20; /W4 /WX /O2 /bigobj /options:strict; dynamic MSVC runtime; no source warning relaxation. Full native client/server and all test targets built.
+CTest: 42 registered, 41 enabled passed, 1 source-disabled (OverlayTest); no newly disabled tests; 245.49s.
+QtTest enabled-suite totals: 1187 cases, 1187 passed, 0 failures, 0 errors, 0 skipped.
+TestAudioWizard: 4 cases, 0 failures, 0 errors, 0 skipped, 0.027s.
+TestDatabasePath: 6 cases, 0 failures, 0 errors, 0 skipped, 1.863s.
+TestReleaseUpdate: 13 cases, 0 failures, 0 errors, 0 skipped, 0.033s.
+TestAnimatedImages: 10 cases, 0 failures, 0 errors, 0 skipped, 0.011s.
+TestChatWebM: 6 cases, 0 failures, 0 errors, 0 skipped, 0.018s.
+TestVideoFramePacketizer: 4 cases, 0 failures, 0 errors, 0 skipped, 0.241s.
+TestVideoPacketPacer: 12 cases, 0 failures, 0 errors, 0 skipped, 0.128s.
+TestVideoQualityProfile: 9 cases, 0 failures, 0 errors, 0 skipped, 0.247s.
+TestVideoViewUi: 5 cases, 0 failures, 0 errors, 0 skipped, 0.006s.
+TestXMLTools: 25 cases, 0 failures, 0 errors, 0 skipped, 0.004s.
+TestFileTransferUi: 78 cases, 0 failures, 0 errors, 0 skipped, 0.021s.
+TestFileTransferManager: 55 cases, 0 failures, 0 errors, 0 skipped, 11.865s.
+TestFileTransferTransport: 11 cases, 0 failures, 0 errors, 0 skipped, 0.005s.
+TestPQCrypto: 30 cases, 0 failures, 0 errors, 0 skipped, 0.557s.
+TestFTIdentity: 14 cases, 0 failures, 0 errors, 0 skipped, 4.498s.
+TestFileTransferSession: 13 cases, 0 failures, 0 errors, 0 skipped, 0.025s.
+TestFileTransferEngine: 48 cases, 0 failures, 0 errors, 0 skipped, 25.870s.
+TestFileTransferE2E: 7 cases, 0 failures, 0 errors, 0 skipped, 244.467s.
+TestSettingsJSONSerialization: 4 cases, 0 failures, 0 errors, 0 skipped, 0.007s.
+TestCrypt: 8 cases, 0 failures, 0 errors, 0 skipped, 0.013s.
+TestAudioReceiverBuffer: 10 cases, 0 failures, 0 errors, 0 skipped, 0.004s.
+TestQtLogger: 7 cases, 0 failures, 0 errors, 0 skipped, 1.858s.
+TestBandwidthRecord: 12 cases, 0 failures, 0 errors, 0 skipped, 0.241s.
+TestConnectionOutputQueue: 10 cases, 0 failures, 0 errors, 0 skipped, 0.134s.
+TestCaseInsensitiveQString: 10 cases, 0 failures, 0 errors, 0 skipped, 0.003s.
+TestCryptographicHash: 13 cases, 0 failures, 0 errors, 0 skipped, 0.006s.
+TestCryptographicRandom: 5 cases, 0 failures, 0 errors, 0 skipped, 1.311s.
+TestDatabase: 22 cases, 0 failures, 0 errors, 0 skipped, 0.167s.
+TestServerDatabase: 18 cases, 0 failures, 0 errors, 0 skipped, 0.325s.
+TestFFDHE: 13 cases, 0 failures, 0 errors, 0 skipped, 0.018s.
+TestIPCUtils: 3 cases, 0 failures, 0 errors, 0 skipped, 0.003s.
+TestPacketDataStream: 646 cases, 0 failures, 0 errors, 0 skipped, 0.009s.
+TestPasswordGenerator: 3 cases, 0 failures, 0 errors, 0 skipped, 0.007s.
+TestMumbleProtocol: 8 cases, 0 failures, 0 errors, 0 skipped, 0.003s.
+TestSelfSignedCertificate: 4 cases, 0 failures, 0 errors, 0 skipped, 0.270s.
+TestServerAddress: 10 cases, 0 failures, 0 errors, 0 skipped, 0.003s.
+TestSSLLocks: 3 cases, 0 failures, 0 errors, 0 skipped, 2.074s.
+TestStdAbs: 3 cases, 0 failures, 0 errors, 0 skipped, 0.003s.
+TestTimer: 4 cases, 0 failures, 0 errors, 0 skipped, 0.153s.
+TestUnresolvedServerAddress: 9 cases, 0 failures, 0 errors, 0 skipped, 0.004s.
+TestVersion: 12 cases, 0 failures, 0 errors, 0 skipped, 0.004s.
+Presented-identity manager/store/real-engine/UI required cases passed; full enabled regression assertions/deadlines unchanged; generated CTest registrations restored byte-for-byte. Source/personal state unchanged. Earlier committed evidence and saved binaries remain intact on E:; preservation record discloses earlier private-log loss. No C: copy/cleanup or GUI/auth automation.
+Overlay requires human inspection. Online and external database variants remain preexisting OFF. Windows source excludes WebM decoder/playback rows (six ChatWebM drop/budget/init/cleanup cases run); Unix permission/symlink branches compile-time conditional. Physical media, installed-client/signatures, extended server queue/fan-out/live acceptance, CodeQL comparison execution, sanitizers/endurance and Windows 11 remain unqualified; automated relay rates/receipts are limited to the owned fixtures described below.
+Production sender authorization/reset/repeated-M1 and engine admission/retry/receipt cases passed. New bounded-idle file-budget/maximum-rate and peer-scoped reset preserving unrelated Ready file regressions passed. Real E2E targeted96MiB+3MiB and competing two48MiB transfers passed with explicit128KiB exact768/24 and768chunk counts, exact saved bytes, positive aggregate retries and authenticated receipts. Existing E2E CTest600sec/fixture deadlines unchanged. Every exported archive Git blob and16recursive pins verified;128normal export-ignore exclusions. Initial227 and failed df/0d remain preserved revision-specific inputs, not newly accepted. Synchronous relay admission, scoped reset retaining another prompt and peer-error direction regressions passed. Same-engine large+small case exercises scheduling fairness with all original assertions. POSIX hosting-script/SSH/readiness tests not run on Windows; source hashed only. No Windows no-file-support OFF build, live GUI/hardware/signing/shipping qualification.

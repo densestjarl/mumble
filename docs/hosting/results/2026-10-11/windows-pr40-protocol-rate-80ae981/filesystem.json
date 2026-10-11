@@ -1,0 +1,6 @@
+{
+  "filesystem": "NTFS",
+  "health": "Healthy",
+  "allocation_unit_size": 4096,
+  "scope": "Owned E: lab"
+}
