@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Start an owned loopback server and verify a stalled TLS receiver is isolated.
+"""Start an owned loopback server and verify selected TLS receivers recover after a stall.
 
 Requires Python 3, OpenSSL CLI and ps (macOS/Linux). Creates a NEW private
 profile at --profile; stops only the subprocess it starts. Transfers 40 MiB
 of opaque valid-length FileData over ~27 seconds, samples server RSS and
 checks every healthy recipient payload/index plus control ping responses.
-Use --expect-disconnect for the corrected server, omit for a baseline record.
+Both selected receivers must retain their connections and receive every chunk.
+The legacy --expect-disconnect mode is refused for the admission/receipt relay.
 This does not measure native devices, cryptographic file engines, VM density,
 queued cross-thread media callbacks or audio/video fairness under saturation.
 """

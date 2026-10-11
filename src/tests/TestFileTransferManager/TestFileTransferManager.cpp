@@ -77,6 +77,92 @@ private slots:
 		QVERIFY(reset->fingerprint.isEmpty());
 	}
 
+	void resettingOnePeerPreservesOtherPrompt() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		ClientUser other;
+		other.uiSession            = 43;
+		other.qsName               = QStringLiteral("Other private peer");
+		other.bFileTransferCapable = other.bFileTransferDeliveryReceipts = true;
+		m_channel->addUser(&other);
+		{
+			QWriteLocker lock(&ClientUser::c_qrwlUsers);
+			ClientUser::c_qmUsers.insert(43, &other);
+		}
+		const auto cleanup = qScopeGuard([&]() {
+			manager.disconnectCleanup();
+			QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection);
+			QWriteLocker lock(&ClientUser::c_qrwlUsers);
+			ClientUser::c_qmUsers.remove(43);
+		});
+		QSignalSpy prompts(&manager, &FileTransferManager::firstContact);
+		QSignalSpy cancelled(&manager, &FileTransferManager::firstContactCancelled);
+		deliverControl(manager, m_oldM1);
+		MumbleProto::FileTransferControl message;
+		message.set_actor(43);
+		message.set_payload(m_newM1.constData(), static_cast< size_t >(m_newM1.size()));
+		manager.handleControlMessage(message);
+		QTRY_COMPARE_WITH_TIMEOUT(prompts.size(), 2, 5000);
+		const quint64 firstToken = manager.firstContactToken(42);
+		const quint64 otherToken = manager.firstContactToken(43);
+		QVERIFY(firstToken && otherToken && firstToken != otherToken);
+		const QByteArray fp = PQFT::identityFingerprint(PQFT::extractM1IdentityKey(m_oldM1));
+		QCOMPARE(manager.m_trustStore->checkAndPin(m_serverDigest, m_peer->qsName, fp, "reset fixture"),
+				 PQFT::TrustState::Pinned);
+		const auto shown = manager.sendRecipient(42);
+		QVERIFY(shown);
+		QVERIFY(manager.resetPeerTrust(*shown));
+		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
+		QCoreApplication::sendPostedEvents(&manager, QEvent::MetaCall);
+		QCOMPARE(manager.m_contactRequests.size(), 1);
+		QCOMPARE(manager.firstContactToken(43), otherToken);
+		QVERIFY(!cancelled.isEmpty());
+		for (const auto &event : cancelled)
+			QVERIFY(event.first().toULongLong() != otherToken);
+		QVERIFY(!manager.resolveFirstContact(43, PQFT::identityFingerprint(PQFT::extractM1IdentityKey(m_newM1)),
+											 otherToken, false));
+		QVERIFY(manager.m_contactRequests.isEmpty());
+		QVERIFY(manager.m_trustStore->list().isEmpty());
+	}
+
+	void peerErrorCannotFailOutgoingTransfer() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		QVERIFY(manager.m_identity->createIdentity(QStringLiteral("isolated-error-routing-passphrase")));
+		manager.m_transportSetup = [](PQFT::FileTransferEngine &engine) {
+			engine.setTransport([](unsigned int, const QByteArray &) {}, {});
+		};
+		MumbleProto::ServerConfig relay;
+		relay.set_file_transfer_relay_version(1);
+		manager.configureRelay(relay);
+		const auto selected = manager.sendRecipient(42);
+		QVERIFY(selected);
+		QFile source(m_directory->filePath("error-routing.bin"));
+		QVERIFY(source.open(QIODevice::WriteOnly));
+		QCOMPARE(source.write(QByteArray(32768, 'e')), qint64(32768));
+		source.close();
+		QSignalSpy updates(&manager, &FileTransferManager::transferUpdated);
+		QVERIFY(manager.startSend(source.fileName(), "application/octet-stream", false, {}, { *selected }));
+		QTRY_VERIFY_WITH_TIMEOUT(!updates.isEmpty(), 5000);
+		const QByteArray id = updates.last().first().value< PQFT::FTTransferInfo >().transferId;
+		QCOMPARE(id.size(), 16);
+		MumbleProto::FileData error;
+		error.set_actor(42);
+		error.set_transfer_id(id.constData(), static_cast< size_t >(id.size()));
+		error.set_data("");
+		error.set_relay_error("injected peer error");
+		manager.handleDataMessage(error);
+		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
+		QCoreApplication::sendPostedEvents(&manager, QEvent::MetaCall);
+		for (const auto &event : updates)
+			QVERIFY(event.first().value< PQFT::FTTransferInfo >().state != PQFT::FTTransferInfo::State::Failed);
+		error.set_actor(41);
+		manager.handleDataMessage(error);
+		QTRY_VERIFY_WITH_TIMEOUT(
+			updates.last().first().value< PQFT::FTTransferInfo >().state == PQFT::FTTransferInfo::State::Failed, 5000);
+		QCOMPARE(updates.last().first().value< PQFT::FTTransferInfo >().error, QStringLiteral("injected peer error"));
+	}
+
 	void cleanup() {
 		if (m_peer) {
 			QWriteLocker lock(&ClientUser::c_qrwlUsers);

@@ -36,12 +36,12 @@ struct BandwidthRecord {
 	int bandwidth() const;
 };
 
-// File relay budgets do not inherit voice's rolling history or accumulate idle credit.
+// File relay budgets cap idle credit independently of voice's rolling history.
 class FileBandwidthRecord {
 	friend class TestBandwidthRecord;
 
 public:
-	static constexpr int MaximumFrameBytes = 1024 * 1024 + 16 + 34;
+	static constexpr int MaximumFrameBytes = 1024 * 1024 + 16 + 128;
 	static qint64 maximumBurst(int rate) { return static_cast< qint64 >(rate) + MaximumFrameBytes; }
 	bool canAddFrame(int size, int rate) const;
 	bool addFrame(int size, int rate);

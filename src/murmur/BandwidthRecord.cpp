@@ -114,7 +114,8 @@ int BandwidthRecord::bandwidth() const {
 qint64 FileBandwidthRecord::available(int rate) const {
 	const qint64 initial  = m_rate == rate ? m_creditMicroBytes : static_cast< qint64 >(rate) * 1000000;
 	const qint64 capacity = maximumBurst(rate) * 1000000;
-	const qint64 elapsed  = qBound< qint64 >(0, m_refillClock.elapsed().count(), capacity / rate + 1);
+	const qint64 elapsed =
+		qBound< qint64 >(qint64(0), static_cast< qint64 >(m_refillClock.elapsed().count()), capacity / rate + 1);
 	return qMin(capacity, initial + elapsed * rate);
 }
 

@@ -1141,7 +1141,8 @@ void FileTransferEngine::paceSends() {
 		// Keep this job queued during callbacks so cleaning up another job
 		// cannot mistake an active sender for an empty queue and stop its timer.
 		sendNextChunk(*job);
-		if (job->lastState == FTTransferInfo::State::Transferring && job->nextChunkIndex == previousIndex) {
+		if (job->lastState == FTTransferInfo::State::Transferring && job->nextChunkIndex == previousIndex
+			&& !job->awaitingRelay) {
 			waitingForCredit = true;
 			break;
 		}
@@ -1194,20 +1195,24 @@ void FileTransferEngine::sendNextChunk(SendJob &job) {
 		for (const SendPeer &peer : job.peers)
 			if (peer.established && !peer.failed)
 				targets.append(peer.session);
-		if (m_targetedChunk
-			&& !m_targetedChunk(targets, job.transferId, job.nextChunkIndex, job.chunkCount, ciphertext))
-			return; // Bounded downstream queue is full; retry this chunk without advancing.
-		// Charge at dispatch, after potentially slow file reads/encryption.
-		// Refresh between packets so a paused callback cannot spend stale credit
-		// and then immediately refill a second burst on the next timer event.
+		// Reserve credit and the acknowledgement state before a transport callback,
+		// which may synchronously accept, reject, or abort this job.
 		refillSendCredit();
-		if (m_config.sendRateBytesPerSecond > 0 || m_config.aggregateSendRate > 0)
-			m_sendCreditMilliBytes -= static_cast< qint64 >(ciphertext.size()) * 1000;
+		const bool rateLimited = m_config.sendRateBytesPerSecond > 0 || m_config.aggregateSendRate > 0;
+		const qint64 charge    = static_cast< qint64 >(ciphertext.size()) * 1000;
+		if (rateLimited)
+			m_sendCreditMilliBytes -= charge;
 		const quint64 index = job.nextChunkIndex;
-		if (m_targetedChunk && m_requireRelayAcknowledgement) {
-			job.awaitingRelay = true;
-			return;
+		const bool needsAcknowledgement = m_targetedChunk && m_requireRelayAcknowledgement;
+		job.awaitingRelay               = needsAcknowledgement;
+		if (m_targetedChunk && !m_targetedChunk(targets, job.transferId, index, job.chunkCount, ciphertext)) {
+			job.awaitingRelay = false;
+			if (rateLimited)
+				m_sendCreditMilliBytes += charge;
+			return; // Local backpressure has not admitted this chunk.
 		}
+		if (needsAcknowledgement || job.lastState != FTTransferInfo::State::Transferring)
+			return;
 		job.bytesDone += static_cast< quint64 >(ciphertext.size() - TagSize);
 		++job.nextChunkIndex;
 		job.pendingCiphertext.clear();
@@ -1608,6 +1613,8 @@ void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArra
 void FileTransferEngine::abortPeer(unsigned int session) {
 	for (const auto &id : m_sendJobs.keys()) {
 		const auto job = m_sendJobs.value(id);
+		if (!job)
+			continue;
 		for (const auto &peer : job->peers)
 			if (peer.session == session) {
 				abortTransfer(id);

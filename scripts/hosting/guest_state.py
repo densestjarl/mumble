@@ -222,7 +222,12 @@ def restore(args):
         stage.mkdir(mode=0o700)
         metadata, state = unpack_verified_archive(archive, stage, manifest)
         # All decryption/inventory/hash/SQLite/package checks precede mutation.
-        ssh_port = state['config']['ssh_port']
+        config = state.get('config')
+        if not isinstance(config, dict):
+            raise ValueError('Archived deployment configuration is missing')
+        ssh_port = config.get('ssh_port')
+        if type(ssh_port) is not int or not 1 <= ssh_port <= 65535:
+            raise ValueError('Archived SSH port must be an integer between 1 and 65535')
         deployment.verify_ssh_port(ssh_port)
         expected_rule = f"tcp dport {{ {ssh_port}, {state['config']['port']} }} accept"
         if expected_rule not in [line.strip() for line in (stage / 'firewall.nft').read_text().splitlines()]:

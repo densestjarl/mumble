@@ -83,6 +83,10 @@ SafetyNumberDialog::SafetyNumberDialog(const QString &peerName, const QString &s
 
 	auto *layout = new QVBoxLayout(this);
 
+	layout->addWidget(new QLabel(sending ? tr("Verify the recipient before sending this file.")
+										 : tr("Verify the sender before receiving this file."),
+								 this));
+
 	auto *intro = new QLabel(
 		tr("First file transfer with <b>%1</b>. Compare the safety number below with the one on their "
 		   "screen — scan the QR code or read the digits aloud. They must match exactly.")

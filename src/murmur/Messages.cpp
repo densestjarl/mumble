@@ -2696,6 +2696,10 @@ void Server::msgFileData(ServerUser *uSource, MumbleProto::FileData &msg) {
 	{
 		QMutexLocker lock(&m_qmFileTransferBytes);
 		// Admission is all-or-nothing: a retry is never charged or delivered to any recipient.
+		if (iMaxFileBandwidth > 0 && packetsize > FileBandwidthRecord::maximumBurst(qMax(1, iMaxFileBandwidth / 8))) {
+			refuse("File chunk exceeds the upload budget burst; reduce chunk size");
+			return;
+		}
 		if (iMaxFileBandwidth > 0 && !uSource->bwrFile.canAddFrame(packetsize, qMax(1, iMaxFileBandwidth / 8))) {
 			refuse("Waiting for the server file upload budget", true);
 			return;

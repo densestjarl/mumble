@@ -56,6 +56,7 @@ class TestFileTransferEngine : public QObject {
 	Q_OBJECT
 private slots:
 	void relayRetriesKeepCiphertextAndRequireAdmission();
+	void synchronousRelayAdmissionCompletes();
 	void incompleteRecipientHandshakeSendsNoContent();
 	void missingReceiptReportsPartialDelivery();
 	void peerResetKeepsUnrelatedReadyFileAndRetiresPrompt();
@@ -281,6 +282,34 @@ void TestFileTransferEngine::relayRetriesKeepCiphertextAndRequireAdmission() {
 	QVERIFY(sawState(received, transfer, PQFT::FTTransferInfo::State::Ready));
 	QCOMPARE(attempts, 3);
 	QVERIFY(!ciphertextChanged);
+}
+
+void TestFileTransferEngine::synchronousRelayAdmissionCompletes() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config config;
+	config.sendRateBytesPerSecond = 0;
+	config.chunkSize              = 64 * 1024;
+	pair.alice.setConfig(config);
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy received(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	QByteArray transfer;
+	int chunks = 0;
+	pair.alice.setTargetedChunkTransport(
+		[&](const QList< unsigned int > &, const QByteArray &id, quint64 index, quint64 total,
+			const QByteArray &ciphertext) {
+			transfer = id;
+			++chunks;
+			pair.bob.onDataMessage(AliceSession, id, index, total, ciphertext);
+			pair.alice.relayResponse(id, index, true, 0, {});
+			return true;
+		},
+		true);
+	QVERIFY(pair.alice.startSend(writeTestFile(192 * 1024), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp } })
+			> 0);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, transfer, PQFT::FTTransferInfo::State::Saved), 5000);
+	QVERIFY(sawState(received, transfer, PQFT::FTTransferInfo::State::Ready));
+	QCOMPARE(chunks, 3);
 }
 
 void TestFileTransferEngine::incompleteRecipientHandshakeSendsNoContent() {
