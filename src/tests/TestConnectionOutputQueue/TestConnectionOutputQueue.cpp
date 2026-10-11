@@ -4,6 +4,8 @@
 // Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
 #include "Connection.h"
+#include "Mumble.pb.h"
+#include <QtCore/QtEndian>
 
 #include <QtNetwork/QTcpServer>
 #include <QtTest/QSignalSpy>
@@ -31,6 +33,9 @@ class TestConnectionOutputQueue : public QObject {
 	Q_OBJECT
 private slots:
 	void admitsExactBoundary();
+	void pausedReadRetainsFrameAndResumes();
+	void pausedReadTimesOutOnce();
+	void oversizedReadHeaderClosesBeforeBody();
 	void admitsLargestProtocolFrame();
 	void disconnectedSocketDoesNotWrite();
 	void refusesFurtherWritesBeforeDeferredClose();
@@ -52,6 +57,82 @@ private:
 		return socket;
 	}
 };
+
+void TestConnectionOutputQueue::pausedReadRetainsFrameAndResumes() {
+	QTcpServer server;
+	auto *socket = connectedSocket(server);
+	QVERIFY(socket);
+	QVERIFY(server.waitForNewConnection(1000));
+	auto *peer = server.nextPendingConnection();
+	QVERIFY(peer);
+	Connection connection(nullptr, socket);
+	bool admitted = false;
+	connection.setReadAdmission([&](Mumble::Protocol::TCPMessageType, qint64) { return admitted; });
+	QList< QByteArray > received;
+	connect(&connection, &Connection::message, this, [&](Mumble::Protocol::TCPMessageType, const QByteArray &data) {
+		QVERIFY(!connection.readAdmissionTimedOut());
+		received.append(data);
+	});
+	MumbleProto::FileData message;
+	message.set_data(std::string(1024 * 1024, 'x'));
+	QByteArray wire;
+	QVERIFY(Connection::messageToNetwork(message, Mumble::Protocol::TCPMessageType::FileData, wire));
+	QCOMPARE(peer->write(wire + wire), qint64(wire.size() * 2));
+	peer->flush();
+	QTest::qWait(100);
+	QVERIFY(received.isEmpty());
+	QVERIFY(socket->bytesAvailable() > 0);
+	QCOMPARE(socket->readBufferSize(), qint64(8 * 1024 * 1024));
+	admitted = true;
+	QTRY_COMPARE_WITH_TIMEOUT(received.size(), 2, 5000);
+	QCOMPARE(received[0], wire.mid(6));
+	QCOMPARE(received[1], wire.mid(6));
+	QCOMPARE(socket->state(), QAbstractSocket::ConnectedState);
+}
+
+void TestConnectionOutputQueue::pausedReadTimesOutOnce() {
+	QTcpServer server;
+	auto *socket = connectedSocket(server);
+	QVERIFY(socket);
+	QVERIFY(server.waitForNewConnection(1000));
+	auto *peer = server.nextPendingConnection();
+	QVERIFY(peer);
+	Connection connection(nullptr, socket);
+	connection.setReadAdmission([](Mumble::Protocol::TCPMessageType, qint64) { return false; }, 50);
+	int timeouts = 0;
+	connect(&connection, &Connection::message, this, [&](Mumble::Protocol::TCPMessageType, const QByteArray &) {
+		QVERIFY(connection.readAdmissionTimedOut());
+		++timeouts;
+	});
+	MumbleProto::FileData message;
+	message.set_data("timeout");
+	QByteArray wire;
+	QVERIFY(Connection::messageToNetwork(message, Mumble::Protocol::TCPMessageType::FileData, wire));
+	QCOMPARE(peer->write(wire), qint64(wire.size()));
+	peer->flush();
+	QTRY_COMPARE_WITH_TIMEOUT(timeouts, 1, 5000);
+	QVERIFY(!connection.readAdmissionTimedOut());
+	QTest::qWait(100);
+	QCOMPARE(timeouts, 1);
+}
+
+void TestConnectionOutputQueue::oversizedReadHeaderClosesBeforeBody() {
+	QTcpServer server;
+	auto *socket = connectedSocket(server);
+	QVERIFY(socket);
+	QVERIFY(server.waitForNewConnection(1000));
+	auto *peer = server.nextPendingConnection();
+	QVERIFY(peer);
+	Connection connection(nullptr, socket);
+	connection.setReadAdmission([](Mumble::Protocol::TCPMessageType, qint64) { return false; });
+	QByteArray header(6, '\0');
+	qToBigEndian< quint16 >(static_cast< quint16 >(Mumble::Protocol::TCPMessageType::FileData), header.data());
+	qToBigEndian< quint32 >(0x800000, header.data() + 2);
+	QTest::ignoreMessage(QtWarningMsg, "Host tried to send huge or invalid packet");
+	QCOMPARE(peer->write(header), qint64(6));
+	peer->flush();
+	QTRY_COMPARE_WITH_TIMEOUT(socket->state(), QAbstractSocket::UnconnectedState, 5000);
+}
 
 void TestConnectionOutputQueue::admitsExactBoundary() {
 	QTcpServer server;

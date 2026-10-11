@@ -214,7 +214,12 @@ void FileTransferManager::setupEngineTransports() {
 					return;
 				}
 				if (state == PQFT::TrustState::Pinned || state == PQFT::TrustState::Verified) {
-					refreshPinCache();
+					// The live check confirmed this peer only; update its entry without scanning the channel.
+					{
+						QMutexLocker lock(&m_pinCacheMutex);
+						m_pinCache.insert(peerSession, fingerprint);
+						m_unavailablePeers.remove(peerSession);
+					}
 					resume(true);
 					return;
 				}
@@ -268,6 +273,8 @@ void FileTransferManager::forwardEngineEvent(std::function< void() > event) {
 }
 
 void FileTransferManager::updateConnectionTransport() {
+	if (const auto handler = Global::get().sh)
+		handler->setFileTransferReceiveBudget(m_inboundBytes);
 	if (m_transportSetup) {
 		const auto setup = m_transportSetup;
 		QMetaObject::invokeMethod(m_engine, [this, setup]() { setup(*m_engine); }, Qt::QueuedConnection);
@@ -283,16 +290,13 @@ void FileTransferManager::updateConnectionTransport() {
 		[engine, connection, connectionId]() {
 			engine->setTransport(
 				[connection, connectionId](unsigned int targetSession, const QByteArray &payload) {
-					const auto handler = connection.lock();
-					if (handler)
-						handler->queueFileTransferControl(targetSession, payload, connectionId);
+					PQFT::Transport::queueControl(connection, targetSession, payload, connectionId);
 				},
 				{});
 			engine->setTargetedChunkTransport(
 				[connection, connectionId](const QList< unsigned int > &targets, const QByteArray &id, quint64 index,
 										   quint64 total, const QByteArray &data) {
-					const auto handler = connection.lock();
-					return handler && handler->queueFileData(targets, id, index, total, data, connectionId);
+					return PQFT::Transport::queueChunk(connection, targets, id, index, total, data, connectionId);
 				},
 				true);
 		},
@@ -307,17 +311,16 @@ QByteArray FileTransferManager::serverDigest() const {
 }
 
 void FileTransferManager::handleControlMessage(const MumbleProto::FileTransferControl &msg) {
-	// User events maintain the cache. Refresh only a new handshake, not every opaque control.
-	if (!msg.payload().empty() && (static_cast< unsigned char >(msg.payload()[0]) & 15) == 1)
-		refreshPinCache();
+	// User and trust-change events maintain the cache. Untrusted controls
+	// must never trigger a channel-wide database scan.
 	const unsigned int actor = msg.has_actor() ? msg.actor() : 0;
 	if (actor == 0 || !msg.has_payload()) {
 		return;
 	}
 	const qint64 charge   = static_cast< qint64 >(msg.payload().size());
-	const qint64 previous = m_inboundBytes.fetch_add(charge);
-	if (charge > 64 * 1024 || previous + charge > 8 * 1024 * 1024) {
-		m_inboundBytes.fetch_sub(charge);
+	const qint64 previous = m_inboundBytes->fetch_add(charge);
+	if (charge > 64 * 1024 || previous + charge > 8 * 1024 * 1024 + 64 * 1024) {
+		m_inboundBytes->fetch_sub(charge);
 		return;
 	}
 	PQFT::FileTransferEngine::PeerSnapshot snapshot;
@@ -330,7 +333,7 @@ void FileTransferManager::handleControlMessage(const MumbleProto::FileTransferCo
 	QMetaObject::invokeMethod(
 		m_engine,
 		[this, actor, payload, snapshot, charge, generation = m_connectionGeneration]() {
-			m_inboundBytes.fetch_sub(charge);
+			m_inboundBytes->fetch_sub(charge);
 			if (generation == m_engineGeneration)
 				m_engine->onControlMessage(actor, payload, snapshot);
 		},
@@ -379,9 +382,9 @@ void FileTransferManager::handleDataMessage(const MumbleProto::FileData &msg) {
 		return;
 	}
 	const qint64 charge   = static_cast< qint64 >(msg.data().size());
-	const qint64 previous = m_inboundBytes.fetch_add(charge);
+	const qint64 previous = m_inboundBytes->fetch_add(charge);
 	if (charge > PQFT::MaxChunkSize + PQFT::TagSize || previous + charge > 8 * 1024 * 1024) {
-		m_inboundBytes.fetch_sub(charge);
+		m_inboundBytes->fetch_sub(charge);
 		if (m_activeReceived.contains(transferId) && !m_inboundRejected.contains(transferId)) {
 			m_inboundRejected.insert(transferId);
 			QMetaObject::invokeMethod(
@@ -401,7 +404,7 @@ void FileTransferManager::handleDataMessage(const MumbleProto::FileData &msg) {
 	QMetaObject::invokeMethod(
 		m_engine,
 		[this, actor, transferId, index, hint, data, charge, generation = m_connectionGeneration]() {
-			m_inboundBytes.fetch_sub(charge);
+			m_inboundBytes->fetch_sub(charge);
 			if (generation == m_engineGeneration)
 				m_engine->onDataMessage(actor, transferId, index, hint, data);
 		},
@@ -463,6 +466,26 @@ std::optional< FileTransferManager::SendRecipient > FileTransferManager::sendRec
 	return recipient;
 }
 
+QList< FileTransferManager::SendRecipient >
+	FileTransferManager::availableSendRecipients(bool &identityUnavailable) const {
+	identityUnavailable = false;
+	QList< SendRecipient > recipients;
+	const ClientUser *self = ClientUser::get(Global::get().uiSession);
+	if (!self || !self->cChannel)
+		return recipients;
+	for (const User *member : self->cChannel->qlUsers) {
+		const auto *user = static_cast< const ClientUser * >(member);
+		if (!user || user == self || !user->bFileTransferCapable || !user->bFileTransferDeliveryReceipts)
+			continue;
+		const auto recipient = sendRecipient(user->uiSession);
+		if (recipient)
+			recipients.append(*recipient);
+		else
+			identityUnavailable = true;
+	}
+	return recipients;
+}
+
 bool FileTransferManager::sendRecipientStillCurrent(const SendRecipient &recipient) const {
 	const auto current = sendRecipient(recipient.session);
 	return current && current->user == recipient.user && current->name == recipient.name
@@ -473,6 +496,7 @@ bool FileTransferManager::sendRecipientStillCurrent(const SendRecipient &recipie
 
 bool FileTransferManager::startSend(const QString &filePath, const QString &mimeType, bool passwordMode,
 									const QByteArray &password, const QList< SendRecipient > &recipients) {
+	m_lastSendError.clear();
 	if (!hasUsableIdentity() || m_engine == nullptr || !Global::get().s.bFTEnabled || !m_relaySupported) {
 		return false;
 	}
@@ -493,15 +517,23 @@ bool FileTransferManager::startSend(const QString &filePath, const QString &mime
 	for (const auto &active : m_sendSelections)
 		for (const SendRecipient &existing : active)
 			for (const SendRecipient &recipient : recipients)
-				if (existing.session == recipient.session)
-					return false; // There is only one pending handshake with a peer at a time.
+				if (existing.session == recipient.session) {
+					m_lastSendError =
+						tr("A transfer to %1 is already pending. Wait for it to finish or cancel it before "
+						   "sending another file.")
+							.arg(recipient.name);
+					return false; // The peer has one pre-manifest handshake slot.
+				}
 	const qint64 fileSize = QFileInfo(filePath).size();
-	if (fileSize <= 0
-		|| (m_relayMaxSize > 0
-			&& static_cast< quint64 >(fileSize)
-					   + (static_cast< quint64 >(fileSize) / PQFT::MinChunkSize + 1) * PQFT::TagSize
-				   > m_relayMaxSize))
+	if (fileSize <= 0)
 		return false;
+	const quint64 size      = static_cast< quint64 >(fileSize);
+	const quint64 chunkSize = PQFT::FileTransferEngine::sendChunkSize(engineConfig(), recipients.size());
+	const quint64 chunks    = size / chunkSize + (size % chunkSize != 0 ? 1 : 0);
+	if (m_relayMaxSize > 0 && (size > m_relayMaxSize || chunks > (m_relayMaxSize - size) / PQFT::TagSize)) {
+		m_lastSendError = tr("The file exceeds the server's file transfer limit.");
+		return false;
+	}
 	const quint64 sendContext = ++m_nextSendContext;
 	m_sendSelections.insert(sendContext, recipients);
 	// Queue identity and connection updates before starting work on the engine.
@@ -809,10 +841,7 @@ void FileTransferManager::refreshPinCache() {
 	m_unavailablePeers = std::move(unavailable);
 }
 
-void FileTransferManager::applyEngineConfig() {
-	if (!m_engine) {
-		return;
-	}
+PQFT::FileTransferEngine::Config FileTransferManager::engineConfig() const {
 	const Settings &s = Global::get().s;
 	PQFT::FileTransferEngine::Config config;
 	config.authorizeSendPeers      = true;
@@ -827,6 +856,14 @@ void FileTransferManager::applyEngineConfig() {
 	config.maxReceiveSize          = static_cast< quint64 >(qMax(1, s.iFTMaxReceiveMiB)) * 1024ull * 1024ull;
 	config.handshakeTimeoutMSecs   = 10000;
 	config.receiveIdleTimeoutMSecs = 60000;
+	return config;
+}
+
+void FileTransferManager::applyEngineConfig() {
+	if (!m_engine)
+		return;
+	const Settings &s = Global::get().s;
+	const auto config = engineConfig();
 	QMetaObject::invokeMethod(m_engine, [this, config]() { m_engine->setConfig(config); }, Qt::QueuedConnection);
 
 	// Invalidate only on the enabled-to-disabled transition.
@@ -849,6 +886,8 @@ void FileTransferManager::configureRelay(const MumbleProto::ServerConfig &config
 }
 
 QString FileTransferManager::sendAvailabilityError() const {
+	if (!m_lastSendError.isEmpty())
+		return m_lastSendError;
 	if (!m_relaySupported)
 		return tr("This server does not support private file delivery. Ask its administrator to update the server.");
 	return tr("The file exceeds the server limit, or a selected recipient changed. Check the file size and choose the "

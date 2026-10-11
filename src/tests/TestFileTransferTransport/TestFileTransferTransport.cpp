@@ -50,6 +50,34 @@ public:
 		m_delivery->completed.release();
 	}
 
+	int connectionID = 17;
+	bool admitted    = true;
+	bool queueFileTransferControl(unsigned int target, const QByteArray &payload, int expectedID) {
+		if (!admitted || expectedID != connectionID)
+			return false;
+		return QMetaObject::invokeMethod(
+			this,
+			[this, target, payload, expectedID]() {
+				if (expectedID == connectionID)
+					sendFileTransferControl({ target }, payload);
+			},
+			Qt::QueuedConnection);
+	}
+	bool queueFileData(const QList< unsigned int > &targets, const QByteArray &id, quint64 index, quint64 total,
+					   const QByteArray &data, int expectedID) {
+		if (!admitted || expectedID != connectionID)
+			return false;
+		return QMetaObject::invokeMethod(
+			this,
+			[this, targets, id, index, total, data, expectedID]() {
+				if (expectedID == connectionID) {
+					m_delivery->targets = targets;
+					sendFileData(id, index, total, data);
+				}
+			},
+			Qt::QueuedConnection);
+	}
+
 private:
 	std::shared_ptr< Delivery > m_delivery;
 };
@@ -62,7 +90,7 @@ private slots:
 		Receiver receiver(delivery);
 		QByteArray payload("a\0b\xff", 4);
 		const QByteArray expected = payload;
-		QVERIFY(PQFT::Transport::queueControl(&receiver, std::numeric_limits< unsigned int >::max(), payload));
+		QVERIFY(PQFT::Transport::queueControl(&receiver, std::numeric_limits< unsigned int >::max(), payload, 17));
 		QCOMPARE(delivery->controlCalls, 0);
 		payload.fill('x');
 		QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
@@ -88,7 +116,7 @@ private slots:
 		QByteArray data("\0\xff\x01", 3);
 		const QByteArray expectedId   = id;
 		const QByteArray expectedData = data;
-		QVERIFY(PQFT::Transport::queueChunk(&receiver, id, index, total, data));
+		QVERIFY(PQFT::Transport::queueChunk(&receiver, { 42 }, id, index, total, data, 17));
 		QCOMPARE(delivery->chunkCalls, 0);
 		id.fill('i');
 		data.fill('d');
@@ -104,8 +132,8 @@ private slots:
 	void destroyedReceiverCancelsPendingCalls() {
 		auto delivery = std::make_shared< Delivery >();
 		auto receiver = std::make_unique< Receiver >(delivery);
-		QVERIFY(PQFT::Transport::queueControl(receiver.get(), 42, QByteArray("control")));
-		QVERIFY(PQFT::Transport::queueChunk(receiver.get(), QByteArray(16, 'i'), 0, 1, QByteArray("data")));
+		QVERIFY(PQFT::Transport::queueControl(receiver.get(), 42, QByteArray("control"), 17));
+		QVERIFY(PQFT::Transport::queueChunk(receiver.get(), { 42 }, QByteArray(16, 'i'), 0, 1, QByteArray("data"), 17));
 		receiver.reset();
 		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
 		QCOMPARE(delivery->controlCalls, 0);
@@ -115,11 +143,11 @@ private slots:
 	void replacementDoesNotReceiveOldConnectionData() {
 		auto oldDelivery = std::make_shared< Delivery >();
 		auto oldReceiver = std::make_unique< Receiver >(oldDelivery);
-		QVERIFY(PQFT::Transport::queueControl(oldReceiver.get(), 42, QByteArray("old")));
+		QVERIFY(PQFT::Transport::queueControl(oldReceiver.get(), 42, QByteArray("old"), 17));
 		oldReceiver.reset();
 		auto newDelivery = std::make_shared< Delivery >();
 		Receiver newReceiver(newDelivery);
-		QVERIFY(PQFT::Transport::queueControl(&newReceiver, 43, QByteArray("new")));
+		QVERIFY(PQFT::Transport::queueControl(&newReceiver, 43, QByteArray("new"), 17));
 		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
 		QCOMPARE(oldDelivery->controlCalls, 0);
 		QCOMPARE(newDelivery->controlCalls, 1);
@@ -133,7 +161,7 @@ private slots:
 		receiver->moveToThread(&worker);
 		connect(&worker, &QThread::finished, receiver, &QObject::deleteLater);
 		worker.start();
-		const bool queued    = PQFT::Transport::queueControl(receiver, 7, QByteArray("thread"));
+		const bool queued    = PQFT::Transport::queueControl(receiver, 7, QByteArray("thread"), 17);
 		const bool delivered = delivery->completed.tryAcquire(1, 5000);
 		worker.quit();
 		worker.wait();
@@ -150,8 +178,8 @@ private slots:
 		const std::shared_ptr< Receiver > oldConnection = current;
 		auto newDelivery                                = std::make_shared< Delivery >();
 		current                                         = std::make_shared< Receiver >(newDelivery);
-		QVERIFY(PQFT::Transport::queueControl(snapshot, 42, QByteArray("old")));
-		QVERIFY(PQFT::Transport::queueChunk(snapshot, QByteArray(16, 'i'), 0, 1, QByteArray("data")));
+		QVERIFY(PQFT::Transport::queueControl(snapshot, 42, QByteArray("old"), 17));
+		QVERIFY(PQFT::Transport::queueChunk(snapshot, { 42 }, QByteArray(16, 'i'), 0, 1, QByteArray("data"), 17));
 		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
 		QCOMPARE(oldDelivery->controlCalls, 1);
 		QCOMPARE(oldDelivery->chunkCalls, 1);
@@ -163,20 +191,38 @@ private slots:
 		auto delivery                            = std::make_shared< Delivery >();
 		auto connection                          = std::make_shared< Receiver >(delivery);
 		const std::weak_ptr< Receiver > snapshot = connection;
-		QVERIFY(PQFT::Transport::queueControl(snapshot, 42, QByteArray("old")));
-		QVERIFY(PQFT::Transport::queueChunk(snapshot, QByteArray(16, 'i'), 0, 1, QByteArray("data")));
+		QVERIFY(PQFT::Transport::queueControl(snapshot, 42, QByteArray("old"), 17));
+		QVERIFY(PQFT::Transport::queueChunk(snapshot, { 42 }, QByteArray(16, 'i'), 0, 1, QByteArray("data"), 17));
 		connection.reset();
 		QVERIFY(snapshot.expired());
-		QVERIFY(!PQFT::Transport::queueControl(snapshot, 42, QByteArray("expired")));
-		QVERIFY(!PQFT::Transport::queueChunk(snapshot, QByteArray(16, 'i'), 0, 1, QByteArray("expired")));
+		QVERIFY(!PQFT::Transport::queueControl(snapshot, 42, QByteArray("expired"), 17));
+		QVERIFY(!PQFT::Transport::queueChunk(snapshot, { 42 }, QByteArray(16, 'i'), 0, 1, QByteArray("expired"), 17));
 		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
 		QCOMPARE(delivery->controlCalls, 0);
 		QCOMPARE(delivery->chunkCalls, 0);
 	}
 
+	void admissionAndConnectionIDArePreserved() {
+		auto delivery                            = std::make_shared< Delivery >();
+		auto receiver                            = std::make_shared< Receiver >(delivery);
+		const std::weak_ptr< Receiver > snapshot = receiver;
+		QVERIFY(!PQFT::Transport::queueControl(snapshot, 42, "stale", 16));
+		receiver->admitted = false;
+		QVERIFY(!PQFT::Transport::queueChunk(snapshot, { 42 }, QByteArray(16, 'i'), 0, 1, "full", 17));
+		receiver->admitted = true;
+		QVERIFY(PQFT::Transport::queueChunk(snapshot, { 42, 43 }, QByteArray(16, 'i'), 0, 1, "ok", 17));
+		QCoreApplication::sendPostedEvents(receiver.get(), QEvent::MetaCall);
+		QCOMPARE(delivery->targets, QList< unsigned int >({ 42, 43 }));
+		QVERIFY(PQFT::Transport::queueControl(snapshot, 42, "old", 17));
+		receiver->connectionID = 18;
+		QCoreApplication::sendPostedEvents(receiver.get(), QEvent::MetaCall);
+		QCOMPARE(delivery->controlCalls, 0);
+	}
+
 	void disconnectedTransportRejectsQueue() {
-		QVERIFY(!PQFT::Transport::queueControl< Receiver >(nullptr, 7, QByteArray("control")));
-		QVERIFY(!PQFT::Transport::queueChunk< Receiver >(nullptr, QByteArray(16, 'i'), 0, 1, QByteArray("data")));
+		QVERIFY(!PQFT::Transport::queueControl< Receiver >(nullptr, 7, QByteArray("control"), 17));
+		QVERIFY(!PQFT::Transport::queueChunk< Receiver >(nullptr, { 42 }, QByteArray(16, 'i'), 0, 1, QByteArray("data"),
+														 17));
 	}
 };
 

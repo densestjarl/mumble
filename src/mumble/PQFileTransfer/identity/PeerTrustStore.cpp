@@ -34,11 +34,11 @@ PinnedPeer rowToPeer(const QSqlQuery &query) {
 
 } // namespace
 
-PeerTrustStore::PeerTrustStore(QSqlDatabase db) : m_db(std::move(db)) { }
+PeerTrustStore::PeerTrustStore(QSqlDatabase db) : m_db(std::move(db)) {
+}
 
 TrustState PeerTrustStore::check(const QByteArray &serverDigest, const QString &username,
-								 const QByteArray &peerFingerprint,
-								 const QString &safetyNumber) const {
+								 const QByteArray &peerFingerprint, const QString &safetyNumber) const {
 	Q_UNUSED(safetyNumber);
 
 	PinnedPeer pinned;
@@ -53,8 +53,7 @@ TrustState PeerTrustStore::check(const QByteArray &serverDigest, const QString &
 }
 
 TrustState PeerTrustStore::checkAndPin(const QByteArray &serverDigest, const QString &username,
-										const QByteArray &peerFingerprint,
-										const QString &safetyNumber) {
+									   const QByteArray &peerFingerprint, const QString &safetyNumber) {
 	const TrustState state = check(serverDigest, username, peerFingerprint, safetyNumber);
 	if (state != TrustState::NewPeer) {
 		return state;
@@ -64,7 +63,10 @@ TrustState PeerTrustStore::checkAndPin(const QByteArray &serverDigest, const QSt
 	if (!query.prepare(QLatin1String("INSERT INTO `ft_pins` "
 									 "(`server_digest`, `username`, `peer_fingerprint`, "
 									 "`safety_number`, `first_seen`, `verified`) "
-									 "VALUES (?, ?, ?, ?, ?, 0)")))
+									 "VALUES (?, ?, ?, ?, ?, 0) "
+									 "ON CONFLICT(server_digest, username) DO UPDATE SET "
+									 "safety_number = excluded.safety_number "
+									 "WHERE ft_pins.peer_fingerprint = excluded.peer_fingerprint")))
 		return TrustState::StorageError; // fail closed on storage errors
 
 	query.addBindValue(serverDigest);
@@ -75,7 +77,9 @@ TrustState PeerTrustStore::checkAndPin(const QByteArray &serverDigest, const QSt
 	if (!execTrustQuery(query)) {
 		return TrustState::StorageError;
 	}
-	return TrustState::Pinned;
+	// A competing first contact may have inserted the row after check().
+	// Preserve verification/first_seen and never replace a different identity.
+	return check(serverDigest, username, peerFingerprint, safetyNumber);
 }
 
 bool PeerTrustStore::markVerified(const QByteArray &serverDigest, const QString &username,

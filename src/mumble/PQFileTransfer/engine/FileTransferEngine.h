@@ -80,8 +80,7 @@ public:
 	/// an empty QByteArray on first contact (mutex-guarded inside the manager).
 	using PinLookup = std::function< QByteArray(unsigned int peerSession) >;
 	/// Peer identity for signing (thread-safe part of FileTransferIdentity).
-	using IdentitySign =
-		std::function< bool(QByteArray &sig, const QByteArray &msg, const QByteArray &ctx) >;
+	using IdentitySign = std::function< bool(QByteArray &sig, const QByteArray &msg, const QByteArray &ctx) >;
 
 	struct PeerSnapshot {
 		QString name;
@@ -100,6 +99,8 @@ public:
 		int handshakeTimeoutMSecs	  = 10000;
 		int receiveIdleTimeoutMSecs   = 60000;
 	};
+
+	static quint32 sendChunkSize(const Config &config, qsizetype recipientCount);
 
 	explicit FileTransferEngine(QObject *parent = nullptr);
 	~FileTransferEngine() override;
@@ -266,8 +267,7 @@ private:
 	void processControlForSend(SendJob &job, SendPeer &peer, const QByteArray &payload);
 	/// Handles an already-authenticated control record (routed by
 	/// onControlMessage, which probed the sessions non-destructively).
-	void processControlForReceive(std::shared_ptr< ReceiveJob > jobPtr, quint8 type,
-								  const QByteArray &body);
+	void processControlForReceive(std::shared_ptr< ReceiveJob > jobPtr, quint8 type, const QByteArray &body);
 	void startResponder(unsigned int actorSession, const QByteArray &m1Frame, const QByteArray &peerFingerprint,
 						const QString &peerName = QString());
 	void handleIncomingM1(unsigned int actorSession, const QByteArray &payload,
@@ -283,8 +283,7 @@ private:
 	void updateReceiveState(ReceiveJob &job, FTTransferInfo::State state, const QString &error = QString());
 	/// Takes the owning pointer: failure paths remove the job from the map,
 	/// which may drop the last reference — the parameter keeps it alive.
-	void feedReceiveChunk(std::shared_ptr< ReceiveJob > jobPtr, quint64 index,
-						  const QByteArray &ciphertext);
+	void feedReceiveChunk(std::shared_ptr< ReceiveJob > jobPtr, quint64 index, const QByteArray &ciphertext);
 	void drainEarlyChunks(std::shared_ptr< ReceiveJob > jobPtr);
 	void drainSpooledChunks(std::shared_ptr< ReceiveJob > jobPtr);
 	bool openSpool(ReceiveJob &job);
@@ -298,8 +297,7 @@ private:
 	void emitInfo(const FTTransferInfo &info);
 	void emitSaveDone(std::shared_ptr< ReceiveJob > jobPtr);
 	void emitSaveFailed(ReceiveJob &job, const QString &error = QString());
-	std::shared_ptr< ReceiveJob > findReceiveByPeer(unsigned int peerSession,
-													const QByteArray &transferId);
+	std::shared_ptr< ReceiveJob > findReceiveByPeer(unsigned int peerSession, const QByteArray &transferId);
 	/// Key for receive jobs whose manifest (and thus transferId) has not
 	/// arrived yet.
 	static QByteArray preManifestKey(unsigned int peerSession);

@@ -41,6 +41,125 @@ private slots:
 		QVERIFY(!m_newM1.isEmpty());
 	}
 
+	void recipientsSkipUnavailableMembers() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		ClientUser legacy, broken;
+		legacy.uiSession            = 43;
+		legacy.qsName               = "Legacy";
+		legacy.bFileTransferCapable = true;
+		broken.uiSession            = 44;
+		broken.qsName               = "Broken pin";
+		broken.bFileTransferCapable = broken.bFileTransferDeliveryReceipts = true;
+		m_channel->addUser(&legacy);
+		m_channel->addUser(&broken);
+		{
+			QWriteLocker lock(&ClientUser::c_qrwlUsers);
+			ClientUser::c_qmUsers.insert(43, &legacy);
+			ClientUser::c_qmUsers.insert(44, &broken);
+		}
+		const auto cleanup = qScopeGuard([&]() {
+			QWriteLocker lock(&ClientUser::c_qrwlUsers);
+			ClientUser::c_qmUsers.remove(43);
+			ClientUser::c_qmUsers.remove(44);
+		});
+		QCOMPARE(manager.m_trustStore->checkAndPin(m_serverDigest, broken.qsName, "invalid", "broken"),
+				 PQFT::TrustState::Pinned);
+		bool unavailable      = false;
+		const auto recipients = manager.availableSendRecipients(unavailable);
+		QCOMPARE(recipients.size(), 1);
+		QCOMPARE(recipients.first().session, 42u);
+		QVERIFY(unavailable);
+		m_trustDb.close();
+		QVERIFY(manager.availableSendRecipients(unavailable).isEmpty());
+		QVERIFY(unavailable);
+	}
+
+	void controlsDoNotRebuildWholePinCache() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		manager.refreshPinCache();
+		{
+			QMutexLocker lock(&manager.m_pinCacheMutex);
+			manager.m_pinCache.insert(99, "cache sentinel");
+		}
+		for (int i = 0; i < 32; ++i)
+			deliverControl(manager, m_oldM1);
+		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
+		QCoreApplication::sendPostedEvents(&manager, QEvent::MetaCall);
+		QMutexLocker lock(&manager.m_pinCacheMutex);
+		QCOMPARE(manager.m_pinCache.value(99), QByteArray("cache sentinel"));
+	}
+
+	void duplicateSessionPromptsAcceptSameIdentity() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		ClientUser other;
+		other.uiSession            = 43;
+		other.qsName               = m_peer->qsName;
+		other.bFileTransferCapable = other.bFileTransferDeliveryReceipts = true;
+		m_channel->addUser(&other);
+		{
+			QWriteLocker lock(&ClientUser::c_qrwlUsers);
+			ClientUser::c_qmUsers.insert(43, &other);
+		}
+		const auto cleanup = qScopeGuard([&]() {
+			manager.disconnectCleanup();
+			QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection);
+			QWriteLocker lock(&ClientUser::c_qrwlUsers);
+			ClientUser::c_qmUsers.remove(43);
+		});
+		manager.refreshPinCache();
+		QSignalSpy prompts(&manager, &FileTransferManager::firstContact);
+		deliverControl(manager, m_oldM1);
+		MumbleProto::FileTransferControl control;
+		control.set_actor(43);
+		control.set_payload(m_oldM1.constData(), static_cast< size_t >(m_oldM1.size()));
+		manager.handleControlMessage(control);
+		QTRY_COMPARE_WITH_TIMEOUT(prompts.size(), 2, 5000);
+		const auto fp    = PQFT::identityFingerprint(PQFT::extractM1IdentityKey(m_oldM1));
+		const auto first = manager.firstContactToken(42), second = manager.firstContactToken(43);
+		QVERIFY(first && second);
+		QVERIFY(manager.resolveFirstContact(42, fp, first, true));
+		QVERIFY(manager.resolveFirstContact(43, fp, second, true));
+		PQFT::PinnedPeer stored;
+		QVERIFY(manager.m_trustStore->lookup(stored, m_serverDigest, m_peer->qsName));
+		QVERIFY(stored.verified);
+		QCOMPARE(stored.fingerprint, fp);
+	}
+
+	void sendLimitUsesActualChunksAndBusyHasOwnError() {
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		QVERIFY(manager.m_identity->createIdentity("owned-send-limit-passphrase"));
+		manager.m_transportSetup = [](PQFT::FileTransferEngine &engine) {
+			engine.setTransport([](unsigned int, const QByteArray &) {}, {});
+		};
+		m_global->s.iFTChunkKB     = 256;
+		m_global->s.iFTSendPaceKiB = 0;
+		MumbleProto::ServerConfig relay;
+		relay.set_file_transfer_relay_version(1);
+		relay.set_max_file_transfer_size(1024 * 1024);
+		manager.configureRelay(relay);
+		const auto selected = manager.sendRecipient(42);
+		QVERIFY(selected);
+		QFile source(m_directory->filePath("near-limit.bin"));
+		QVERIFY(source.open(QIODevice::WriteOnly));
+		QVERIFY(source.resize(1024 * 1024 - 63));
+		source.close();
+		QVERIFY(!manager.startSend(source.fileName(), "application/octet-stream", false, {}, { *selected }));
+		QVERIFY(manager.sendAvailabilityError().contains("limit"));
+		QVERIFY(source.open(QIODevice::ReadWrite));
+		QVERIFY(source.resize(1024 * 1024 - 64));
+		source.close();
+		QVERIFY(manager.startSend(source.fileName(), "application/octet-stream", false, {}, { *selected }));
+		QVERIFY(!manager.startSend(source.fileName(), "application/octet-stream", false, {}, { *selected }));
+		QVERIFY(manager.sendAvailabilityError().contains(selected->name));
+		QVERIFY(manager.sendAvailabilityError().contains("pending"));
+		manager.disconnectCleanup();
+		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
+	}
+
 	void repeatedFirstContactsKeepOnePrompt() {
 		FileTransferManager manager;
 		QVERIFY(setupTrustFixture(manager));
@@ -95,6 +214,7 @@ private slots:
 			QWriteLocker lock(&ClientUser::c_qrwlUsers);
 			ClientUser::c_qmUsers.remove(43);
 		});
+		manager.refreshPinCache(); // The joined peer triggers a production user-list refresh.
 		QSignalSpy prompts(&manager, &FileTransferManager::firstContact);
 		QSignalSpy cancelled(&manager, &FileTransferManager::firstContactCancelled);
 		deliverControl(manager, m_oldM1);
@@ -829,6 +949,7 @@ private slots:
 		deliverControl(manager, m_oldM1);
 		QVERIFY(QMetaObject::invokeMethod(engine, []() {}, Qt::BlockingQueuedConnection));
 		manager.disconnectCleanup();
+		manager.refreshPinCache(); // Reconnected user-list events repopulate the cache.
 		deliverControl(manager, m_newM1);
 		QVERIFY(QMetaObject::invokeMethod(engine, []() {}, Qt::BlockingQueuedConnection));
 		QCoreApplication::sendPostedEvents(&manager, QEvent::MetaCall);
@@ -902,6 +1023,7 @@ private:
 				},
 				Qt::BlockingQueuedConnection))
 			return false;
+		manager.refreshPinCache(); // Match the production user-list event before inbound handshakes.
 		return true;
 	}
 	static QByteArray firstContactFrame() {

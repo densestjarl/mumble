@@ -13,8 +13,8 @@
 #include "PQFileTransfer/PQFTConstants.h"
 #include "PQFileTransfer/crypto/CryptoUtils.h"
 #include "PQFileTransfer/crypto/SigMLDSA65.h"
-#include "PQFileTransfer/engine/FileTransferEngine.h"
 #include "PQFileTransfer/engine/FTMessages.h"
+#include "PQFileTransfer/engine/FileTransferEngine.h"
 #include "PQFileTransfer/engine/FileTransferSession.h"
 #include "PQFileTransfer/identity/FTIdentity.h"
 
@@ -29,6 +29,9 @@
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
+#ifndef Q_OS_WIN
+#	include <sys/stat.h>
+#endif
 
 // A named namespace (not an anonymous one): the test class below has external
 // linkage and GCC's -Wsubobject-linkage rejects members whose type uses an
@@ -99,14 +102,16 @@ private slots:
 	void saveDoesNotDeleteUnrelatedPart();
 	void confirmedSaveReplacesAtomically();
 	void failedSavePreservesReceiveForRetry();
+	void savedPermissionsMatchNormalCreation_data();
+	void savedPermissionsMatchNormalCreation();
+	void receiveFailureStopsSenderImmediately();
 	void saveSyncFailureIsRetryable_data();
 	void saveSyncFailureIsRetryable();
 
 private:
 	QString writeTestFile(qsizetype size);
 	/// True once `updates` contains `state` for `transferId` ("" matches any).
-	static bool sawState(const QSignalSpy &updates, const QByteArray &transferId,
-						 PQFT::FTTransferInfo::State state);
+	static bool sawState(const QSignalSpy &updates, const QByteArray &transferId, PQFT::FTTransferInfo::State state);
 
 	QTemporaryDir m_tempDir;
 	TestIdentity m_alice, m_bob;
@@ -233,7 +238,6 @@ struct EnginePair {
 				alice.onControlMessage(BobSession, payload);
 			},
 			[](const QByteArray &, quint64, quint64, const QByteArray &) {});
-
 	}
 };
 } // namespace
@@ -511,6 +515,75 @@ void TestFileTransferEngine::frequentRefillsPreserveElapsedCredit() {
 		QVERIFY(QMetaObject::invokeMethod(pacer.data(), "timeout", Qt::DirectConnection));
 	}
 	QVERIFY(sawState(received, {}, PQFT::FTTransferInfo::State::Ready));
+}
+
+void TestFileTransferEngine::receiveFailureStopsSenderImmediately() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config config;
+	config.chunkSize              = 16 * 1024;
+	config.sendRateBytesPerSecond = 64 * 1024;
+	pair.alice.setConfig(config);
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy received(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	QByteArray transfer;
+	int chunks            = 0;
+	pair.onChunkDelivered = [&](const QByteArray &id, quint64, quint64, const QByteArray &) {
+		transfer = id;
+		++chunks;
+	};
+	QVERIFY(pair.alice.startSend(writeTestFile(1024 * 1024), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp } }));
+	QTRY_VERIFY_WITH_TIMEOUT(chunks > 0, 5000);
+	const int before = chunks;
+	pair.bob.transportFailed(AliceSession, transfer, "receive queue stalled");
+	QVERIFY(sawState(sent, transfer, PQFT::FTTransferInfo::State::Failed));
+	QVERIFY(sawState(received, transfer, PQFT::FTTransferInfo::State::Failed));
+	QTest::qWait(300);
+	QCOMPARE(chunks, before);
+}
+
+void TestFileTransferEngine::savedPermissionsMatchNormalCreation_data() {
+	QTest::addColumn< bool >("replace");
+	QTest::addColumn< int >("creationMask");
+	QTest::newRow("new-default") << false << 0022;
+	QTest::newRow("replace-default") << true << 0022;
+	QTest::newRow("new-private") << false << 0077;
+	QTest::newRow("replace-private") << true << 0077;
+}
+
+void TestFileTransferEngine::savedPermissionsMatchNormalCreation() {
+	QFETCH(bool, replace);
+	QFETCH(int, creationMask);
+#ifndef Q_OS_WIN
+	const auto previousMask = ::umask(static_cast< mode_t >(creationMask));
+	const auto restoreMask  = qScopeGuard([&]() { ::umask(previousMask); });
+#else
+	Q_UNUSED(creationMask);
+#endif
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	QSignalSpy received(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	const QString source = writeTestFile(64 * 1024);
+	QVERIFY(pair.alice.startSend(source, "application/octet-stream", false, {}, { { BobSession, m_bobFp } }));
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(received, {}, PQFT::FTTransferInfo::State::Ready), 5000);
+	const auto ready = received.last().first().value< PQFT::FTTransferInfo >();
+	QFile ordinary(m_tempDir.filePath(replace ? QString("ordinary-replace-%1.bin").arg(creationMask)
+											  : QString("ordinary-new-%1.bin").arg(creationMask)));
+	QVERIFY(ordinary.open(QIODevice::WriteOnly | QIODevice::NewOnly));
+	const auto expected = ordinary.permissions();
+	ordinary.close();
+	const QString target = m_tempDir.filePath(replace ? QString("permissions-replace-%1.bin").arg(creationMask)
+													  : QString("permissions-new-%1.bin").arg(creationMask));
+	if (replace) {
+		QFile existing(target);
+		QVERIFY(existing.open(QIODevice::WriteOnly));
+	}
+	pair.bob.saveTransferAs(ready.transferId, target, replace);
+	QVERIFY(sawState(received, ready.transferId, PQFT::FTTransferInfo::State::Saved));
+	QCOMPARE(QFile::permissions(target), expected);
+	QCOMPARE(QDir(m_tempDir.path())
+				 .entryList({ ".mumble-ft-mode-*", ".mumble-ft-save-*" }, QDir::Files | QDir::Hidden)
+				 .size(),
+			 0);
 }
 
 void TestFileTransferEngine::saveDoesNotDeleteUnrelatedPart() {
@@ -1023,7 +1096,8 @@ void TestFileTransferEngine::earlyChunksKeepTheirTransferIdentity() {
 
 void TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive() {
 	PQFT::FileTransferEngine engine;
-	engine.setIdentity(m_bob.publicKey, [&](QByteArray &signature, const QByteArray &message, const QByteArray &context) {
+	engine.setIdentity(m_bob.publicKey,
+					   [&](QByteArray &signature, const QByteArray &message, const QByteArray &context) {
 		PQFT::SigMLDSA65 sign;
 		return sign.sign(signature, m_bob.secretKey, message, context);
 	});
@@ -1285,8 +1359,7 @@ void TestFileTransferEngine::passwordRoundTrip() {
 		[&]() {
 			for (const auto &argument : bobUpdates) {
 				const PQFT::FTTransferInfo info = argument.at(0).value< PQFT::FTTransferInfo >();
-				if (info.transferId == passwordTransfer
-					&& info.state == PQFT::FTTransferInfo::State::Ready) {
+				if (info.transferId == passwordTransfer && info.state == PQFT::FTTransferInfo::State::Ready) {
 					readyTransfer = info.transferId;
 					return true;
 				}
@@ -1343,8 +1416,7 @@ void TestFileTransferEngine::wrongPasswordFailsClosed() {
 		[&]() {
 			for (const auto &argument : bobUpdates) {
 				const PQFT::FTTransferInfo info = argument.at(0).value< PQFT::FTTransferInfo >();
-				if (info.transferId == passwordTransfer
-					&& info.state == PQFT::FTTransferInfo::State::Failed) {
+				if (info.transferId == passwordTransfer && info.state == PQFT::FTTransferInfo::State::Failed) {
 					failedWithGenericError = info.error.contains("Decryption failed");
 					return true;
 				}
@@ -1355,8 +1427,7 @@ void TestFileTransferEngine::wrongPasswordFailsClosed() {
 	QVERIFY(failedWithGenericError);
 
 	// No temp directory survived for that transfer
-	const QString dir =
-		stagingDirectory(passwordTransfer);
+	const QString dir = stagingDirectory(passwordTransfer);
 	QVERIFY(!QFile::exists(dir + "/content.bin"));
 }
 
@@ -1412,8 +1483,7 @@ void TestFileTransferEngine::duplicateChunkIsFatal() {
 		}
 	}
 	QVERIFY(!failedTransfer.isEmpty());
-	const QString dir =
-		stagingDirectory(failedTransfer);
+	const QString dir = stagingDirectory(failedTransfer);
 	QVERIFY(!QFile::exists(dir + "/content.bin"));
 }
 
@@ -1454,9 +1524,7 @@ void TestFileTransferEngine::latePasswordSpoolsAllChunks() {
 	pair.bob.providePassword(passwordTransfer, QByteArray("a late password"));
 
 	// Every spooled chunk replays and the transfer completes.
-	QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, passwordTransfer,
-									 PQFT::FTTransferInfo::State::Ready),
-							 30000);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, passwordTransfer, PQFT::FTTransferInfo::State::Ready), 30000);
 
 	const QString target = m_tempDir.filePath("received-late-password.bin");
 	pair.bob.saveTransferAs(passwordTransfer, target);
@@ -1513,8 +1581,7 @@ void TestFileTransferEngine::secondTransferWhileFirstReady() {
 		[&]() {
 			for (const auto &argument : bobUpdates) {
 				const PQFT::FTTransferInfo info = argument.at(0).value< PQFT::FTTransferInfo >();
-				if (info.state == PQFT::FTTransferInfo::State::Ready
-					&& info.transferId != firstTransfer) {
+				if (info.state == PQFT::FTTransferInfo::State::Ready && info.transferId != firstTransfer) {
 					secondTransfer = info.transferId;
 					return true;
 				}
@@ -1526,8 +1593,7 @@ void TestFileTransferEngine::secondTransferWhileFirstReady() {
 
 	// The first transfer was untouched by the second one's handshake.
 	QVERIFY(!sawState(bobUpdates, firstTransfer, PQFT::FTTransferInfo::State::Failed));
-	const QString firstDir =
-		stagingDirectory(firstTransfer);
+	const QString firstDir = stagingDirectory(firstTransfer);
 	QVERIFY(QFile::exists(firstDir + "/content.bin"));
 
 	// ...and both saved copies match their sources.
@@ -1580,8 +1646,7 @@ void TestFileTransferEngine::readyTransferDoesNotExpire() {
 	// Sit well past the idle timeout with the transfer Ready.
 	QTest::qWait(2000);
 	QVERIFY(!sawState(bobUpdates, readyTransfer, PQFT::FTTransferInfo::State::Failed));
-	const QString dir =
-		stagingDirectory(readyTransfer);
+	const QString dir = stagingDirectory(readyTransfer);
 	QVERIFY(QFile::exists(dir + "/content.bin"));
 
 	const QString target = m_tempDir.filePath("received-no-expiry.bin");
@@ -1626,9 +1691,7 @@ void TestFileTransferEngine::firstContactPinFlags() {
 
 		// No M2 was ever sent: the initiator fails once its handshake
 		// timeout expires instead of hanging.
-		QTRY_VERIFY_WITH_TIMEOUT(sawState(aliceUpdates, QByteArray(),
-										 PQFT::FTTransferInfo::State::Failed),
-								 10000);
+		QTRY_VERIFY_WITH_TIMEOUT(sawState(aliceUpdates, QByteArray(), PQFT::FTTransferInfo::State::Failed), 10000);
 	}
 	{
 		// Sender side: first use after a completed (authenticated) handshake
@@ -1652,9 +1715,7 @@ void TestFileTransferEngine::firstContactPinFlags() {
 		QCOMPARE(aliceFirstContact.first().at(4).toBool(), true);
 		QVERIFY(!sawState(bobUpdates, QByteArray(), PQFT::FTTransferInfo::State::Ready));
 		pair.alice.resolveSendAuthorization(BobSession, aliceFirstContact.first().at(3).toByteArray(), true);
-		QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, QByteArray(),
-										 PQFT::FTTransferInfo::State::Ready),
-								 30000);
+		QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, QByteArray(), PQFT::FTTransferInfo::State::Ready), 30000);
 	}
 }
 
@@ -1680,9 +1741,7 @@ void TestFileTransferEngine::incomingAbortCleansUpSafely() {
 
 	// Wait until the transfer is live (manifest verified, chunks trickling),
 	// then abort from the sender side.
-	QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, QByteArray(),
-									 PQFT::FTTransferInfo::State::Transferring),
-							 30000);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, QByteArray(), PQFT::FTTransferInfo::State::Transferring), 30000);
 	pair.alice.abortTransfer(QByteArray());   // invalid id: must not disturb anything
 
 	QByteArray transferId;
@@ -1695,14 +1754,11 @@ void TestFileTransferEngine::incomingAbortCleansUpSafely() {
 	QVERIFY(!transferId.isEmpty());
 	pair.alice.abortTransfer(transferId);
 
-	QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, transferId,
-									 PQFT::FTTransferInfo::State::Aborted),
-							 10000);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, transferId, PQFT::FTTransferInfo::State::Aborted), 10000);
 	QVERIFY(sawState(aliceUpdates, transferId, PQFT::FTTransferInfo::State::Aborted));
 
 	// Partial output is gone.
-	const QString dir =
-		stagingDirectory(transferId);
+	const QString dir = stagingDirectory(transferId);
 	QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(dir + "/content.bin"), 10000);
 }
 
@@ -1762,8 +1818,7 @@ void TestFileTransferEngine::passwordSpoolIsBounded() {
 		[&]() {
 			for (const auto &argument : bobUpdates) {
 				const PQFT::FTTransferInfo info = argument.at(0).value< PQFT::FTTransferInfo >();
-				if (info.transferId == passwordTransfer
-					&& info.state == PQFT::FTTransferInfo::State::Failed) {
+				if (info.transferId == passwordTransfer && info.state == PQFT::FTTransferInfo::State::Failed) {
 					failedWithGenericError = info.error.contains("Decryption failed");
 					return true;
 				}
@@ -1773,11 +1828,8 @@ void TestFileTransferEngine::passwordSpoolIsBounded() {
 		30000);
 	QVERIFY(failedWithGenericError);
 
-	const QString dir =
-		stagingDirectory(passwordTransfer);
-	QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(dir + "/content.bin")
-								 && !QFile::exists(dir + "/chunks.spool"),
-							 10000);
+	const QString dir = stagingDirectory(passwordTransfer);
+	QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(dir + "/content.bin") && !QFile::exists(dir + "/chunks.spool"), 10000);
 }
 
 QTEST_MAIN(TestFileTransferEngine)

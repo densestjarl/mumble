@@ -35,6 +35,8 @@ private slots:
 	void identityChangePassphrase();
 
 	void trustStoreTransitions();
+	void concurrentPinPreservesIdentity_data();
+	void concurrentPinPreservesIdentity();
 	void trustStoreChangedBlocks();
 	void trustStoreRemovePin();
 	void verificationMatchesExpectedKey();
@@ -95,8 +97,7 @@ void TestFTIdentity::safetyNumberSymmetry() {
 
 void TestFTIdentity::safetyNumberDistinct() {
 	const QByteArray fpA = PQFT::randomBytes(48);
-	QVERIFY(PQFT::safetyNumber(fpA, PQFT::randomBytes(48))
-			!= PQFT::safetyNumber(fpA, PQFT::randomBytes(48)));
+	QVERIFY(PQFT::safetyNumber(fpA, PQFT::randomBytes(48)) != PQFT::safetyNumber(fpA, PQFT::randomBytes(48)));
 }
 
 void TestFTIdentity::qrPayload() {
@@ -176,6 +177,39 @@ void TestFTIdentity::identityChangePassphrase() {
 	QCOMPARE(identity.publicKey().size(), PQFT::SigMLDSA65::PublicKeySize);
 }
 
+void TestFTIdentity::concurrentPinPreservesIdentity_data() {
+	QTest::addColumn< bool >("sameKey");
+	QTest::newRow("same-key") << true;
+	QTest::newRow("different-key") << false;
+}
+
+void TestFTIdentity::concurrentPinPreservesIdentity() {
+	QFETCH(bool, sameKey);
+	PQFT::PeerTrustStore store(m_db);
+	const auto digest    = PQFT::randomBytes(20);
+	const auto fp        = PQFT::randomBytes(PQFT::HashSize);
+	const auto competing = sameKey ? fp : PQFT::randomBytes(PQFT::HashSize);
+	QSqlQuery query(m_db);
+	// Insert between the initial check and INSERT without a timing-dependent race.
+	const QString trigger =
+		QStringLiteral(
+			"CREATE TEMP TRIGGER competing_pin BEFORE INSERT ON ft_pins "
+			"WHEN NOT EXISTS (SELECT 1 FROM ft_pins WHERE server_digest=NEW.server_digest AND username=NEW.username) "
+			"BEGIN INSERT INTO ft_pins(server_digest,username,peer_fingerprint,safety_number,first_seen,verified) "
+			"VALUES(NEW.server_digest,NEW.username,X'%1','earlier','2000-01-01',1); END")
+			.arg(QString::fromLatin1(competing.toHex()));
+	QVERIFY(query.exec(trigger));
+	const auto state = store.checkAndPin(digest, "Concurrent", fp, "shown");
+	QVERIFY(query.exec("DROP TRIGGER competing_pin"));
+	QCOMPARE(state, sameKey ? PQFT::TrustState::Verified : PQFT::TrustState::Changed);
+	PQFT::PinnedPeer peer;
+	QVERIFY(store.lookup(peer, digest, "Concurrent"));
+	QCOMPARE(peer.fingerprint, competing);
+	QVERIFY(peer.verified);
+	QCOMPARE(peer.firstSeen, QDate(2000, 1, 1));
+	QCOMPARE(store.checkAndPin(digest, "Concurrent", fp, "shown"), state);
+}
+
 void TestFTIdentity::trustStoreTransitions() {
 	PQFT::PeerTrustStore store(m_db);
 	const QByteArray serverDigest = PQFT::randomBytes(48);
@@ -214,8 +248,7 @@ void TestFTIdentity::trustStoreChangedBlocks() {
 
 	const QByteArray attackerFp = PQFT::randomBytes(48);
 	QCOMPARE(store.check(serverDigest, username, attackerFp, safety), PQFT::TrustState::Changed);
-	QCOMPARE(store.checkAndPin(serverDigest, username, attackerFp, safety),
-			 PQFT::TrustState::Changed);
+	QCOMPARE(store.checkAndPin(serverDigest, username, attackerFp, safety), PQFT::TrustState::Changed);
 
 	// The original pin is untouched (no silent key updates, ever)
 	PQFT::PinnedPeer peer;

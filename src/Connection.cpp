@@ -52,6 +52,8 @@ Connection::Connection(QObject *p, QSslSocket *qtsSock) : QObject(p) {
 	connect(qtsSocket, SIGNAL(disconnected()), this, SLOT(socketDisconnected()));
 	connect(qtsSocket, SIGNAL(sslErrors(const QList< QSslError > &)), this,
 			SLOT(socketSslErrors(const QList< QSslError > &)));
+	m_readRetry.setSingleShot(true);
+	connect(&m_readRetry, &QTimer::timeout, this, &Connection::socketRead);
 	qtLastPacket.restart();
 #ifdef Q_OS_WIN
 	dwFlow = 0;
@@ -104,6 +106,14 @@ void Connection::resetActivityTime() {
 	qtLastPacket.restart();
 }
 
+void Connection::setReadAdmission(std::function< bool(Mumble::Protocol::TCPMessageType, qint64) > admission,
+								  int timeoutMSecs) {
+	m_readAdmission    = std::move(admission);
+	m_readPauseTimeout = qMax(1, timeoutMSecs);
+	// Large enough for every valid protocol frame, bounded while reads pause.
+	qtsSocket->setReadBufferSize(8 * 1024 * 1024);
+}
+
 /**
  * This function waits until a complete package is received and then emits it as a message.
  * It gets called everytime new data is available and interprets the message prefix header
@@ -130,20 +140,31 @@ void Connection::socketRead() {
 			iAvailable -= 6;
 		}
 
-		if ((iPacketLength == -1) || (iAvailable < iPacketLength))
-			return;
-
-		if (iPacketLength > 0x7fffff) {
-			qWarning() << "Host tried to send huge packet";
+		if (iPacketLength < 0 || iPacketLength > 0x7fffff) {
+			qWarning() << "Host tried to send huge or invalid packet";
 			disconnectSocket(true);
 			return;
 		}
+		if (iAvailable < iPacketLength)
+			return;
 
+		if (m_readAdmission && !m_readAdmission(m_type, iPacketLength)) {
+			if (!m_readPauseClock.isValid())
+				m_readPauseClock.start();
+			if (m_readPauseClock.elapsed() < m_readPauseTimeout) {
+				m_readRetry.start(20);
+				return;
+			}
+			m_readAdmissionTimedOut = true;
+		}
+		m_readPauseClock.invalidate();
+		m_readRetry.stop();
 		QByteArray qbaBuffer = qtsSocket->read(iPacketLength);
 		iPacketLength        = -1;
 		iAvailable -= iPacketLength;
 
 		emit message(m_type, qbaBuffer);
+		m_readAdmissionTimedOut = false;
 	}
 }
 

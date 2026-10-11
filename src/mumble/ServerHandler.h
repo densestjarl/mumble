@@ -82,6 +82,7 @@ private:
 
 	Database *database;
 	std::shared_ptr< std::atomic< qint64 > > m_fileInboundBytes = std::make_shared< std::atomic< qint64 > >(0);
+	std::shared_ptr< std::atomic< qint64 > > m_fileWorkerInboundBytes;
 	std::atomic< qint64 > m_fileQueuedBytes{ 0 };
 	std::atomic< qint64 > m_fileControlQueuedBytes{ 0 };
 	std::atomic< qint64 > m_fileSocketBytes{ 0 };
@@ -179,7 +180,9 @@ public:
 	void setServerSynchronized(bool synchronized);
 
 #define PROCESS_MUMBLE_TCP_MESSAGE(name, value) \
-	void sendMessage(const MumbleProto::name &msg) { sendProtoMessage(msg, Mumble::Protocol::TCPMessageType::name); }
+	void sendMessage(const MumbleProto::name &msg) {                   \
+		sendProtoMessage(msg, Mumble::Protocol::TCPMessageType::name); \
+	}
 	MUMBLE_ALL_TCP_MESSAGES
 #undef PROCESS_MUMBLE_TCP_MESSAGE
 
@@ -200,6 +203,9 @@ public:
 	void banUser(unsigned int uiSession, const QString &reason, bool banCertificate, bool banIP);
 	void sendUserTextMessage(unsigned int uiSession, const QString &message_);
 	void sendChannelTextMessage(unsigned int channel, const QString &message_, bool tree);
+	void setFileTransferReceiveBudget(std::shared_ptr< std::atomic< qint64 > > budget) {
+		std::atomic_store(&m_fileWorkerInboundBytes, std::move(budget));
+	}
 	void sendFileTransferControl(const QList< unsigned int > &targetSessions, const QByteArray &payload);
 	bool queueFileTransferControl(unsigned int target, const QByteArray &payload, int expectedConnectionID);
 	bool queueFileData(const QList< unsigned int > &targets, const QByteArray &transferId, quint64 index, quint64 total,

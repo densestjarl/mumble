@@ -57,7 +57,6 @@
 #	include "PQFileTransfer/identity/FTIdentity.h"
 #	include "PQFileTransfer/widgets/FileTransferDialogs.h"
 #endif
-#include "SelfSharePreview.h"
 #include "SearchDialog.h"
 #include "SelfSharePreview.h"
 #include "ServerHandler.h"
@@ -154,7 +153,9 @@ MainWindow::MainWindow(QWidget *p)
 	else
 		SvgIcon::addSvgPixmapsToIcon(qiIcon, QLatin1String("skin:mumble.svg"));
 #else
-	{ SvgIcon::addSvgPixmapsToIcon(qiIcon, QLatin1String("skin:mumble.svg")); }
+	{
+		SvgIcon::addSvgPixmapsToIcon(qiIcon, QLatin1String("skin:mumble.svg"));
+	}
 
 	// Set application icon except on MacOSX, where the window-icon
 	// shown in the title-bar usually serves as a draggable version of the
@@ -256,20 +257,18 @@ MainWindow::MainWindow(QWidget *p)
 			&MainWindow::onFileTransferUpdated);
 	connect(Global::get().fileTransferManager, &FileTransferManager::firstContact, this,
 			&MainWindow::onFileFirstContact);
-	connect(Global::get().fileTransferManager, &FileTransferManager::peerBlocked, this,
-			&MainWindow::onFilePeerBlocked);
+	connect(Global::get().fileTransferManager, &FileTransferManager::peerBlocked, this, &MainWindow::onFilePeerBlocked);
 	connect(Global::get().fileTransferManager, &FileTransferManager::passwordRequired, this,
 			&MainWindow::onFilePasswordRequired);
 
-	connect(qteChat, &ChatbarTextEdit::fileDropRequested, this,
-			[this](const QStringList &paths) {
+	connect(qteChat, &ChatbarTextEdit::fileDropRequested, this, [this](const QStringList &paths) {
 				for (const QString &path : paths) {
 					startFileSend(path);
 				}
 			});
 
-	qtbSendFile->setIcon(QIcon::fromTheme(QStringLiteral("mail-attachment"),
-										  QIcon::fromTheme(QStringLiteral("attach"))));
+	qtbSendFile->setIcon(
+		QIcon::fromTheme(QStringLiteral("mail-attachment"), QIcon::fromTheme(QStringLiteral("attach"))));
 	qtbSendFile->setToolTip(tr("Send a file to the channel"));
 #else
 	qtbSendFile->hide();
@@ -554,9 +553,8 @@ void MainWindow::setupGui() {
 	auto ld = std::make_unique< LogDocument >(qteLog, true);
 	qteLog->setDocument(ld.get());
 #ifdef USE_FILE_SHARING
-	ld->setFileCardLookup([this](const QByteArray &transferId, QImage &out) {
-		return fileTransferCardInfo(transferId, out);
-	});
+	ld->setFileCardLookup(
+		[this](const QByteArray &transferId, QImage &out) { return fileTransferCardInfo(transferId, out); });
 #endif
 	// Animated images replace their frame in the document's resource cache whenever the animation
 	// advances, so the log (its viewport, to be precise) has to be repainted to show the new frame.
@@ -1163,12 +1161,11 @@ void MainWindow::saveImageAs() {
 	bool isGif      = resName.startsWith(QLatin1String("data:image/gif;"), Qt::CaseInsensitive);
 	bool isWebM     = resName.startsWith(QLatin1String("data:video/webm;"), Qt::CaseInsensitive);
 	QString defaultFname =
-		QString::fromLatin1("Mumble-%1.%2").arg(now.toString(QString::fromLatin1("yyyy-MM-dd-HHmmss"))).arg(
-			isGif ? QLatin1String("gif")
-				  : (isWebM ? QLatin1String("webm") : QLatin1String("jpg")));
+		QString::fromLatin1("Mumble-%1.%2")
+			.arg(now.toString(QString::fromLatin1("yyyy-MM-dd-HHmmss")))
+			.arg(isGif ? QLatin1String("gif") : (isWebM ? QLatin1String("webm") : QLatin1String("jpg")));
 
-	QString fname =
-		QFileDialog::getSaveFileName(this, tr("Save Image File"), getImagePath(defaultFname),
+	QString fname = QFileDialog::getSaveFileName(this, tr("Save Image File"), getImagePath(defaultFname),
 									 tr("Images (*.png *.jpg *.jpeg *.gif);;Videos (*.webm)"));
 	if (fname.isNull()) {
 		return;
@@ -5057,28 +5054,21 @@ void MainWindow::startFileSend(const QString &path) {
 	const quint64 generation     = manager->connectionGeneration();
 	const unsigned int channelId = self->cChannel->iId;
 	QHash< unsigned int, FileTransferManager::SendRecipient > recipientChoices;
-	for (const User *u : self->cChannel->qlUsers) {
-		const auto *user = static_cast< const ClientUser * >(u);
-		if (!user || user == self || !user->bFileTransferCapable) {
-			continue;
-		}
-		const auto choice = manager->sendRecipient(user->uiSession);
-		if (!choice) {
-			QMessageBox::information(this, tr("File transfer"),
-									 tr("Could not read the recipient identity. Try again."));
-			return;
-		}
+	bool identityUnavailable = false;
+	for (const auto &choice : manager->availableSendRecipients(identityUnavailable)) {
 		FileSendDialog::Recipient recipient;
-		recipient.session = user->uiSession;
-		recipient.name    = user->qsName;
-		recipient.trustState = static_cast< int >(choice->trust);
+		recipient.session    = choice.session;
+		recipient.name       = choice.name;
+		recipient.trustState = static_cast< int >(choice.trust);
 		recipients.append(recipient);
-		recipientChoices.insert(user->uiSession, *choice);
+		recipientChoices.insert(choice.session, choice);
 	}
 	if (recipients.isEmpty()) {
-		QMessageBox::information(this, tr("File transfer"),
-								 tr("Nobody else in this channel can receive file transfers (they "
-									"need this client version)."));
+		QMessageBox::information(
+			this, tr("File transfer"),
+			identityUnavailable
+				? tr("Could not read the recipient identity. Try again.")
+				: tr("Nobody else in this channel can receive file transfers (they need this client version)."));
 		return;
 	}
 

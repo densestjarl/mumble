@@ -22,6 +22,8 @@
 #include <QtCore/QObject>
 #include <QtNetwork/QSslSocket>
 
+#include <QtCore/QTimer>
+#include <functional>
 #include <memory>
 
 #ifdef Q_OS_WIN
@@ -40,6 +42,11 @@ private:
 	Q_DISABLE_COPY(Connection)
 	qint64 m_maxPendingSendBytes = 0;
 	bool m_sendQueueBlocked      = false;
+	std::function< bool(Mumble::Protocol::TCPMessageType, qint64) > m_readAdmission;
+	QTimer m_readRetry;
+	QElapsedTimer m_readPauseClock;
+	int m_readPauseTimeout       = 60000;
+	bool m_readAdmissionTimedOut = false;
 
 protected:
 	QSslSocket *qtsSocket;
@@ -76,6 +83,11 @@ public:
 	/// A connection that exceeds the limit stops accepting output and closes asynchronously.
 	void setMaxPendingSendBytes(qint64 bytes);
 	qint64 pendingSendBytes() const;
+	/// Retain an unadmitted frame in the bounded socket buffer and retry when queues drain.
+	/// On timeout deliver once so the receiver can fail it and notify its peer.
+	void setReadAdmission(std::function< bool(Mumble::Protocol::TCPMessageType, qint64) > admission,
+						  int timeoutMSecs = 60000);
+	bool readAdmissionTimedOut() const { return m_readAdmissionTimedOut; }
 	void disconnectSocket(bool force = false);
 	void forceFlush();
 	qint64 activityTime() const;

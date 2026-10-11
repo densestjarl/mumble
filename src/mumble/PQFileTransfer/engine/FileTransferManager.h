@@ -70,6 +70,7 @@ public:
 		unsigned int channelId = 0;
 	};
 	std::optional< SendRecipient > sendRecipient(unsigned int session) const;
+	QList< SendRecipient > availableSendRecipients(bool &identityUnavailable) const;
 	bool sendRecipientStillCurrent(const SendRecipient &recipient) const;
 
 	/// Queue a file for sending to `recipients` (sessions with pinned
@@ -139,6 +140,8 @@ private:
 	void forwardEngineEvent(std::function< void() > event);
 	void rejectReceive(const PQFT::FTTransferInfo &info, PQFT::TrustState state);
 	QByteArray serverDigest() const;
+	PQFT::FileTransferEngine::Config engineConfig() const;
+	QString m_lastSendError;
 	// Private dependency seam for isolated trust-store fixtures without a network or personal database.
 	std::function< QByteArray() > m_serverDigestProvider;
 	std::function< void(PQFT::FileTransferEngine &) > m_transportSetup;
@@ -190,7 +193,7 @@ private:
 	QHash< QByteArray, PQFT::FTTransferInfo > m_readyReceived;
 	QHash< QByteArray, PQFT::FTTransferInfo > m_rejectedReceived;
 	QSet< QByteArray > m_savesInFlight;
-	std::atomic< qint64 > m_inboundBytes{ 0 };
+	std::shared_ptr< std::atomic< qint64 > > m_inboundBytes = std::make_shared< std::atomic< qint64 > >(0);
 	QSet< QByteArray > m_activeReceived;
 	QSet< QByteArray > m_inboundRejected;
 };
