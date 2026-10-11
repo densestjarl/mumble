@@ -1,0 +1,1823 @@
+{
+  "source_head": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+  "runtime_source": "9b5b8e26684d6f2481591b11653397d390d39300",
+  "runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 38110655395,
+      "headSha": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+      "jobs": [
+        {
+          "completedAt": "2026-10-11T04:09:06Z",
+          "conclusion": "success",
+          "databaseId": 114385337695,
+          "name": "fetch_build_number",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:01Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:03Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:04Z",
+              "conclusion": "success",
+              "name": "Run build_version=\"$(\"/home/runner/work/mumble/mumble/scripts/mumble-version.py\")\"",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:04Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 6,
+              "startedAt": "2026-10-11T04:09:04Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:04Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 7,
+              "startedAt": "2026-10-11T04:09:04Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395/job/114385337695"
+        },
+        {
+          "completedAt": "2026-10-11T04:25:21Z",
+          "conclusion": "success",
+          "databaseId": 114385361381,
+          "name": "build (macos-15, static, arm64)",
+          "startedAt": "2026-10-11T04:09:13Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:16Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:55Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:16Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:01Z",
+              "conclusion": "success",
+              "name": "Install Bash",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:55Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:01Z",
+              "conclusion": "success",
+              "name": "Set environment variables",
+              "number": 4,
+              "startedAt": "2026-10-11T04:10:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:18Z",
+              "conclusion": "success",
+              "name": "Run actions/cache/restore@v5",
+              "number": 5,
+              "startedAt": "2026-10-11T04:10:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:21Z",
+              "conclusion": "success",
+              "name": "Run hendrikmuhs/ccache-action@v1.2",
+              "number": 6,
+              "startedAt": "2026-10-11T04:10:18Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:39Z",
+              "conclusion": "success",
+              "name": "Run ./.github/actions/install-dependencies",
+              "number": 7,
+              "startedAt": "2026-10-11T04:10:21Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:23:50Z",
+              "conclusion": "success",
+              "name": "Build",
+              "number": 8,
+              "startedAt": "2026-10-11T04:10:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:01Z",
+              "conclusion": "success",
+              "name": "Test",
+              "number": 9,
+              "startedAt": "2026-10-11T04:23:50Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:02Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 10,
+              "startedAt": "2026-10-11T04:25:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:02Z",
+              "conclusion": "skipped",
+              "name": "Verify FFmpeg installer payload",
+              "number": 11,
+              "startedAt": "2026-10-11T04:25:02Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:02Z",
+              "conclusion": "skipped",
+              "name": "Run ./.github/actions/sign-binaries",
+              "number": 12,
+              "startedAt": "2026-10-11T04:25:02Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:15Z",
+              "conclusion": "success",
+              "name": "Publish",
+              "number": 13,
+              "startedAt": "2026-10-11T04:25:02Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:15Z",
+              "conclusion": "skipped",
+              "name": "Run actions/cache/save@v5",
+              "number": 14,
+              "startedAt": "2026-10-11T04:25:15Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:16Z",
+              "conclusion": "success",
+              "name": "Post Run hendrikmuhs/ccache-action@v1.2",
+              "number": 27,
+              "startedAt": "2026-10-11T04:25:15Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:18Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 28,
+              "startedAt": "2026-10-11T04:25:16Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:19Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 29,
+              "startedAt": "2026-10-11T04:25:18Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395/job/114385361381"
+        },
+        {
+          "completedAt": "2026-10-11T04:25:57Z",
+          "conclusion": "success",
+          "databaseId": 114385361406,
+          "name": "build (ubuntu-24.04, shared, x86_64)",
+          "startedAt": "2026-10-11T04:09:08Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:11Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:09Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:38Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:11Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:38Z",
+              "conclusion": "skipped",
+              "name": "Install Bash",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:38Z",
+              "conclusion": "success",
+              "name": "Set environment variables",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:49Z",
+              "conclusion": "success",
+              "name": "Run actions/cache/restore@v5",
+              "number": 5,
+              "startedAt": "2026-10-11T04:09:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:56Z",
+              "conclusion": "success",
+              "name": "Run hendrikmuhs/ccache-action@v1.2",
+              "number": 6,
+              "startedAt": "2026-10-11T04:09:49Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:11Z",
+              "conclusion": "success",
+              "name": "Run ./.github/actions/install-dependencies",
+              "number": 7,
+              "startedAt": "2026-10-11T04:09:56Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:47Z",
+              "conclusion": "success",
+              "name": "Build",
+              "number": 8,
+              "startedAt": "2026-10-11T04:11:11Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:52Z",
+              "conclusion": "success",
+              "name": "Test",
+              "number": 9,
+              "startedAt": "2026-10-11T04:24:48Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:53Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 10,
+              "startedAt": "2026-10-11T04:25:52Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:53Z",
+              "conclusion": "skipped",
+              "name": "Verify FFmpeg installer payload",
+              "number": 11,
+              "startedAt": "2026-10-11T04:25:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:53Z",
+              "conclusion": "skipped",
+              "name": "Run ./.github/actions/sign-binaries",
+              "number": 12,
+              "startedAt": "2026-10-11T04:25:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:53Z",
+              "conclusion": "skipped",
+              "name": "Publish",
+              "number": 13,
+              "startedAt": "2026-10-11T04:25:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:53Z",
+              "conclusion": "skipped",
+              "name": "Run actions/cache/save@v5",
+              "number": 14,
+              "startedAt": "2026-10-11T04:25:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:53Z",
+              "conclusion": "success",
+              "name": "Post Run hendrikmuhs/ccache-action@v1.2",
+              "number": 27,
+              "startedAt": "2026-10-11T04:25:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:54Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 28,
+              "startedAt": "2026-10-11T04:25:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:54Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 29,
+              "startedAt": "2026-10-11T04:25:54Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395/job/114385361406"
+        },
+        {
+          "completedAt": "2026-10-11T04:36:18Z",
+          "conclusion": "success",
+          "databaseId": 114385361415,
+          "name": "build (windows-2025-vs2026, static, x86_64)",
+          "startedAt": "2026-10-11T04:09:07Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:09Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:08Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:45Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:09Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:45Z",
+              "conclusion": "skipped",
+              "name": "Install Bash",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:45Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:46Z",
+              "conclusion": "success",
+              "name": "Set environment variables",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:45Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:17Z",
+              "conclusion": "success",
+              "name": "Run actions/cache/restore@v5",
+              "number": 5,
+              "startedAt": "2026-10-11T04:09:46Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:20Z",
+              "conclusion": "success",
+              "name": "Run hendrikmuhs/ccache-action@v1.2",
+              "number": 6,
+              "startedAt": "2026-10-11T04:10:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:00Z",
+              "conclusion": "success",
+              "name": "Run ./.github/actions/install-dependencies",
+              "number": 7,
+              "startedAt": "2026-10-11T04:10:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:41Z",
+              "conclusion": "success",
+              "name": "Build",
+              "number": 8,
+              "startedAt": "2026-10-11T04:12:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:35:25Z",
+              "conclusion": "success",
+              "name": "Test",
+              "number": 9,
+              "startedAt": "2026-10-11T04:32:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:35:28Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 10,
+              "startedAt": "2026-10-11T04:35:25Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:35:28Z",
+              "conclusion": "skipped",
+              "name": "Verify FFmpeg installer payload",
+              "number": 11,
+              "startedAt": "2026-10-11T04:35:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:35:28Z",
+              "conclusion": "skipped",
+              "name": "Run ./.github/actions/sign-binaries",
+              "number": 12,
+              "startedAt": "2026-10-11T04:35:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:36:09Z",
+              "conclusion": "success",
+              "name": "Publish",
+              "number": 13,
+              "startedAt": "2026-10-11T04:35:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:36:09Z",
+              "conclusion": "skipped",
+              "name": "Run actions/cache/save@v5",
+              "number": 14,
+              "startedAt": "2026-10-11T04:36:09Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:36:09Z",
+              "conclusion": "success",
+              "name": "Post Run hendrikmuhs/ccache-action@v1.2",
+              "number": 27,
+              "startedAt": "2026-10-11T04:36:09Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:36:16Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 28,
+              "startedAt": "2026-10-11T04:36:09Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:36:17Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 29,
+              "startedAt": "2026-10-11T04:36:16Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395/job/114385361415"
+        },
+        {
+          "completedAt": "2026-10-11T04:44:10Z",
+          "conclusion": "success",
+          "databaseId": 114385361447,
+          "name": "build (macos-15-intel, static, x86_64)",
+          "startedAt": "2026-10-11T04:09:13Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:25Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:16Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:12Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:25Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:41Z",
+              "conclusion": "success",
+              "name": "Install Bash",
+              "number": 3,
+              "startedAt": "2026-10-11T04:11:12Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:41Z",
+              "conclusion": "success",
+              "name": "Set environment variables",
+              "number": 4,
+              "startedAt": "2026-10-11T04:11:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:48Z",
+              "conclusion": "success",
+              "name": "Run actions/cache/restore@v5",
+              "number": 5,
+              "startedAt": "2026-10-11T04:11:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:56Z",
+              "conclusion": "success",
+              "name": "Run hendrikmuhs/ccache-action@v1.2",
+              "number": 6,
+              "startedAt": "2026-10-11T04:12:48Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:13:51Z",
+              "conclusion": "success",
+              "name": "Run ./.github/actions/install-dependencies",
+              "number": 7,
+              "startedAt": "2026-10-11T04:12:56Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:41:53Z",
+              "conclusion": "success",
+              "name": "Build",
+              "number": 8,
+              "startedAt": "2026-10-11T04:13:51Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:43:36Z",
+              "conclusion": "success",
+              "name": "Test",
+              "number": 9,
+              "startedAt": "2026-10-11T04:41:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:43:38Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 10,
+              "startedAt": "2026-10-11T04:43:36Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:43:38Z",
+              "conclusion": "skipped",
+              "name": "Verify FFmpeg installer payload",
+              "number": 11,
+              "startedAt": "2026-10-11T04:43:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:43:38Z",
+              "conclusion": "skipped",
+              "name": "Run ./.github/actions/sign-binaries",
+              "number": 12,
+              "startedAt": "2026-10-11T04:43:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:03Z",
+              "conclusion": "success",
+              "name": "Publish",
+              "number": 13,
+              "startedAt": "2026-10-11T04:43:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:03Z",
+              "conclusion": "skipped",
+              "name": "Run actions/cache/save@v5",
+              "number": 14,
+              "startedAt": "2026-10-11T04:44:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:04Z",
+              "conclusion": "success",
+              "name": "Post Run hendrikmuhs/ccache-action@v1.2",
+              "number": 27,
+              "startedAt": "2026-10-11T04:44:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:08Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 28,
+              "startedAt": "2026-10-11T04:44:04Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:09Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 29,
+              "startedAt": "2026-10-11T04:44:08Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395/job/114385361447"
+        },
+        {
+          "completedAt": "2026-10-11T04:44:22Z",
+          "conclusion": "success",
+          "databaseId": 114390861628,
+          "name": "Decode complete safety QR data",
+          "startedAt": "2026-10-11T04:44:12Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:44:15Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:44:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:17Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:44:15Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:17Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-python@v6",
+              "number": 3,
+              "startedAt": "2026-10-11T04:44:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:18Z",
+              "conclusion": "success",
+              "name": "Run actions/download-artifact@v8",
+              "number": 4,
+              "startedAt": "2026-10-11T04:44:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:19Z",
+              "conclusion": "success",
+              "name": "Run python -m pip install --only-binary=:all: -r scripts/hosting/safety-qr-test-requirements.txt",
+              "number": 5,
+              "startedAt": "2026-10-11T04:44:18Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:20Z",
+              "conclusion": "success",
+              "name": "Verify full binary payload from every client runtime",
+              "number": 6,
+              "startedAt": "2026-10-11T04:44:19Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:20Z",
+              "conclusion": "success",
+              "name": "Run actions/upload-artifact@v7",
+              "number": 7,
+              "startedAt": "2026-10-11T04:44:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:20Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-python@v6",
+              "number": 13,
+              "startedAt": "2026-10-11T04:44:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:21Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 14,
+              "startedAt": "2026-10-11T04:44:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:44:21Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 15,
+              "startedAt": "2026-10-11T04:44:21Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395/job/114390861628"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/gavmac11/mumble/actions/runs/38110655395",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 38110655384,
+      "headSha": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+      "jobs": [
+        {
+          "completedAt": "2026-10-11T04:09:25Z",
+          "conclusion": "success",
+          "databaseId": 114385337633,
+          "name": "Update and publication tests",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:00Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:08:59Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:01Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:01Z",
+              "conclusion": "success",
+              "name": "Run python3 -m unittest discover -s scripts/tests -p 'test_publish_preview.py'",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:16Z",
+              "conclusion": "success",
+              "name": "Install update test dependencies",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:23Z",
+              "conclusion": "success",
+              "name": "Test client release selection",
+              "number": 5,
+              "startedAt": "2026-10-11T04:09:16Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:24Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 10,
+              "startedAt": "2026-10-11T04:09:23Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:24Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 11,
+              "startedAt": "2026-10-11T04:09:24Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114385337633"
+        },
+        {
+          "completedAt": "2026-10-11T04:32:54Z",
+          "conclusion": "success",
+          "databaseId": 114385337772,
+          "name": "Windows x64",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:02Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:49Z",
+              "conclusion": "success",
+              "name": "Check out source",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:02Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:50Z",
+              "conclusion": "success",
+              "name": "Set build environment",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:49Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:17Z",
+              "conclusion": "success",
+              "name": "Restore dependency cache",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:50Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:19Z",
+              "conclusion": "success",
+              "name": "Restore compiler cache",
+              "number": 5,
+              "startedAt": "2026-10-11T04:10:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:25Z",
+              "conclusion": "success",
+              "name": "Install dependencies",
+              "number": 6,
+              "startedAt": "2026-10-11T04:10:19Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:31:44Z",
+              "conclusion": "success",
+              "name": "Build installer",
+              "number": 7,
+              "startedAt": "2026-10-11T04:11:25Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:27Z",
+              "conclusion": "success",
+              "name": "Gate installer publication on regression tests",
+              "number": 8,
+              "startedAt": "2026-10-11T04:31:44Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:29Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 9,
+              "startedAt": "2026-10-11T04:32:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:35Z",
+              "conclusion": "success",
+              "name": "Verify FFmpeg installer payload",
+              "number": 10,
+              "startedAt": "2026-10-11T04:32:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:36Z",
+              "conclusion": "success",
+              "name": "Stage client installer",
+              "number": 11,
+              "startedAt": "2026-10-11T04:32:35Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:43Z",
+              "conclusion": "success",
+              "name": "Upload installer",
+              "number": 12,
+              "startedAt": "2026-10-11T04:32:36Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:43Z",
+              "conclusion": "skipped",
+              "name": "Save dependency cache",
+              "number": 13,
+              "startedAt": "2026-10-11T04:32:43Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:43Z",
+              "conclusion": "success",
+              "name": "Post Restore compiler cache",
+              "number": 25,
+              "startedAt": "2026-10-11T04:32:43Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:52Z",
+              "conclusion": "success",
+              "name": "Post Check out source",
+              "number": 26,
+              "startedAt": "2026-10-11T04:32:43Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:32:52Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 27,
+              "startedAt": "2026-10-11T04:32:52Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114385337772"
+        },
+        {
+          "completedAt": "2026-10-11T04:21:21Z",
+          "conclusion": "success",
+          "databaseId": 114385337803,
+          "name": "macOS ARM64",
+          "startedAt": "2026-10-11T04:09:03Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:05Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:38Z",
+              "conclusion": "success",
+              "name": "Check out source",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:05Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:41Z",
+              "conclusion": "success",
+              "name": "Install build and packaging tools",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:41Z",
+              "conclusion": "success",
+              "name": "Set build environment",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:59Z",
+              "conclusion": "success",
+              "name": "Restore dependency cache",
+              "number": 5,
+              "startedAt": "2026-10-11T04:09:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:02Z",
+              "conclusion": "success",
+              "name": "Restore compiler cache",
+              "number": 6,
+              "startedAt": "2026-10-11T04:09:59Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:17Z",
+              "conclusion": "success",
+              "name": "Install dependencies",
+              "number": 7,
+              "startedAt": "2026-10-11T04:10:02Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:19:29Z",
+              "conclusion": "success",
+              "name": "Build native ARM64 client",
+              "number": 8,
+              "startedAt": "2026-10-11T04:10:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:20:36Z",
+              "conclusion": "success",
+              "name": "Gate installer publication on regression tests",
+              "number": 9,
+              "startedAt": "2026-10-11T04:19:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:20:38Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 10,
+              "startedAt": "2026-10-11T04:20:36Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:20:53Z",
+              "conclusion": "success",
+              "name": "Prepare portable application bundle",
+              "number": 11,
+              "startedAt": "2026-10-11T04:20:38Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:20:57Z",
+              "conclusion": "success",
+              "name": "Verify architecture and runtime dependencies",
+              "number": 12,
+              "startedAt": "2026-10-11T04:20:53Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:03Z",
+              "conclusion": "success",
+              "name": "Smoke test packaged application launch",
+              "number": 13,
+              "startedAt": "2026-10-11T04:20:57Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:09Z",
+              "conclusion": "success",
+              "name": "Stage client archive",
+              "number": 14,
+              "startedAt": "2026-10-11T04:21:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:13Z",
+              "conclusion": "success",
+              "name": "Upload installer",
+              "number": 15,
+              "startedAt": "2026-10-11T04:21:09Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:13Z",
+              "conclusion": "skipped",
+              "name": "Save dependency cache",
+              "number": 16,
+              "startedAt": "2026-10-11T04:21:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:13Z",
+              "conclusion": "success",
+              "name": "Post Restore compiler cache",
+              "number": 31,
+              "startedAt": "2026-10-11T04:21:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:16Z",
+              "conclusion": "success",
+              "name": "Post Check out source",
+              "number": 32,
+              "startedAt": "2026-10-11T04:21:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:21:19Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 33,
+              "startedAt": "2026-10-11T04:21:16Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114385337803"
+        },
+        {
+          "completedAt": "2026-10-11T04:24:33Z",
+          "conclusion": "success",
+          "databaseId": 114385337834,
+          "name": "Ubuntu 24.04 client (amd64)",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:01Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:18Z",
+              "conclusion": "success",
+              "name": "Check out source",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:18Z",
+              "conclusion": "success",
+              "name": "Set build environment",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:18Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:26Z",
+              "conclusion": "success",
+              "name": "Restore dependency cache",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:18Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:35Z",
+              "conclusion": "success",
+              "name": "Restore compiler cache",
+              "number": 5,
+              "startedAt": "2026-10-11T04:09:26Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:26Z",
+              "conclusion": "success",
+              "name": "Install dependencies",
+              "number": 6,
+              "startedAt": "2026-10-11T04:09:35Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:26Z",
+              "conclusion": "success",
+              "name": "Install packaging tools",
+              "number": 7,
+              "startedAt": "2026-10-11T04:10:26Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:22:13Z",
+              "conclusion": "success",
+              "name": "Build client",
+              "number": 8,
+              "startedAt": "2026-10-11T04:10:26Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:23:16Z",
+              "conclusion": "success",
+              "name": "Gate installer publication on regression tests",
+              "number": 9,
+              "startedAt": "2026-10-11T04:22:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:23:17Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 10,
+              "startedAt": "2026-10-11T04:23:16Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:23:39Z",
+              "conclusion": "success",
+              "name": "Build Ubuntu package",
+              "number": 11,
+              "startedAt": "2026-10-11T04:23:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:21Z",
+              "conclusion": "success",
+              "name": "Test clean Ubuntu package installation",
+              "number": 12,
+              "startedAt": "2026-10-11T04:23:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:24Z",
+              "conclusion": "success",
+              "name": "Test Ubuntu package installation",
+              "number": 13,
+              "startedAt": "2026-10-11T04:24:21Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:29Z",
+              "conclusion": "success",
+              "name": "Smoke test installed client launch",
+              "number": 14,
+              "startedAt": "2026-10-11T04:24:24Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:30Z",
+              "conclusion": "success",
+              "name": "Upload Ubuntu package",
+              "number": 15,
+              "startedAt": "2026-10-11T04:24:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:30Z",
+              "conclusion": "skipped",
+              "name": "Save dependency cache",
+              "number": 16,
+              "startedAt": "2026-10-11T04:24:30Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:30Z",
+              "conclusion": "success",
+              "name": "Post Restore compiler cache",
+              "number": 31,
+              "startedAt": "2026-10-11T04:24:30Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:31Z",
+              "conclusion": "success",
+              "name": "Post Check out source",
+              "number": 32,
+              "startedAt": "2026-10-11T04:24:30Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:24:31Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 33,
+              "startedAt": "2026-10-11T04:24:31Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114385337834"
+        },
+        {
+          "completedAt": "2026-10-11T04:12:48Z",
+          "conclusion": "success",
+          "databaseId": 114385337840,
+          "name": "Debian 12 server (amd64)",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:00Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:08:59Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:06Z",
+              "conclusion": "success",
+              "name": "Initialize containers",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:21Z",
+              "conclusion": "success",
+              "name": "Bootstrap checkout and packaging tools",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:06Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:39Z",
+              "conclusion": "success",
+              "name": "Check out source",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:21Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:39Z",
+              "conclusion": "success",
+              "name": "Set build environment",
+              "number": 5,
+              "startedAt": "2026-10-11T04:09:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:22Z",
+              "conclusion": "success",
+              "name": "Install dependencies",
+              "number": 6,
+              "startedAt": "2026-10-11T04:09:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:28Z",
+              "conclusion": "success",
+              "name": "Build server",
+              "number": 7,
+              "startedAt": "2026-10-11T04:10:22Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:35Z",
+              "conclusion": "success",
+              "name": "Test server build",
+              "number": 8,
+              "startedAt": "2026-10-11T04:12:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:35Z",
+              "conclusion": "success",
+              "name": "Retain regression results",
+              "number": 9,
+              "startedAt": "2026-10-11T04:12:35Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:35Z",
+              "conclusion": "success",
+              "name": "Verify Debian 12 runtime compatibility",
+              "number": 10,
+              "startedAt": "2026-10-11T04:12:35Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:38Z",
+              "conclusion": "success",
+              "name": "Build Debian package",
+              "number": 11,
+              "startedAt": "2026-10-11T04:12:35Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:40Z",
+              "conclusion": "success",
+              "name": "Test Debian package installation",
+              "number": 12,
+              "startedAt": "2026-10-11T04:12:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:41Z",
+              "conclusion": "success",
+              "name": "Upload Debian package",
+              "number": 13,
+              "startedAt": "2026-10-11T04:12:40Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:41Z",
+              "conclusion": "success",
+              "name": "Post Check out source",
+              "number": 25,
+              "startedAt": "2026-10-11T04:12:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:46Z",
+              "conclusion": "success",
+              "name": "Stop containers",
+              "number": 26,
+              "startedAt": "2026-10-11T04:12:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:46Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 27,
+              "startedAt": "2026-10-11T04:12:46Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114385337840"
+        },
+        {
+          "completedAt": "2026-10-11T04:33:11Z",
+          "conclusion": "success",
+          "databaseId": 114389111986,
+          "name": "Decode complete safety QR data",
+          "startedAt": "2026-10-11T04:32:56Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:32:59Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:32:57Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:04Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:32:59Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:04Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-python@v6",
+              "number": 3,
+              "startedAt": "2026-10-11T04:33:04Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:05Z",
+              "conclusion": "success",
+              "name": "Run actions/download-artifact@v8",
+              "number": 4,
+              "startedAt": "2026-10-11T04:33:04Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:07Z",
+              "conclusion": "success",
+              "name": "Run python -m pip install --only-binary=:all: -r scripts/hosting/safety-qr-test-requirements.txt",
+              "number": 5,
+              "startedAt": "2026-10-11T04:33:05Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:07Z",
+              "conclusion": "success",
+              "name": "Verify full binary payload from every client runtime",
+              "number": 6,
+              "startedAt": "2026-10-11T04:33:07Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:08Z",
+              "conclusion": "success",
+              "name": "Run actions/upload-artifact@v7",
+              "number": 7,
+              "startedAt": "2026-10-11T04:33:07Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:08Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-python@v6",
+              "number": 13,
+              "startedAt": "2026-10-11T04:33:08Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:09Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 14,
+              "startedAt": "2026-10-11T04:33:08Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:33:09Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 15,
+              "startedAt": "2026-10-11T04:33:09Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114389111986"
+        },
+        {
+          "completedAt": "2026-10-11T04:33:11Z",
+          "conclusion": "skipped",
+          "databaseId": 114389157268,
+          "name": "Publish versioned preview",
+          "startedAt": "2026-10-11T04:33:11Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384/job/114389157268"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/gavmac11/mumble/actions/runs/38110655384",
+      "workflowName": "Preview installers"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 38110655331,
+      "headSha": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+      "jobs": [
+        {
+          "completedAt": "2026-10-11T04:09:15Z",
+          "conclusion": "success",
+          "databaseId": 114385337206,
+          "name": "validation",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:01Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:03Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:11Z",
+              "conclusion": "success",
+              "name": "Install recovery encryption tool",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:12Z",
+              "conclusion": "success",
+              "name": "Validate package pins, recovery and relay accounting",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:11Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:12Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 8,
+              "startedAt": "2026-10-11T04:09:12Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:12Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 9,
+              "startedAt": "2026-10-11T04:09:12Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655331/job/114385337206"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/gavmac11/mumble/actions/runs/38110655331",
+      "workflowName": "Hosting rehearsal tools"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 38110655396,
+      "headSha": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+      "jobs": [
+        {
+          "completedAt": "2026-10-11T04:28:23Z",
+          "conclusion": "success",
+          "databaseId": 114385337684,
+          "name": "CodeQL legacy comparison (ubuntu-latest)",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:01Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:25Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:49Z",
+              "conclusion": "success",
+              "name": "Initialize CodeQL",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:25Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:47Z",
+              "conclusion": "success",
+              "name": "Run ./.github/actions/install-dependencies",
+              "number": 4,
+              "startedAt": "2026-10-11T04:09:49Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:48Z",
+              "conclusion": "success",
+              "name": "Create build dir",
+              "number": 5,
+              "startedAt": "2026-10-11T04:10:47Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:08Z",
+              "conclusion": "success",
+              "name": "Run CMake",
+              "number": 6,
+              "startedAt": "2026-10-11T04:10:48Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:18:34Z",
+              "conclusion": "success",
+              "name": "Build",
+              "number": 7,
+              "startedAt": "2026-10-11T04:11:08Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:28:19Z",
+              "conclusion": "success",
+              "name": "Perform CodeQL Analysis",
+              "number": 8,
+              "startedAt": "2026-10-11T04:18:34Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:28:20Z",
+              "conclusion": "success",
+              "name": "Post Perform CodeQL Analysis",
+              "number": 14,
+              "startedAt": "2026-10-11T04:28:19Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:28:20Z",
+              "conclusion": "success",
+              "name": "Post Initialize CodeQL",
+              "number": 15,
+              "startedAt": "2026-10-11T04:28:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:28:22Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 16,
+              "startedAt": "2026-10-11T04:28:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:28:22Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 17,
+              "startedAt": "2026-10-11T04:28:22Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655396/job/114385337684"
+        },
+        {
+          "completedAt": "2026-10-11T04:25:46Z",
+          "conclusion": "success",
+          "databaseId": 114385337814,
+          "name": "CodeQL",
+          "startedAt": "2026-10-11T04:08:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-11T04:09:03Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-11T04:09:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:09:39Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v6",
+              "number": 2,
+              "startedAt": "2026-10-11T04:09:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:10:08Z",
+              "conclusion": "success",
+              "name": "Initialize CodeQL",
+              "number": 3,
+              "startedAt": "2026-10-11T04:09:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:41Z",
+              "conclusion": "success",
+              "name": "Run ./.github/actions/install-dependencies",
+              "number": 4,
+              "startedAt": "2026-10-11T04:10:08Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:11:41Z",
+              "conclusion": "success",
+              "name": "Create build dir",
+              "number": 5,
+              "startedAt": "2026-10-11T04:11:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:12:00Z",
+              "conclusion": "success",
+              "name": "Run CMake",
+              "number": 6,
+              "startedAt": "2026-10-11T04:11:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:17:41Z",
+              "conclusion": "success",
+              "name": "Build",
+              "number": 7,
+              "startedAt": "2026-10-11T04:12:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:41Z",
+              "conclusion": "success",
+              "name": "Perform CodeQL Analysis",
+              "number": 8,
+              "startedAt": "2026-10-11T04:17:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:42Z",
+              "conclusion": "success",
+              "name": "Post Perform CodeQL Analysis",
+              "number": 14,
+              "startedAt": "2026-10-11T04:25:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:42Z",
+              "conclusion": "success",
+              "name": "Post Initialize CodeQL",
+              "number": 15,
+              "startedAt": "2026-10-11T04:25:42Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:44Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v6",
+              "number": 16,
+              "startedAt": "2026-10-11T04:25:42Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-11T04:25:44Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 17,
+              "startedAt": "2026-10-11T04:25:44Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/gavmac11/mumble/actions/runs/38110655396/job/114385337814"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/gavmac11/mumble/actions/runs/38110655396",
+      "workflowName": "Security"
+    }
+  ],
+  "security": "Actual analysis/configuration and zero-annotation combined check proof in hosted-security.json; 33 existing results per analysis remain",
+  "limits": "Earlier source only; preview publication skipped; no final-source extrapolation"
+}
