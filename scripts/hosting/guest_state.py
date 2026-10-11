@@ -228,8 +228,11 @@ def restore(args):
         ssh_port = config.get('ssh_port')
         if type(ssh_port) is not int or not 1 <= ssh_port <= 65535:
             raise ValueError('Archived SSH port must be an integer between 1 and 65535')
+        port = config.get('port')
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError('Archived server port must be an integer between 1 and 65535')
         deployment.verify_ssh_port(ssh_port)
-        expected_rule = f"tcp dport {{ {ssh_port}, {state['config']['port']} }} accept"
+        expected_rule = f"tcp dport {{ {ssh_port}, {port} }} accept"
         if expected_rule not in [line.strip() for line in (stage / 'firewall.nft').read_text().splitlines()]:
             raise ValueError('Archived firewall does not preserve its selected SSH port')
         fresh_or_resumable(args.sha256, manifest, ssh_port)

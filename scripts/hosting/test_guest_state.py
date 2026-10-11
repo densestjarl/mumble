@@ -148,7 +148,7 @@ class StateTests(unittest.TestCase):
         self.assertFalse(args.output.exists())
 
     def test_restore_checks_ssh_and_readiness_before_publication(self):
-        for scenario in ('ready', 'wrong-ssh', 'wrong-firewall', 'crash-loop', 'missing-ssh', 'invalid-ssh'):
+        for scenario in ('ready', 'wrong-ssh', 'wrong-firewall', 'crash-loop', 'missing-ssh', 'invalid-ssh', 'missing-server-port', 'invalid-server-port'):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(dir=self.root) as directory:
                 owned = Path(directory)
                 cipher = owned / 'state.age'
@@ -163,6 +163,10 @@ class StateTests(unittest.TestCase):
                     del state['config']['ssh_port']
                 elif scenario == 'invalid-ssh':
                     state['config']['ssh_port'] = '2222'
+                elif scenario == 'missing-server-port':
+                    del state['config']['port']
+                elif scenario == 'invalid-server-port':
+                    state['config']['port'] = '64738'
                 destinations = {name: owned / ('installed-' + name) for name in guest_state.PAYLOADS}
                 def command(*argv, **kwargs):
                     if argv[0] == 'age':
@@ -200,10 +204,10 @@ class StateTests(unittest.TestCase):
                         with self.assertRaises((ValueError, RuntimeError)):
                             guest_state.restore(args)
                         save.assert_not_called()
-                        if scenario in ('wrong-ssh', 'wrong-firewall', 'missing-ssh', 'invalid-ssh'):
+                        if scenario in ('wrong-ssh', 'wrong-firewall', 'missing-ssh', 'invalid-ssh', 'missing-server-port', 'invalid-server-port'):
                             mutation.assert_not_called()
                             self.assertFalse(any(path.exists() for path in destinations.values()))
-                    if scenario in ('missing-ssh', 'invalid-ssh'):
+                    if scenario in ('missing-ssh', 'invalid-ssh', 'missing-server-port', 'invalid-server-port'):
                         ssh.assert_not_called()
                     else:
                         ssh.assert_called_once_with(2222)
