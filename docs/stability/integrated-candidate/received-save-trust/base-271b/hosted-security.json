@@ -1,0 +1,55 @@
+{
+  "published_head": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+  "runtime_source_head": "9b5b8e26684d6f2481591b11653397d390d39300",
+  "merge_revision": "2f086846b24aa6a0cb4f417e59714bf22727e914",
+  "workflow_run": 38110655396,
+  "analyses": [
+    {
+      "analysis_key": ".github/workflows/code-ql.yml:CodeQL-Build",
+      "category": ".github/workflows/code-ql.yml:CodeQL-Build/os:ubuntu-latest",
+      "commit_sha": "2f086846b24aa6a0cb4f417e59714bf22727e914",
+      "created_at": "2026-10-11T04:28:14Z",
+      "environment": "{\"os\":\"ubuntu-latest\"}",
+      "error": "",
+      "id": 1930575391,
+      "results_count": 33,
+      "actual_result_rule_families": [
+        "cpp",
+        "py"
+      ],
+      "sarif_sha256": "a98e0c4079ee8dde5c24297a918e1ec86cbf64e7a21a53bad3b1c14c055c7760"
+    },
+    {
+      "analysis_key": ".github/workflows/code-ql.yml:codeql",
+      "category": ".github/workflows/code-ql.yml:codeql",
+      "commit_sha": "2f086846b24aa6a0cb4f417e59714bf22727e914",
+      "created_at": "2026-10-11T04:25:37Z",
+      "environment": "{}",
+      "error": "",
+      "id": 1930570623,
+      "results_count": 33,
+      "actual_result_rule_families": [
+        "cpp",
+        "py"
+      ],
+      "sarif_sha256": "3eb20b2a1c1e6b6316369cb1f1571c9e8bad7809a3bd7f84c69992089df302d6"
+    }
+  ],
+  "combined_check": {
+    "app": "github-advanced-security",
+    "conclusion": "success",
+    "head_sha": "271b48d26b360e160e34e80dddc37ce397c9ebb2",
+    "html_url": "https://github.com/gavmac11/mumble/runs/114387965399",
+    "id": 114387965399,
+    "name": "CodeQL",
+    "status": "completed"
+  },
+  "output": {
+    "annotations_count": 0,
+    "annotations_url": "https://api.github.com/repos/gavmac11/mumble/check-runs/114387965399/annotations",
+    "summary": "[View all branch alerts](/gavmac11/mumble/security/code-scanning?query=pr%3A40+tool%3ACodeQL+is%3Aopen).",
+    "text": null,
+    "title": "No new alerts in code changed by this pull request"
+  },
+  "limits": "Actual current and legacy configurations and changed-code comparison qualify base271b/runtime9b only. Each has33 existing results; this is not zero repository alerts. It does not qualify later received-save source5ead."
+}
