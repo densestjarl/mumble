@@ -1,0 +1,257 @@
+{
+  "producer_commit": "80ae9813aa12cf92e1f74f36686aef11c7301d79",
+  "suites": [
+    {
+      "name": "TestAudioWizard",
+      "seconds": "0.221194",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestDatabasePath",
+      "seconds": "1.8991",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestReleaseUpdate",
+      "seconds": "0.0471766",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestAnimatedImages",
+      "seconds": "0.0833078",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestChatWebM",
+      "seconds": "12.3355",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestVideoFramePacketizer",
+      "seconds": "0.00512943",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestVideoPacketPacer",
+      "seconds": "0.127324",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestVideoQualityProfile",
+      "seconds": "0.00443508",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestVideoViewUi",
+      "seconds": "0.0211581",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestXMLTools",
+      "seconds": "0.0051268",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFileTransferUi",
+      "seconds": "0.0922178",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFileTransferManager",
+      "seconds": "10.5408",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFileTransferTransport",
+      "seconds": "0.00414147",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestPQCrypto",
+      "seconds": "0.534834",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFTIdentity",
+      "seconds": "4.51847",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFileTransferSession",
+      "seconds": "0.0137412",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFileTransferEngine",
+      "seconds": "24.0078",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFileTransferE2E",
+      "seconds": "231.38",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestSettingsJSONSerialization",
+      "seconds": "0.0785486",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "OverlayTest",
+      "seconds": "0",
+      "disabled": true,
+      "failed": false
+    },
+    {
+      "name": "TestCrypt",
+      "seconds": "0.0136138",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestAudioReceiverBuffer",
+      "seconds": "0.00547703",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestQtLogger",
+      "seconds": "0.0194447",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestBandwidthRecord",
+      "seconds": "0.00472166",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestConnectionOutputQueue",
+      "seconds": "0.0168636",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestCaseInsensitiveQString",
+      "seconds": "0.00469585",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestCryptographicHash",
+      "seconds": "0.00827792",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestCryptographicRandom",
+      "seconds": "2.15281",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestDatabase",
+      "seconds": "1.27641",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestServerDatabase",
+      "seconds": "0.731852",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestFFDHE",
+      "seconds": "0.00972629",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestIPCUtils",
+      "seconds": "0.0050387",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestPacketDataStream",
+      "seconds": "0.00579861",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestPasswordGenerator",
+      "seconds": "0.0125076",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestMumbleProtocol",
+      "seconds": "0.00549629",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestSelfSignedCertificate",
+      "seconds": "0.809318",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestServerAddress",
+      "seconds": "0.00540782",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestSSLLocks",
+      "seconds": "2.01156",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestStdAbs",
+      "seconds": "0.00482308",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestTimer",
+      "seconds": "0.155134",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestUnresolvedServerAddress",
+      "seconds": "0.00459329",
+      "disabled": false,
+      "failed": false
+    },
+    {
+      "name": "TestVersion",
+      "seconds": "0.00398895",
+      "disabled": false,
+      "failed": false
+    }
+  ]
+}

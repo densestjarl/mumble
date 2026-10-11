@@ -1,0 +1,71 @@
+{
+  "custom-ssh-resume-v2.log": [
+    {
+      "status": "restored",
+      "profile": {
+        "format": 1,
+        "profile": "debian-12-historical-rehearsal",
+        "package_version": "1.3.4-4",
+        "package_sha256": "c7381408f4c2078844156ce7c38041648f7012ffc8eb0525e7855f7040966d5e",
+        "database_schema": 7
+      },
+      "database_tls_hashes_match": true,
+      "local_tls_certificate_matches": true,
+      "original_ini_retained": true,
+      "configuration_overrides": [
+        "database",
+        "sslCert",
+        "sslKey",
+        "host",
+        "port"
+      ],
+      "ssh_port": 2222,
+      "seconds": 4.828,
+      "external_readiness_required": true
+    }
+  ],
+  "custom-ssh-reboot-v3.log": [
+    {
+      "ssh_2222_live": true,
+      "pinned_protocol_ready_after_reboot": true,
+      "restore_marker": {
+        "phase": "ready",
+        "sha256": "b9aa18f517e942849074403f6c811fc0404cfb6247649262c8ee64c0be4bd20e",
+        "profile": {
+          "format": 1,
+          "profile": "debian-12-historical-rehearsal",
+          "package_version": "1.3.4-4",
+          "package_sha256": "c7381408f4c2078844156ce7c38041648f7012ffc8eb0525e7855f7040966d5e",
+          "database_schema": 7
+        },
+        "port": 64738,
+        "ssh_port": 2222
+      },
+      "firewall_keeps_custom_ssh": true
+    },
+    {
+      "incorrect_ssh_port_refused_before_mutation": "Selected SSH port is not configured and listening; firewall unchanged"
+    }
+  ],
+  "custom-ssh-crash-loop-v1.log": [
+    {
+      "crash_loop_refused_with_live_tls_listener": true,
+      "reason": "Pinned Mumble listener did not remain ready; service may be restarting"
+    },
+    {
+      "fresh_ssh_still_usable": true
+    }
+  ],
+  "modern-ssh-185c091-refusal.log": [
+    {
+      "actual_encrypted_preview_restore_mismatched_ssh_refused": true,
+      "modern_state_unchanged": true,
+      "reason": "Selected SSH port is not configured and listening; firewall unchanged",
+      "helper_sha256": {
+        "deploy_guest.py": "5b6ef6d10814e7338b966dac81070c7db4c8b9c742a7cb7c15537c955d8dbb50",
+        "guest_state.py": "26a88b5cbd3b859c75e2615008ffb1d07cb6c8b848b98af41d7af7d363c4646c",
+        "historical_recovery.py": "cf8ae55fb2e528140b0577732b95e467ae968d7f9df566f694a5e01c18fe1af8"
+      }
+    }
+  ]
+}

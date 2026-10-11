@@ -1,5 +1,7 @@
 # Integrated review follow-up work order
 
+The prioritized delivery, trust lifecycle and SSH blockers are addressed in [the October 11 follow-up](blocker-fixes-2026-10-11/README.md). This document retains the earlier work order; final validation and remaining release limits are recorded in that follow-up.
+
 The exact Opus 5.5 CLI review is retained in [opus-review.md](opus-review.md). Findings require reproduction and qualification; a green baseline suite is insufficient to promote this candidate. This list supplements the existing S1–S5/D1–D2/P0/H1–H2/P1–P2 release order.
 
 | Priority | Work | Acceptance evidence |

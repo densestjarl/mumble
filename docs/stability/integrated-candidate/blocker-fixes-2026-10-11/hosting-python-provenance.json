@@ -1,0 +1,11 @@
+{
+  "source": "520c2e6e2a3c8477d56be9363a3e238874a2290b",
+  "result": "70 passed, zero skips",
+  "inputs_sha256": {
+    "scripts/hosting/guest_state.py": "d733d7693926a7247e80790cbc1583391f46c3e7678c2e165d821cdc548e0cf1",
+    "scripts/hosting/test_guest_state.py": "e4c925120ecb002ef05fc7532c512cf2c180060c3433fd7994be29cc65e51ca9",
+    "scripts/hosting/deploy_guest.py": "5b6ef6d10814e7338b966dac81070c7db4c8b9c742a7cb7c15537c955d8dbb50",
+    "scripts/hosting/historical_recovery.py": "cf8ae55fb2e528140b0577732b95e467ae968d7f9df566f694a5e01c18fe1af8"
+  },
+  "native_bridges": "Previously qualified native crypto/pacer bridge inputs are unchanged; no claim of file-engine pacing qualification by these bridges."
+}

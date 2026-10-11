@@ -1,5 +1,7 @@
 # Trust lifecycle follow-up
 
+The prioritized delivery, trust lifecycle and SSH blockers are addressed in [the October 11 follow-up](blocker-fixes-2026-10-11/README.md). This document retains the earlier work order; final validation and remaining release limits are recorded in that follow-up.
+
 PR51 source `9b5b8e26684d6f2481591b11653397d390d39300` qualifies specific identity/sender-snapshot corrections, with exact [review and native evidence](presented-identity/revision-9b5b8e/README.md). The remaining Should items are required before release acceptance, not silently waived by a green automated suite.
 
 | Priority | Work | Required evidence |

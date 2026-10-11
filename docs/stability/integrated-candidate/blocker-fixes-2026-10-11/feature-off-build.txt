@@ -1,0 +1,4 @@
+PASS: full native Mac client built with file-sharing=OFF at 185c091.
+The later 80ae981 casts affect only server Messages.cpp, which this client-only configuration does not compile. The 520c2e6 change is Python only.
+Shared Homebrew dependencies, Werror OFF, require macOS 26; this is not minimum-OS or signed-package qualification.
+Private original build-log SHA256: b0d25c5a9f55237eb579d25aadf073f91e8fe23bbcfeeb68137697cb054c3af1
