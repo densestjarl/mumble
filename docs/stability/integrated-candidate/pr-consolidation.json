@@ -1,0 +1,187 @@
+{
+  "integration_head_before_summary": "0be4ff3b9570a1263b1113f8ff5a69e222f8b490",
+  "qualified_runtime_source": "5eadce0753b634147f97746e192ddef613019a02",
+  "all_non_document_inputs_match_qualified_source": true,
+  "base": "master",
+  "base_head": "7fc94bf23cfb7e773282fdd67f30982e5bd25b33",
+  "prs": [
+    {
+      "number": 30,
+      "title": "FIX/CI: Establish native stability regression foundation",
+      "head": "59eb5be1fc116630afd1bdd4501d07dc8cd60bdf",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 31,
+      "title": "FEAT(hosting): Add pinned private guest deployment rehearsal",
+      "head": "95078540366de1e0514b20d6106fc080a04ac613",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 32,
+      "title": "FEAT(hosting): Add encrypted private guest state recovery rehearsal",
+      "head": "7ef97710ef33899085d8e78ab710dc5f70b07f18",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 33,
+      "title": "Cancel and join busy file-transfer workers before teardown",
+      "head": "d07569f8a28e0656defc81a36019805202139ced",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 34,
+      "title": "Add pinned historical encrypted recovery and reboot resume drill",
+      "head": "0cc42dd4915e8155c7ac163915de66e214178d66",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 35,
+      "title": "Fix full-width server media bandwidth accounting",
+      "head": "8705a77c1b09634feafd0b9c396a2e5ba04b1b99",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 36,
+      "title": "Bound server output retained by stalled TCP receivers",
+      "head": "de1c63192b4b85bfc50c0baecea2e702202065ce",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 37,
+      "title": "Fix Mac accessibility crashes and late Qt logging teardown",
+      "head": "d6bbce13edf0025698019f2e737e16bb0c19ae86",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 38,
+      "title": "Preserve safety QR payloads and add keyboard file actions",
+      "head": "a66723e932bb290e872ee31a649c86605d28260d",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 39,
+      "title": "Stop silent fallback from explicit client database paths",
+      "head": "c6c36b76e27931cbd8a726759a00298c399ac756",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 41,
+      "title": "Show configured database errors and fix fatal teardown",
+      "head": "d8bb735ba17e89dbe723b458f36a02f4bc79918a",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 42,
+      "title": "Keep received plaintext in private random temporary storage",
+      "head": "8e092f55946462e8fd863890611fca9ace1e8975",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 43,
+      "title": "Require TLS 1.2 for historical recovery readiness",
+      "head": "fc50d01ab306d60a2d0d6a6c8d788f49e5548f85",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 44,
+      "title": "Isolate early chunks and receive idle progress by transfer",
+      "head": "ee0e915dadaeeaca5ce9572c6e208ab757e5ca64",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 45,
+      "title": "Use server-provided ban identifiers in recovery fixtures",
+      "head": "873e4a2eb1f552b9abc3532895d0ccb7f2c578a9",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 46,
+      "title": "Enforce a shared file-transfer sending rate",
+      "head": "f3b8d6ba3293addcc63e5e21a6bb63bf53e823d7",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 47,
+      "title": "Handle unavailable devices in the audio wizard",
+      "head": "5ecac5da6492d6f61294a974912ccb1b7114ff7e",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 48,
+      "title": "Restore both CodeQL comparison configurations",
+      "head": "6bc3bd717575bba805549d53a6478b2e01012235",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 49,
+      "title": "Preserve files during failed and confirmed transfer saves",
+      "head": "9d0070caa8a0d37151aaa23c9cc42697ebf3faa8",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 50,
+      "title": "FIX: separate manual save history and refuse unsafe automatic filenames",
+      "head": "f4c317ca5ed1a053b399f00290765923b9c44664",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "MERGED",
+      "disposition": "Integrated into PR40; merge history retained"
+    },
+    {
+      "number": 51,
+      "title": "FIX: Bind file transfer trust to the actual peer identity",
+      "head": "5e9c5f2098580b86da6c1b9da1124eec54b97ff6",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; superseded draft closed with reference"
+    },
+    {
+      "number": 52,
+      "title": "Recheck received sender identity before saving files",
+      "head": "5eadce0753b634147f97746e192ddef613019a02",
+      "all_head_commits_in_integration": true,
+      "state_before_consolidation": "OPEN",
+      "disposition": "Integrated into PR40; merge history retained"
+    }
+  ],
+  "PR29": "Already an ancestor, remains open for its required human review; no approval bypass",
+  "PR43_resolution": "The TLS minimum and accompanying record were already present. Merged its exact head while retaining newer server-supplied ban identifier correction; tree unchanged by reconciliation."
+}

@@ -1,5 +1,17 @@
 # Integrated stabilization candidate
 
+## Current consolidated candidate
+
+PR40 consolidates every current component head from PR30–39 and PR41–52. [The PR audit and disposition](pr-consolidation.md) identify each branch and the actual remaining blockers. PR43 is reconciled without changing the already qualified TLS/security behavior; PR52 adds received-save trust rechecks and duplicate-save result preservation. Runtime/build/test/hosting inputs match source `5eadce0753b634147f97746e192ddef613019a02`.
+
+[Exact final native evidence](received-save-trust/revision-5eadce0/README.md) records full available Mac, native Windows and Linux builds, with all 41 enabled suites passing on each (Mac 66.45 s; Windows 38.75 s and 1,168 Qt cases; Linux 64.06 s). All 99 Windows evidence hashes and 143 source blobs independently verify. The actual Opus 5.5 follow-up finds no new Must or Should in the final save correction. Mac local built-in speaker/microphone checks are human-confirmed; network/device/signing limits remain explicit.
+
+[Earlier integration 271b hosted evidence](received-save-trust/base-271b/hosted-final.json) records passing CI, preview package/QR, hosting and both actual security configurations. The combined security comparison has zero annotations and no new changed-code alerts; 33 existing repository results per analysis remain. New consolidated-head hosted checks must qualify their own revision.
+
+PR40 remains a draft with one required human approval missing. Known relay/receipts/backpressure and trust lifecycle work, installed GUI/device/supported-OS/signing checks, final recovery/endurance and commercial acceptance remain open. Older sections below are source-specific historical evidence, including controller/security failures that were subsequently corrected; they are not the current status.
+
+## Historical evidence
+
 This candidate combines the client foundation, cooperative worker shutdown/unsaved receive cleanup, pinned deployment/current/historical recovery tools, full-width bandwidth accounting, stalled TCP output bounds, Qt Cocoa ownership/logging repairs, full binary safety QR verification, keyboard file actions and explicit client database isolation. Each earlier evidence record identifies its own source/package and remains limited to that source.
 
 The code tree at `740649f89` fully builds on the available Mac. All [40 enabled CTest suites](local-regression.txt) pass in 46.39 seconds (41 registered; OverlayTest disabled), without execution failures/skips. All [59 hosting Python checks](hosting-regression.txt) pass without skips when the native crypto/pacer bridges are freshly compiled and configured. The first broad invocation lacked those bridge paths and skipped five cases; it does not qualify the full suite. Private bridge builds use current production sources, and the pacer bridge retains strict warnings.
