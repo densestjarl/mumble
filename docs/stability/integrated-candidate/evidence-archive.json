@@ -1,0 +1,16 @@
+{
+  "source_commit": "8daa4c065b9ff08540b3d69b6676215141118302",
+  "files": 1509,
+  "uncompressed_bytes": 13983810,
+  "archive": "pr40-evidence-8daa4c0.tar.gz",
+  "archive_bytes": 1978339,
+  "sha256": "4a03155edafc422bdb61aaea4d2789aac9fae39f6f34e6a45219bd6be7f3aeec",
+  "scope": [
+    "docs/hosting/results",
+    "docs/stability/integrated-candidate"
+  ],
+  "verified": "Every archived file compared byte-for-byte with its tracked source before removal.",
+  "removed_pr_added_files": 1313,
+  "base_existing_files_preserved": 196,
+  "release_url": "https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11"
+}

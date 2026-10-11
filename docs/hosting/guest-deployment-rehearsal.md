@@ -41,7 +41,7 @@ The supplied Ubuntu 24.04 test host exposes KVM. We created dedicated, resource-
 
 The package tested is the successful Debian artifact from [preview run 38077239024](https://github.com/gavmac11/mumble/actions/runs/38077239024), built at merge commit `984d6674e8aa3304d4d9222ebaba5a408f584588` (PR head `d78218004ece5e3d51b5cf0d40031ee70cf37c1c` merged into master `7fc94bf23cfb7e773282fdd67f30982e5bd25b33`). Package version: `1.7.56~master+git984d6674`; SHA-256: `c77f5c70c609fe6303d151f69f49821cd078a1d21bd8f21c73e4a5d1270c1974`. Later client-only channel-ID fixes do not change this artifact; this drill does not qualify a different package or frozen candidate.
 
-See [deployment evidence](results/2026-10-10/guest-deployment-validation.json) and the neighboring external probe records. The first guest caught two rehearsal mistakes before acceptance: unsupported `sqlite_wal=1` and an assumed server ID of 1. The final tool uses WAL 2 and discovers/validates the actual account. Successful CLI exit alone did not prove administrator access; an actual external SuperUser TLS login did.
+See [deployment evidence](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11) (`results/2026-10-10/guest-deployment-validation.json` in the archive) and the neighboring external probe records. The first guest caught two rehearsal mistakes before acceptance: unsupported `sqlite_wal=1` and an assumed server ID of 1. The final tool uses WAL 2 and discovers/validates the actual account. Successful CLI exit alone did not prove administrator access; an actual external SuperUser TLS login did.
 
 ## Remaining release gates
 

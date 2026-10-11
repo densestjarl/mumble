@@ -1,9 +1,0 @@
-{
-  "source_commit": "227be70ed77faf220942000c84c7f9b00928d9b9",
-  "state": "Source/archive preserved and verified; native build and CTest not started",
-  "reason": "Planning reports Mac fixture chunk-cardinality mismatch at 900000 bytes/sec pacing; corrected explicit 128KiB chunk size/source archive pending. E2E/final evidence held per steering. File-sharing OFF handler compile guard also under correction.",
-  "reported_diagnostic_scope": "Relayed Mac diagnosis, not a Windows runtime failure",
-  "reported_counts": "96MiB actual 448 at 225000-byte effective chunks; old assertion 384 incorrect. Follow-up intends exact 768+24 with 128KiB; competing sender total 768. No local assertion or deadline changes.",
-  "preparation_event": "Initial archive completeness assertion compared all Git files including export-ignore files; corrected comparison to exact recursive Git exports independently proved all supplied blobs/pins. No archive content or production edits.",
-  "recorded_utc": "2026-10-11T06:37:09.375540+00:00"
-}

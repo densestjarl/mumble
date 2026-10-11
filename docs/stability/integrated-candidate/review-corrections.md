@@ -1,0 +1,23 @@
+# October 11 review corrections
+
+Implementation input: `e09cbafa0a53267a032b280aa852a23e185568c5`. The [requested review](https://github.com/gavmac11/mumble/pull/40#pullrequestreview-5483106744) is addressed by these corrections; acceptance still requires the reviewer to assess them.
+
+| Finding | Correction | Regression coverage |
+| --- | --- | --- |
+| One unavailable recipient aborts selection | Skip legacy clients without receipts and individual unusable identities; explain identity/storage failure when none remain. Valid peers stay selectable. | `recipientsSkipUnavailableMembers` |
+| First-contact insertion conflict | Conditional upsert accepts the same identity, preserves `verified` and `first_seen`, and refuses a competing different key. Sequential duplicate acceptance already rechecked the existing pin; the new test also forces an insertion race. | `concurrentPinPreservesIdentity` (same/different keys); `duplicateSessionPromptsAcceptSameIdentity` |
+| Busy-recipient error | Name the recipient and explain that an existing transfer must finish or be cancelled. The single pending transfer restriction is retained because the receive protocol has one pre-manifest handshake slot per peer. | `sendLimitUsesActualChunksAndBusyHasOwnError` |
+| Inbound overflow loses the receive | Admit file frames only while both GUI and worker budgets have room. Retain an unadmitted frame in the bounded socket buffer and retry as queues drain. After 60 seconds, fail the receive through its authenticated abort path. Retire local state before synchronous peer re-entry. | `pausedReadRetainsFrameAndResumes`; `pausedReadTimesOutOnce`; `receiveFailureStopsSenderImmediately`; real-server delivery suites |
+| Control messages amplify database scans | User/trust events maintain the channel cache. Incoming controls do not refresh it; a live matching-key authorization updates only that peer's cache entry. | `controlsDoNotRebuildWholePinCache`; existing joined/changed/reconnected identity cases |
+| New saves retain private staging permissions | Keep partial staging private, then apply permissions measured from ordinary file creation in the destination directory before atomic publication. No process-wide umask read/change in production. Replacement retains its existing save behavior. | `savedPermissionsMatchNormalCreation` (new/replacement; default/private umasks); existing atomic save/failure tests |
+| Near-limit files are over-rejected | Share effective chunk sizing between the manager and engine, including upload/aggregate rate adaptation. Compute exact ceiling chunk count and tag overhead with overflow-safe bounds. | `sendLimitUsesActualChunksAndBusyHasOwnError`; existing pacing/E2E cases |
+| Tested transport helpers are unused | Production callbacks now use the helpers, which delegate connection validation and accounting to the handler's existing queue methods. | Transport snapshot, payload-copy, target, admission, stale-connection and lifetime cases |
+| Bulky evidence in repository | Remove 1,313 PR-added evidence files from the working tree; retain curated summaries and a small archive manifest. Preserve all 1,509 historical records in durable release assets, including the 196 files already on master. | Byte comparison before removal and checksum verification after download |
+
+The bounded read buffer also rejects an oversized/invalid header before waiting for its body (`oversizedReadHeaderClosesBeforeBody`). Socket backpressure preserves stream ordering: TCP controls and tunneled voice behind a paused file frame wait for the receive queue; UDP is independent. Prolonged stalls still fail at the timeout. This is not a priority scheduler for TCP traffic.
+
+## Validation and retention
+
+Complete local Release client/server build and all five affected suites pass. The 70 hosting checks pass with both native bridges. Full-suite and cross-platform results for this implementation are retained in the [evidence release](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11), in `pr40-review-corrections-e09cbafa0.json` and its accompanying archive. See [the current PR checks](https://github.com/gavmac11/mumble/pull/40/checks) for hosted client/server, installer and both security configurations. Raw output and inventories are not committed here. Failed intermediate checks are retained in the archive; later passing results identify the exact source input.
+
+The historical [candidate summary](README.md) records prior qualification separately. An Opus 5.5 source review is supporting evidence only. Physical-device, supported-OS, shipping-signature, endurance and final-package recovery work remains in the release qualification gate; it is not marked passed by these corrections.

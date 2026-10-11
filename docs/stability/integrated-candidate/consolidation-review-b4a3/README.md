@@ -1,9 +1,0 @@
-# Consolidation review and additional checks
-
-The actual read-only [Opus 5.5 CLI review](opus-review.md) of integration head `b4a3ced7041446bf92772d686397ef0a10e1f034` found no lost correction or new production Must. All 98 snapshot files were independently compared to Git before review. Its two Should items are addressed by recording the omitted SSH/readiness/packaging blockers and adding the TLS minimum assertion plus hosted ban-identifier tests. No listed correctness or hardware requirement is waived. Links unavailable to the reviewer snapshot were verified to exist at that exact Git head.
-
-The [new TLS assertion fails](tls-minimum-negative.txt) on the exact pre-PR43 historical readiness implementation; it passes on the candidate. [All 62 local hosting checks pass](hosting-guards-positive.txt) with verified unchanged native crypto/pacer bridges and no skips. The workflow now executes the three existing server-provided ban-identifier tests as well as its previous selected suites.
-
-[The Mac camera check](native-mac-camera.json) verifies authorized local built-in camera capture, visible live preview and Stop sharing. The coordinate toolbar click opened the source picker; an earlier accessibility checkbox click alone had not invoked it. No camera image or user face is retained in public evidence. Network video, permissions across supported OS versions, signing and endurance remain open.
-
-[The relay negative](relay-recipient-routing-negative.json) now runs on an independently hashed copy of the qualified final server, using fresh owned state and validated TLS including hostname checks. Both the selected peer and a nonrecipient receive the synthetic opaque chunk. This confirms current channel broadcast; it does not establish a valid encrypted file/session or completion behavior. Targeted relay/negotiation and receipts remain required.

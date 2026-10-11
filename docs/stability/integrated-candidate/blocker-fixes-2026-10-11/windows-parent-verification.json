@@ -1,8 +1,0 @@
-{
-  "producer_commit": "73bbbc64003afc2df8d19af43fcb5d185d66cdad",
-  "source_commit": "80ae9813aa12cf92e1f74f36686aef11c7301d79",
-  "evidence_checksums_verified": 108,
-  "source_blobs_independently_verified": 12874,
-  "binary_hash_entries": 44,
-  "sensitive_output_scan": "No unredacted generated SuperUser password or private key detected"
-}

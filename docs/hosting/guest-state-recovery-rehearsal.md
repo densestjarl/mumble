@@ -29,7 +29,7 @@ For the protocol acceptance fixture, create private `member.crt/key` and `banned
 
 ## Recorded execution and remaining evidence
 
-The [recovery manifest](results/2026-10-10/guest-recovery-validation.json) identifies the tool hashes, exact candidate package, environment, raw protocol records and timing. The source and replacement are real nested KVM Debian 12 guests on the supplied Ubuntu host. Existing host services and the older pilot were preserved.
+The [recovery manifest](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11) (`results/2026-10-10/guest-recovery-validation.json` in the archive) identifies the tool hashes, exact candidate package, environment, raw protocol records and timing. The source and replacement are real nested KVM Debian 12 guests on the supplied Ubuntu host. Existing host services and the older pilot were preserved.
 
 The first restore command took 45.924 seconds. Subsequent external checks and a real guest reboot recovered the registered certificate account, permanent room, group/ACL behavior, certificate ban, credentials and original TLS identity. All seven managed file hashes matched. Server limits were 512 MiB, one CPU core, 128 tasks and 4096 open files. TCP and encrypted UDP fan-out were checked in separate runs; overlapping probes on the same channel contaminate each other's streams and are not acceptance evidence.
 

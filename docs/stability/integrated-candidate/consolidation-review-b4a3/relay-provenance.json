@@ -1,7 +1,0 @@
-{
-  "source_head": "5eadce0753b634147f97746e192ddef613019a02",
-  "consolidated_head": "b4a3ced7041446bf92772d686397ef0a10e1f034",
-  "server_binary_sha256": "6b1c6930f36776ec9f48c60b73990aad7e26b216a3db1d3dd81a8edf0e66a6a6",
-  "tls": "Fresh disposable SAN localhost leaf; chain and hostname validation enabled; extra exact DER SHA256 check; TLS1.2 minimum",
-  "fixture_limits": "Opaque valid-length relay message, not an encrypted file/session/completion qualification"
-}

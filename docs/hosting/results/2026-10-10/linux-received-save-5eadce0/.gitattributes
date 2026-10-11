@@ -1,4 +1,0 @@
-# Preserve logger whitespace in retained raw evidence.
-*.txt whitespace=-blank-at-eol
-*.xml whitespace=-blank-at-eol
-*.log whitespace=-blank-at-eol
