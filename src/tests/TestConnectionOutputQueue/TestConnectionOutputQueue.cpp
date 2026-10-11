@@ -78,6 +78,8 @@ void TestConnectionOutputQueue::pausedReadRetainsFrameAndResumes() {
 		received.append(data);
 	});
 	MumbleProto::FileData message;
+	message.set_transfer_id(std::string(16, 't'));
+	message.set_chunk_index(0);
 	message.set_data(std::string(1024 * 1024, 'x'));
 	QByteArray wire;
 	QVERIFY(Connection::messageToNetwork(message, Mumble::Protocol::TCPMessageType::FileData, wire));
@@ -109,6 +111,8 @@ void TestConnectionOutputQueue::pausedReadTimesOutOnce() {
 		&connection, &Connection::messageRejected, this,
 		[&](Mumble::Protocol::TCPMessageType, const QByteArray &) { ++timeouts; }, Qt::QueuedConnection);
 	MumbleProto::FileData message;
+	message.set_transfer_id(std::string(16, 't'));
+	message.set_chunk_index(0);
 	message.set_data("timeout");
 	QByteArray wire;
 	QVERIFY(Connection::messageToNetwork(message, Mumble::Protocol::TCPMessageType::FileData, wire));
@@ -142,6 +146,8 @@ void TestConnectionOutputQueue::congestedReadsShareDeadlineAndDeliverPing() {
 		++pings;
 	});
 	MumbleProto::FileData data;
+	data.set_transfer_id(std::string(16, 't'));
+	data.set_chunk_index(0);
 	data.set_data("congested");
 	QByteArray file, ping;
 	QVERIFY(Connection::messageToNetwork(data, Mumble::Protocol::TCPMessageType::FileData, file));
@@ -177,6 +183,8 @@ void TestConnectionOutputQueue::congestionDeadlineRecoversAfterIdle() {
 	connect(&connection, &Connection::message, this,
 			[&](Mumble::Protocol::TCPMessageType, const QByteArray &) { ++received; });
 	MumbleProto::FileData data;
+	data.set_transfer_id(std::string(16, 't'));
+	data.set_chunk_index(0);
 	data.set_data("small final chunk");
 	QByteArray wire;
 	QVERIFY(Connection::messageToNetwork(data, Mumble::Protocol::TCPMessageType::FileData, wire));
