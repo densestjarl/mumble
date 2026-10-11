@@ -271,6 +271,8 @@ MainWindow::MainWindow(QWidget *p)
 	qtbSendFile->setIcon(QIcon::fromTheme(QStringLiteral("mail-attachment"),
 										  QIcon::fromTheme(QStringLiteral("attach"))));
 	qtbSendFile->setToolTip(tr("Send a file to the channel"));
+#else
+	qtbSendFile->hide();
 #endif
 	connect(Global::get().screenShareReceiver, &ScreenShareReceiver::frameDecoded, this,
 			&MainWindow::onRemoteFrameDecoded, Qt::QueuedConnection);
