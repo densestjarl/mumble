@@ -22,6 +22,8 @@
 #include <QtCore/QObject>
 #include <QtNetwork/QSslSocket>
 
+#include <QtCore/QTimer>
+#include <functional>
 #include <memory>
 
 #ifdef Q_OS_WIN
@@ -35,9 +37,21 @@ namespace protobuf {
 } // namespace google
 
 class Connection : public QObject {
+public:
+	enum class ReadAdmission { Ready, Defer, Bypass };
+
 private:
 	Q_OBJECT
 	Q_DISABLE_COPY(Connection)
+	qint64 m_maxPendingSendBytes = 0;
+	bool m_sendQueueBlocked      = false;
+	std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > m_readAdmission;
+	QTimer m_readRetry;
+	QElapsedTimer m_readPauseClock;
+	QElapsedTimer m_lastReadDeferral;
+	int m_readPauseTimeout = 2000;
+	bool m_frameDeferred = false;
+
 protected:
 	QSslSocket *qtsSocket;
 	QElapsedTimer qtLastPacket;
@@ -56,8 +70,10 @@ public slots:
 	void proceedAnyway();
 signals:
 	void encrypted();
+	void outputProgress(qint64 pendingBytes);
 	void connectionClosed(QAbstractSocket::SocketError, const QString &reason);
 	void message(Mumble::Protocol::TCPMessageType type, const QByteArray &);
+	void messageRejected(Mumble::Protocol::TCPMessageType type, const QByteArray &);
 	void handleSslErrors(const QList< QSslError > &);
 
 public:
@@ -68,6 +84,16 @@ public:
 	void sendMessage(const ::google::protobuf::Message &msg, Mumble::Protocol::TCPMessageType msgType,
 					 QByteArray &cache);
 	void sendMessage(const QByteArray &qbaMsg);
+	/// Limit pending plaintext and encrypted output together. Zero leaves output unlimited.
+	/// A connection that exceeds the limit stops accepting output and closes asynchronously.
+	void setMaxPendingSendBytes(qint64 bytes);
+	qint64 pendingSendBytes() const;
+	/// Retain an unadmitted frame in the bounded socket buffer and retry when queues drain.
+	/// Reject stalled frames after one brief pause per congestion episode.
+	/// Bypass frames preserve the episode deadline; Ready ends the episode.
+	void setReadAdmission(std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > admission,
+						  int timeoutMSecs = 2000);
+	bool readPaused() const { return m_readRetry.isActive(); }
 	void disconnectSocket(bool force = false);
 	void forceFlush();
 	qint64 activityTime() const;

@@ -31,6 +31,10 @@ Connection::Connection(QObject *p, QSslSocket *qtsSock) : QObject(p) {
 	bDisconnectedEmitted = false;
 	csCrypt              = std::make_unique< CryptStateOCB2 >();
 
+	connect(qtsSocket, &QSslSocket::bytesWritten, this, [this](qint64) { emit outputProgress(pendingSendBytes()); });
+	connect(qtsSocket, &QSslSocket::encryptedBytesWritten, this,
+			[this](qint64) { emit outputProgress(pendingSendBytes()); });
+
 	static bool bDeclared = false;
 	if (!bDeclared) {
 		bDeclared = true;
@@ -48,6 +52,8 @@ Connection::Connection(QObject *p, QSslSocket *qtsSock) : QObject(p) {
 	connect(qtsSocket, SIGNAL(disconnected()), this, SLOT(socketDisconnected()));
 	connect(qtsSocket, SIGNAL(sslErrors(const QList< QSslError > &)), this,
 			SLOT(socketSslErrors(const QList< QSslError > &)));
+	m_readRetry.setSingleShot(true);
+	connect(&m_readRetry, &QTimer::timeout, this, &Connection::socketRead);
 	qtLastPacket.restart();
 #ifdef Q_OS_WIN
 	dwFlow = 0;
@@ -100,6 +106,14 @@ void Connection::resetActivityTime() {
 	qtLastPacket.restart();
 }
 
+void Connection::setReadAdmission(std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > admission,
+								  int timeoutMSecs) {
+	m_readAdmission    = std::move(admission);
+	m_readPauseTimeout = qMax(1, timeoutMSecs);
+	// Large enough for every valid protocol frame, bounded while reads pause.
+	qtsSocket->setReadBufferSize(8 * 1024 * 1024);
+}
+
 /**
  * This function waits until a complete package is received and then emits it as a message.
  * It gets called everytime new data is available and interprets the message prefix header
@@ -126,20 +140,41 @@ void Connection::socketRead() {
 			iAvailable -= 6;
 		}
 
-		if ((iPacketLength == -1) || (iAvailable < iPacketLength))
-			return;
-
-		if (iPacketLength > 0x7fffff) {
-			qWarning() << "Host tried to send huge packet";
+		if (iPacketLength < 0 || iPacketLength > 0x7fffff) {
+			qWarning() << "Host tried to send huge or invalid packet";
 			disconnectSocket(true);
 			return;
 		}
+		if (iAvailable < iPacketLength)
+			return;
 
+		const auto admission = m_readAdmission ? m_readAdmission(m_type, iPacketLength) : ReadAdmission::Ready;
+		bool rejected        = false;
+		if (admission == ReadAdmission::Defer) {
+			if (!m_readPauseClock.isValid()
+				|| (!m_frameDeferred && m_lastReadDeferral.isValid()
+					&& m_lastReadDeferral.elapsed() > m_readPauseTimeout))
+				m_readPauseClock.start();
+			m_lastReadDeferral.restart();
+			m_frameDeferred = true;
+			if (m_readPauseClock.elapsed() < m_readPauseTimeout) {
+				m_readRetry.start(20);
+				return;
+			}
+			rejected = true;
+		} else if (admission == ReadAdmission::Ready) {
+			m_readPauseClock.invalidate();
+			m_lastReadDeferral.invalidate();
+		}
+		m_readRetry.stop();
+		m_frameDeferred      = false;
 		QByteArray qbaBuffer = qtsSocket->read(iPacketLength);
 		iPacketLength        = -1;
-		iAvailable -= iPacketLength;
 
-		emit message(m_type, qbaBuffer);
+		if (rejected)
+			emit messageRejected(m_type, qbaBuffer);
+		else
+			emit message(m_type, qbaBuffer);
 	}
 }
 
@@ -196,11 +231,41 @@ void Connection::sendMessage(const ::google::protobuf::Message &msg, Mumble::Pro
 }
 
 void Connection::sendMessage(const QByteArray &qbaMsg) {
-	if (qbaMsg.isEmpty() || qtsSocket->state() != QAbstractSocket::SocketState::ConnectedState) {
+	if (qbaMsg.isEmpty() || m_sendQueueBlocked || qtsSocket->state() != QAbstractSocket::SocketState::ConnectedState) {
 		return;
 	}
 
+	if (m_maxPendingSendBytes > 0) {
+		const qint64 plaintext = qtsSocket->bytesToWrite();
+		const qint64 encrypted = qtsSocket->encryptedBytesToWrite();
+		// Subtract rather than add potentially large queue sizes. Count both Qt
+		// buffers: bytesToWrite() alone excludes already encrypted output.
+		if (plaintext > m_maxPendingSendBytes || encrypted > m_maxPendingSendBytes - plaintext
+			|| qbaMsg.size() > m_maxPendingSendBytes - plaintext - encrypted) {
+			m_sendQueueBlocked = true;
+			// A synchronous abort can remove a ServerUser from a channel while
+			// its broadcast loop is still iterating that channel's users.
+			QMetaObject::invokeMethod(
+				this,
+				[this]() {
+					qWarning("Outgoing TCP queue exceeded connection limit; disconnecting slow peer");
+					disconnectSocket(true);
+				},
+				Qt::QueuedConnection);
+			return;
+		}
+	}
+
 	qtsSocket->write(qbaMsg);
+	emit outputProgress(pendingSendBytes());
+}
+
+qint64 Connection::pendingSendBytes() const {
+	return qtsSocket->bytesToWrite() + qtsSocket->encryptedBytesToWrite();
+}
+
+void Connection::setMaxPendingSendBytes(qint64 bytes) {
+	m_maxPendingSendBytes = qMax< qint64 >(0, bytes);
 }
 
 void Connection::forceFlush() {

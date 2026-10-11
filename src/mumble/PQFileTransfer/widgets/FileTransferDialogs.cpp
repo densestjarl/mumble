@@ -11,6 +11,9 @@
 
 #include <qrcodegen.hpp>
 
+#include <cstdint>
+#include <vector>
+
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QBrush>
@@ -30,17 +33,19 @@
 
 namespace {
 QImage renderQr(const QByteArray &payload) {
-	const QByteArray text = payload.isEmpty() ? QByteArray("mumble-file-transfer") : payload;
-	qrcodegen::QrCode qr = qrcodegen::QrCode::encodeText(text.constData(), qrcodegen::QrCode::Ecc::MEDIUM);
+	const QByteArray bytes = payload.isEmpty() ? QByteArray("mumble-file-transfer") : payload;
+	const auto *begin = reinterpret_cast< const std::uint8_t * >(bytes.constData());
+	const std::vector< std::uint8_t > content(begin, begin + bytes.size());
+	qrcodegen::QrCode qr = qrcodegen::QrCode::encodeBinary(content, qrcodegen::QrCode::Ecc::MEDIUM);
 
 	const int border = 4;
 	const int size   = qr.getSize() + border * 2;
-	QImage image(size, size, QImage::Format_Mono);
+	QImage image(size, size, QImage::Format_RGB32);
 	image.fill(Qt::white);
 	for (int y = 0; y < qr.getSize(); ++y) {
 		for (int x = 0; x < qr.getSize(); ++x) {
 			if (qr.getModule(x, y)) {
-				image.setPixel(x + border, y + border, 0);
+				image.setPixel(x + border, y + border, qRgb(0, 0, 0));
 			}
 		}
 	}
@@ -71,12 +76,16 @@ QString strengthHint(const QString &password) {
 } // namespace
 
 SafetyNumberDialog::SafetyNumberDialog(const QString &peerName, const QString &safetyDigits,
-									   const QByteArray &qrPayload, QWidget *parent)
+									   const QByteArray &qrPayload, QWidget *parent, bool sending)
 	: QDialog(parent), m_verified(false) {
-	setWindowTitle(tr("Verify file-transfer identity"));
+	setWindowTitle(sending ? tr("Verify recipient before sending") : tr("Verify sender before receiving"));
 	setModal(true);
 
 	auto *layout = new QVBoxLayout(this);
+
+	layout->addWidget(new QLabel(sending ? tr("Verify the recipient before sending this file.")
+										 : tr("Verify the sender before receiving this file."),
+								 this));
 
 	auto *intro = new QLabel(
 		tr("First file transfer with <b>%1</b>. Compare the safety number below with the one on their "
@@ -201,6 +210,9 @@ FileSendDialog::FileSendDialog(const QString &fileName, quint64 fileSize,
 			case PQFT::TrustState::Pinned:
 				trust = tr("pinned (not verified yet)");
 				break;
+			case PQFT::TrustState::StorageError:
+				trust = tr("Cannot read saved identity — unavailable");
+				break;
 			case PQFT::TrustState::Changed:
 				trust = tr("IDENTITY CHANGED — blocked");
 				break;
@@ -212,7 +224,8 @@ FileSendDialog::FileSendDialog(const QString &fileName, quint64 fileSize,
 		item->setText(tr("%1 — %2").arg(recipient.name.toHtmlEscaped()).arg(trust));
 		item->setData(Qt::UserRole, recipient.session);
 		item->setData(Qt::UserRole + 1, recipient.trustState);
-		if (recipient.trustState == static_cast< int >(PQFT::TrustState::Changed)) {
+		if (recipient.trustState == static_cast< int >(PQFT::TrustState::Changed)
+			|| recipient.trustState == static_cast< int >(PQFT::TrustState::StorageError)) {
 			// Hard exclusion: a peer whose pinned identity changed is never a
 			// valid recipient. Gray the entry out and make it inert (the
 			// engine refuses the handshake anyway — this is UX only).

@@ -12,6 +12,7 @@
 #	include "win.h"
 #endif
 
+#include "BandwidthRecord.h"
 #include "ClientType.h"
 #include "Connection.h"
 #include "HostAddress.h"
@@ -28,29 +29,6 @@
 #endif
 
 #include <vector>
-
-// Unfortunately, this needs to be "large enough" to hold
-// enough frames to account for both short-term and
-// long-term "maladjustments".
-
-#define N_BANDWIDTH_SLOTS 360
-
-struct BandwidthRecord {
-	int iRecNum;
-	int iSum;
-	Timer tFirst;
-	Timer tIdleControl;
-	unsigned short a_iBW[N_BANDWIDTH_SLOTS];
-	Timer a_qtWhen[N_BANDWIDTH_SLOTS];
-	mutable QMutex qmMutex;
-
-	BandwidthRecord();
-	bool addFrame(int size, int maxpersec);
-	int onlineSeconds() const;
-	int idleSeconds() const;
-	void resetIdleSeconds();
-	int bandwidth() const;
-};
 
 struct WhisperTarget {
 	struct Channel {
@@ -155,7 +133,7 @@ public:
 	/// Video traffic is metered separately from voice (bwr) so one cannot starve the other.
 	BandwidthRecord bwrVideo;
 	/// Chat file-transfer traffic, metered separately from voice and video.
-	BandwidthRecord bwrFile;
+	FileBandwidthRecord bwrFile;
 	/// True when the client announced UserState.file_transfer_capable.
 	bool bFileTransferCapable = false;
 	struct sockaddr_storage saiUdpAddress;

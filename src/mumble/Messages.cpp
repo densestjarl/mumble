@@ -39,6 +39,9 @@
 #include "crypto/CryptState.h"
 #include "crypto/CryptStateOCB2.h"
 #include "Global.h"
+#ifdef USE_FILE_SHARING
+#	include "PQFileTransfer/engine/FileTransferManager.h"
+#endif
 
 #include <QTextDocumentFragment>
 
@@ -203,6 +206,10 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 ///
 /// @param msg The message object
 void MainWindow::msgServerConfig(const MumbleProto::ServerConfig &msg) {
+#ifdef USE_FILE_SHARING
+	if (Global::get().fileTransferManager)
+		Global::get().fileTransferManager->configureRelay(msg);
+#endif
 	if (msg.has_welcome_text()) {
 		QString str = u8(msg.welcome_text());
 		if (!str.isEmpty()) {
@@ -351,6 +358,8 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 	ACTOR_INIT;
 	ClientUser *pSelf = ClientUser::get(Global::get().uiSession);
 	ClientUser *pDst  = ClientUser::get(msg.session());
+	const bool trustContextChanged = !pDst || msg.has_name() || msg.has_channel_id() || msg.has_file_transfer_capable()
+									 || msg.has_file_transfer_delivery_receipts();
 	Channel *channel  = nullptr;
 
 	if (msg.has_channel_id()) {
@@ -601,6 +610,8 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 		}
 	}
 
+	if (msg.has_file_transfer_delivery_receipts())
+		pDst->bFileTransferDeliveryReceipts = msg.file_transfer_delivery_receipts();
 	if (msg.has_file_transfer_capable()) {
 		pDst->setFileTransferCapable(msg.file_transfer_capable());
 	}
@@ -859,6 +870,12 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 		pmModel->setCommentHash(pDst, blob(msg.comment_hash()));
 	if (msg.has_comment())
 		pmModel->setComment(pDst, u8(msg.comment()));
+#ifdef USE_FILE_SHARING
+	if (trustContextChanged && Global::get().fileTransferManager)
+		Global::get().fileTransferManager->refreshPinCache();
+#else
+	Q_UNUSED(trustContextChanged);
+#endif
 }
 
 /// This message is being received when a user was removed. This might be because the user disconnected or because
@@ -919,6 +936,10 @@ void MainWindow::msgUserRemove(const MumbleProto::UserRemove &msg) {
 		Global::get().mw->onRemoteScreenShareStopped(pDst->uiSession);
 		pmModel->removeUser(pDst);
 	}
+#ifdef USE_FILE_SHARING
+	if (Global::get().fileTransferManager)
+		Global::get().fileTransferManager->refreshPinCache();
+#endif
 }
 
 /// This message is being received when the server informs the local client about channel properties (either during
@@ -1329,13 +1350,18 @@ void MainWindow::msgFileTransferControl(const MumbleProto::FileTransferControl &
 	// Defensive stub: ServerHandler::message intercepts FileTransferControl before
 	// anything is posted to the GUI thread, so reaching this handler means the
 	// interception path is broken.
-	qWarning("FileTransferControl reached the GUI dispatcher unexpectedly");
+#ifdef USE_FILE_SHARING
+	if (Global::get().fileTransferManager)
+		Global::get().fileTransferManager->handleControlMessage(msg);
+#endif
 	Q_UNUSED(msg);
 }
 
 void MainWindow::msgFileData(const MumbleProto::FileData &msg) {
-	// Defensive stub: see msgFileTransferControl.
-	qWarning("FileData reached the GUI dispatcher unexpectedly");
+#ifdef USE_FILE_SHARING
+	if (Global::get().fileTransferManager)
+		Global::get().fileTransferManager->handleDataMessage(msg);
+#endif
 	Q_UNUSED(msg);
 }
 

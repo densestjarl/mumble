@@ -191,6 +191,8 @@ void ServerHandler::customEvent(QEvent *evt) {
 	}
 
 	ServerHandlerMessageEvent *shme = static_cast< ServerHandlerMessageEvent * >(evt);
+	if (shme->sourceConnectionID >= 0 && shme->sourceConnectionID != getConnectionID())
+		return;
 
 	ConnectionPtr connection(cConnection);
 	if (connection) {
@@ -224,7 +226,7 @@ bool ServerHandler::isAborted() {
 }
 
 int ServerHandler::getConnectionID() const {
-	return connectionID;
+	return connectionID.load();
 }
 
 void ServerHandler::setProtocolVersion(Version::full_t version) {
@@ -381,6 +383,7 @@ void ServerHandler::sendProtoMessage(const ::google::protobuf::Message &msg, Mum
 	if (QThread::currentThread() != thread()) {
 		Connection::messageToNetwork(msg, type, qba);
 		ServerHandlerMessageEvent *shme = new ServerHandlerMessageEvent(qba, type, false);
+		shme->sourceConnectionID        = getConnectionID();
 		QApplication::postEvent(this, shme);
 	} else {
 		ConnectionPtr connection(cConnection);
@@ -436,6 +439,12 @@ void ServerHandler::hostnameResolved() {
 }
 
 void ServerHandler::run() {
+	// Each connection attempt owns a new identity, including reuse of this QThread object.
+	{
+		QMutexLocker lock(&nextConnectionIDMutex);
+		connectionID.store(++nextConnectionID);
+	}
+	m_fileSocketBytes.store(0);
 	// Resolve the hostname...
 
 	changeState(ServerHandlerState::DNSQuery);
@@ -463,6 +472,10 @@ void ServerHandler::run() {
 	bool shouldTryNextTargetServer = true;
 	do {
 		saTargetServer = qlAddresses.takeFirst();
+		{
+			QMutexLocker lock(&nextConnectionIDMutex);
+			connectionID.store(++nextConnectionID);
+		}
 
 		tConnectionTimeoutTimer = nullptr;
 		qbaDigest               = QByteArray();
@@ -483,6 +496,29 @@ void ServerHandler::run() {
 		{
 			ConnectionPtr connection(new Connection(this, qtsSock));
 			cConnection = connection;
+			connection->setReadAdmission([this](Mumble::Protocol::TCPMessageType type, qint64 size) {
+				if (type != Mumble::Protocol::TCPMessageType::FileData)
+					return Connection::ReadAdmission::Bypass; // Do not renew a stalled file deadline.
+				if (size <= 512) {
+					const QByteArray body = qtsSock->peek(size);
+					MumbleProto::FileData response;
+					if (response.ParseFromArray(body.constData(), static_cast< int >(body.size()))
+						&& (response.has_relay_accepted() || response.has_relay_retry_after_ms()))
+						return Connection::ReadAdmission::Bypass;
+				}
+				const qint64 queued = m_fileInboundBytes->load();
+				std::shared_ptr< std::atomic< qint64 > > worker;
+				{
+					QMutexLocker lock(&m_fileReceiveBudgetMutex);
+					worker = m_fileWorkerInboundBytes;
+				}
+				return queued + size <= 4 * 1024 * 1024
+							   && queued + size + (worker ? worker->load() : 0) <= 8 * 1024 * 1024
+						   ? Connection::ReadAdmission::Ready
+						   : Connection::ReadAdmission::Defer;
+			});
+			connect(connection.get(), &Connection::outputProgress, this,
+					[this](qint64 pending) { m_fileSocketBytes.store(pending); });
 
 			// Technically it isn't necessary to reset this flag here since a ServerHandler will not be used
 			// for multiple connections in a row but just in case that at some point it will, we'll reset the
@@ -497,6 +533,7 @@ void ServerHandler::run() {
 			QObject::connect(connection.get(), &Connection::connectionClosed, this,
 							 &ServerHandler::serverConnectionClosed);
 			QObject::connect(connection.get(), &Connection::message, this, &ServerHandler::message);
+			QObject::connect(connection.get(), &Connection::messageRejected, this, &ServerHandler::fileMessageRejected);
 			QObject::connect(connection.get(), &Connection::handleSslErrors, this, &ServerHandler::setSslErrors);
 		}
 		bUdp = false;
@@ -637,6 +674,9 @@ void ServerHandler::sendPingInternal() {
 		return;
 	}
 
+	// An intentional local read pause is not evidence of a dead server.
+	if (connection->readPaused())
+		iInFlightTCPPings = 0;
 	if (Global::get().s.iMaxInFlightTCPPings > 0 && iInFlightTCPPings >= Global::get().s.iMaxInFlightTCPPings) {
 		serverConnectionClosed(QAbstractSocket::UnknownSocketError, tr("Server is not responding to TCP pings"));
 		return;
@@ -678,10 +718,20 @@ void ServerHandler::sendPingInternal() {
 
 	sendMessage(mpp);
 
-	iInFlightTCPPings += 1;
+	if (!connection->readPaused())
+		iInFlightTCPPings += 1;
 }
 
-void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteArray &qbaMsg) {
+void ServerHandler::fileMessageRejected(Mumble::Protocol::TCPMessageType type, const QByteArray &data) {
+	handleMessage(type, data, true);
+}
+
+void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteArray &data) {
+	handleMessage(type, data, false);
+}
+
+void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const QByteArray &qbaMsg,
+								  bool admissionExpired) {
 	const char *ptr = qbaMsg.constData();
 	if (type == Mumble::Protocol::TCPMessageType::UDPTunnel) {
 		// audio tunneled through tcp.
@@ -741,33 +791,51 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 			}
 		}
 	}
-#ifdef USE_FILE_SHARING
-	else if (type == Mumble::Protocol::TCPMessageType::FileTransferControl) {
-		// File-transfer records never reach the GUI thread directly: the
-		// manager's front half parses and enqueues them on this thread.
-		MumbleProto::FileTransferControl msg;
-		if (msg.ParseFromArray(qbaMsg.constData(), static_cast< int >(qbaMsg.size()))) {
-			if (Global::get().fileTransferManager) {
-				Global::get().fileTransferManager->handleControlMessage(msg);
-			}
-		}
-	} else if (type == Mumble::Protocol::TCPMessageType::FileData) {
-		MumbleProto::FileData msg;
-		if (msg.ParseFromArray(qbaMsg.constData(), static_cast< int >(qbaMsg.size()))) {
-			if (Global::get().fileTransferManager) {
-				Global::get().fileTransferManager->handleDataMessage(msg);
-			}
-		}
-	}
-#endif // USE_FILE_SHARING
+
 	else {
-		ServerHandlerMessageEvent *shme = new ServerHandlerMessageEvent(qbaMsg, type, false);
+		QByteArray delivery   = qbaMsg;
+		const bool fileRecord = type == Mumble::Protocol::TCPMessageType::FileData
+								|| type == Mumble::Protocol::TCPMessageType::FileTransferControl;
+		if (fileRecord) {
+			const qint64 previous = m_fileInboundBytes->fetch_add(delivery.size());
+			MumbleProto::FileData response;
+			const bool admission = type == Mumble::Protocol::TCPMessageType::FileData && delivery.size() <= 512
+								   && response.ParseFromArray(delivery.constData(), static_cast< int >(delivery.size()))
+								   && (response.has_relay_accepted() || response.has_relay_retry_after_ms());
+			const bool control   = type == Mumble::Protocol::TCPMessageType::FileTransferControl;
+			const qint64 limit   = 4 * 1024 * 1024 + ((admission || control) ? 64 * 1024 : 0);
+			if (previous + delivery.size() > limit || admissionExpired) {
+				m_fileInboundBytes->fetch_sub(delivery.size());
+				MumbleProto::FileData incoming;
+				if (type != Mumble::Protocol::TCPMessageType::FileData
+					|| !incoming.ParseFromArray(delivery.constData(), static_cast< int >(delivery.size()))
+					|| incoming.transfer_id().size() != 16)
+					return;
+				MumbleProto::FileData failure;
+				failure.set_actor(incoming.actor());
+				failure.set_transfer_id(incoming.transfer_id());
+				failure.set_chunk_index(incoming.chunk_index());
+				failure.set_data("");
+				failure.set_relay_error(admissionExpired
+											? "Incoming file queue did not drain before the receive timeout"
+											: "Incoming file queue exceeded the receive limit");
+				delivery                   = QByteArray::fromStdString(failure.SerializeAsString());
+				const qint64 errorPrevious = m_fileInboundBytes->fetch_add(delivery.size());
+				if (errorPrevious + delivery.size() > 4 * 1024 * 1024 + 64 * 1024) {
+					m_fileInboundBytes->fetch_sub(delivery.size());
+					return;
+				}
+			}
+		}
+		ServerHandlerMessageEvent *shme = new ServerHandlerMessageEvent(delivery, type, false);
+		shme->sourceConnectionID        = connectionID;
+		if (fileRecord)
+			shme->inboundBudget = m_fileInboundBytes;
 		QApplication::postEvent(Global::get().mw, shme);
 	}
 }
 
-void ServerHandler::sendFileTransferControl(const QList< unsigned int > &targetSessions,
-											const QByteArray &payload) {
+void ServerHandler::sendFileTransferControl(const QList< unsigned int > &targetSessions, const QByteArray &payload) {
 	MumbleProto::FileTransferControl msg;
 	for (unsigned int session : targetSessions) {
 		msg.add_target_session(session);
@@ -776,8 +844,64 @@ void ServerHandler::sendFileTransferControl(const QList< unsigned int > &targetS
 	sendMessage(msg);
 }
 
-void ServerHandler::sendFileData(const QByteArray &transferId, quint64 chunkIndex,
-								 std::optional< quint64 > chunkCount, const QByteArray &data) {
+bool ServerHandler::queueFileTransferControl(unsigned int target, const QByteArray &payload, int expectedConnectionID) {
+	if (getConnectionID() != expectedConnectionID || payload.size() > 64 * 1024)
+		return false;
+	const qint64 charge   = payload.size() + 128;
+	const qint64 previous = m_fileControlQueuedBytes.fetch_add(charge);
+	if (previous + charge > 1024 * 1024) {
+		m_fileControlQueuedBytes.fetch_sub(charge);
+		return false;
+	}
+	const bool queued = QMetaObject::invokeMethod(
+		this,
+		[this, target, payload, charge, expectedConnectionID]() {
+			if (getConnectionID() == expectedConnectionID && cConnection)
+				sendFileTransferControl({ target }, payload);
+			m_fileControlQueuedBytes.fetch_sub(charge);
+		},
+		Qt::QueuedConnection);
+	if (!queued)
+		m_fileControlQueuedBytes.fetch_sub(charge);
+	return queued;
+}
+
+bool ServerHandler::queueFileData(const QList< unsigned int > &targets, const QByteArray &transferId, quint64 index,
+								  quint64 total, const QByteArray &data, int expectedConnectionID) {
+	if (getConnectionID() != expectedConnectionID)
+		return false;
+	// Admission happens on the engine thread, before any GUI/network event is allocated.
+	const qint64 charge   = data.size() + 1024;
+	const qint64 previous = m_fileQueuedBytes.fetch_add(charge);
+	if (previous + charge + m_fileSocketBytes.load() > 2 * 1024 * 1024) {
+		m_fileQueuedBytes.fetch_sub(charge);
+		return false;
+	}
+	const bool queued = QMetaObject::invokeMethod(
+		this,
+		[this, targets, transferId, index, total, data, charge, expectedConnectionID]() {
+			if (getConnectionID() != expectedConnectionID || !cConnection) {
+				m_fileQueuedBytes.fetch_sub(charge);
+				return;
+			}
+			MumbleProto::FileData msg;
+			for (unsigned int target : targets)
+				msg.add_target_session(target);
+			msg.set_transfer_id(transferId.constData(), static_cast< size_t >(transferId.size()));
+			msg.set_chunk_index(index);
+			msg.set_chunk_count(total);
+			msg.set_data(data.constData(), static_cast< size_t >(data.size()));
+			sendMessage(msg);
+			m_fileQueuedBytes.fetch_sub(charge);
+		},
+		Qt::QueuedConnection);
+	if (!queued)
+		m_fileQueuedBytes.fetch_sub(charge);
+	return queued;
+}
+
+void ServerHandler::sendFileData(const QByteArray &transferId, quint64 chunkIndex, std::optional< quint64 > chunkCount,
+								 const QByteArray &data) {
 	MumbleProto::FileData msg;
 	msg.set_transfer_id(transferId.constData(), static_cast< size_t >(transferId.size()));
 	msg.set_chunk_index(chunkIndex);

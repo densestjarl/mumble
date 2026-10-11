@@ -34,16 +34,17 @@ PinnedPeer rowToPeer(const QSqlQuery &query) {
 
 } // namespace
 
-PeerTrustStore::PeerTrustStore(QSqlDatabase db) : m_db(std::move(db)) { }
+PeerTrustStore::PeerTrustStore(QSqlDatabase db) : m_db(std::move(db)) {
+}
 
 TrustState PeerTrustStore::check(const QByteArray &serverDigest, const QString &username,
-								 const QByteArray &peerFingerprint,
-								 const QString &safetyNumber) const {
+								 const QByteArray &peerFingerprint, const QString &safetyNumber) const {
 	Q_UNUSED(safetyNumber);
 
 	PinnedPeer pinned;
-	if (!lookup(pinned, serverDigest, username)) {
-		return TrustState::NewPeer;
+	bool querySucceeded = false;
+	if (!lookup(pinned, serverDigest, username, &querySucceeded)) {
+		return querySucceeded ? TrustState::NewPeer : TrustState::StorageError;
 	}
 	if (pinned.fingerprint != peerFingerprint) {
 		return TrustState::Changed;
@@ -52,19 +53,21 @@ TrustState PeerTrustStore::check(const QByteArray &serverDigest, const QString &
 }
 
 TrustState PeerTrustStore::checkAndPin(const QByteArray &serverDigest, const QString &username,
-										const QByteArray &peerFingerprint,
-										const QString &safetyNumber) {
+									   const QByteArray &peerFingerprint, const QString &safetyNumber) {
 	const TrustState state = check(serverDigest, username, peerFingerprint, safetyNumber);
 	if (state != TrustState::NewPeer) {
 		return state;
 	}
 
 	QSqlQuery query(m_db);
-	if (!query.prepare(QLatin1String("INSERT OR REPLACE INTO `ft_pins` "
+	if (!query.prepare(QLatin1String("INSERT INTO `ft_pins` "
 									 "(`server_digest`, `username`, `peer_fingerprint`, "
 									 "`safety_number`, `first_seen`, `verified`) "
-									 "VALUES (?, ?, ?, ?, ?, 0)")))
-		return TrustState::Changed; // fail closed on storage errors
+									 "VALUES (?, ?, ?, ?, ?, 0) "
+									 "ON CONFLICT(server_digest, username) DO UPDATE SET "
+									 "safety_number = excluded.safety_number "
+									 "WHERE ft_pins.peer_fingerprint = excluded.peer_fingerprint")))
+		return TrustState::StorageError; // fail closed on storage errors
 
 	query.addBindValue(serverDigest);
 	query.addBindValue(username);
@@ -72,33 +75,41 @@ TrustState PeerTrustStore::checkAndPin(const QByteArray &serverDigest, const QSt
 	query.addBindValue(safetyNumber);
 	query.addBindValue(QDate::currentDate());
 	if (!execTrustQuery(query)) {
-		return TrustState::Changed;
+		return TrustState::StorageError;
 	}
-	return TrustState::Pinned;
+	// A competing first contact may have inserted the row after check().
+	// Preserve verification/first_seen and never replace a different identity.
+	return check(serverDigest, username, peerFingerprint, safetyNumber);
 }
 
-bool PeerTrustStore::markVerified(const QByteArray &serverDigest, const QString &username) {
+bool PeerTrustStore::markVerified(const QByteArray &serverDigest, const QString &username,
+								  const QByteArray &expectedFingerprint) {
 	QSqlQuery query(m_db);
 	if (!query.prepare(QLatin1String("UPDATE `ft_pins` SET `verified` = 1 "
-									 "WHERE `server_digest` = ? AND `username` = ?")))
+									 "WHERE `server_digest` = ? AND `username` = ? AND `peer_fingerprint` = ?")))
 		return false;
 	query.addBindValue(serverDigest);
 	query.addBindValue(username);
-	return execTrustQuery(query);
+	query.addBindValue(expectedFingerprint);
+	return execTrustQuery(query) && query.numRowsAffected() == 1;
 }
 
-bool PeerTrustStore::removePin(const QByteArray &serverDigest, const QString &username) {
+bool PeerTrustStore::removePin(const QByteArray &serverDigest, const QString &username,
+							   const QByteArray &expectedFingerprint) {
 	QSqlQuery query(m_db);
-	if (!query.prepare(QLatin1String("DELETE FROM `ft_pins` "
-									 "WHERE `server_digest` = ? AND `username` = ?")))
+	if (!query.prepare(QLatin1String("DELETE FROM `ft_pins` WHERE `server_digest` = ? "
+									 "AND `username` = ? AND `peer_fingerprint` = ?")))
 		return false;
 	query.addBindValue(serverDigest);
 	query.addBindValue(username);
-	return execTrustQuery(query);
+	query.addBindValue(expectedFingerprint);
+	return execTrustQuery(query) && query.numRowsAffected() == 1;
 }
 
-bool PeerTrustStore::lookup(PinnedPeer &out, const QByteArray &serverDigest,
-							const QString &username) const {
+bool PeerTrustStore::lookup(PinnedPeer &out, const QByteArray &serverDigest, const QString &username,
+							bool *querySucceeded) const {
+	if (querySucceeded)
+		*querySucceeded = false;
 	QSqlQuery query(m_db);
 	if (!query.prepare(QLatin1String("SELECT `server_digest`, `username`, `peer_fingerprint`, "
 									 "`safety_number`, `first_seen`, `verified` FROM `ft_pins` "
@@ -106,7 +117,12 @@ bool PeerTrustStore::lookup(PinnedPeer &out, const QByteArray &serverDigest,
 		return false;
 	query.addBindValue(serverDigest);
 	query.addBindValue(username);
-	if (!execTrustQuery(query) || !query.next())
+	if (!execTrustQuery(query))
+		return false;
+	const bool found = query.next();
+	if (querySucceeded)
+		*querySucceeded = !query.lastError().isValid();
+	if (!found)
 		return false;
 
 	out = rowToPeer(query);

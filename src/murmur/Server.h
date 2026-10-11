@@ -206,7 +206,7 @@ public:
 	/// Server-wide meter for relayed file egress, checked against iMaxFileBandwidthAggregate.
 	/// Guarded by m_qmFileTransferBytes (the handlers run on the TCP message path, not the
 	/// voice thread).
-	BandwidthRecord m_bwrFileAggregate;
+	FileBandwidthRecord m_bwrFileAggregate;
 
 	/// In-memory per-(session, transfer_id) accounting of relayed file bytes, checked against
 	/// iMaxFileSize. Advisory relay state only — never persisted anywhere.

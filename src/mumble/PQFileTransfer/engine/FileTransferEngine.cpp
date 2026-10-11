@@ -18,12 +18,62 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QStandardPaths>
+#include <QSaveFile>
+#include <QTemporaryFile>
+#include <QThread>
+
+#include <cerrno>
+#include <filesystem>
+
+#ifdef Q_OS_WIN
+#	include <io.h>
+#else
+#	include <fcntl.h>
+#	include <unistd.h>
+#endif
 
 namespace PQFT {
 
 namespace {
 constexpr int EarlyChunkBufferMax = 8;
+
+bool syncSaveFile(QFileDevice &file) {
+	if (!file.flush() || file.handle() < 0)
+		return false;
+#ifdef Q_OS_WIN
+	return ::_commit(file.handle()) == 0;
+#else
+	int result;
+	do {
+		result = ::fsync(file.handle());
+	} while (result != 0 && errno == EINTR);
+	return result == 0;
+#endif
+}
+
+bool syncSavePublication(const QString &targetPath) {
+#ifdef Q_OS_WIN
+	// Check a flush on the published file too. This does not claim Windows
+	// directory-journal or physical power-loss qualification.
+	QFile target(targetPath);
+	return target.open(QIODevice::ReadWrite) && syncSaveFile(target);
+#else
+	const QByteArray directory = QFile::encodeName(QFileInfo(targetPath).absolutePath());
+	const int fd               = ::open(directory.constData(), O_RDONLY | O_DIRECTORY);
+	if (fd < 0)
+		return false;
+	int result;
+	do {
+		result = ::fsync(fd);
+	} while (result != 0 && errno == EINTR);
+	::close(fd);
+	return result == 0;
+#endif
+}
+
+bool shutdownRequested() {
+	return QThread::currentThread()->isInterruptionRequested();
+}
 
 QByteArray blobForEarlyChunk(quint64 index, const QByteArray &ciphertext) {
 	return uint64be(index) + ciphertext;
@@ -41,8 +91,7 @@ bool earlyChunkSplit(const QByteArray &blob, quint64 &index, QByteArray &ciphert
 }
 
 // Spool record: "u32be payload length" || "u64be index" || ciphertext. The
-// length prefix makes the on-disk stream parseable (the in-memory early-chunk
-// blob has none).
+// length prefix makes the on-disk stream parseable.
 QByteArray spoolRecord(quint64 index, const QByteArray &ciphertext) {
 	const quint32 payloadLength = static_cast< quint32 >(8 + ciphertext.size());
 	QByteArray record(4, Qt::Uninitialized);
@@ -56,7 +105,12 @@ QByteArray spoolRecord(quint64 index, const QByteArray &ciphertext) {
 const QByteArray canonicalEmptyMap = QByteArray::fromHex("a0");
 } // namespace
 
-FileTransferEngine::FileTransferEngine(QObject *parent) : QObject(parent) { }
+FileTransferEngine::FileTransferEngine(QObject *parent) : QObject(parent) {
+	m_syncSaveFile        = syncSaveFile;
+	m_syncSavePublication = syncSavePublication;
+	m_sendPaceTimer = std::make_unique< QTimer >(this);
+	connect(m_sendPaceTimer.get(), &QTimer::timeout, this, &FileTransferEngine::paceSends);
+}
 
 FileTransferEngine::~FileTransferEngine() {
 	// Take owning copies first: cleanup*() removes the jobs from the maps,
@@ -67,7 +121,7 @@ FileTransferEngine::~FileTransferEngine() {
 	}
 	const QList< std::shared_ptr< ReceiveJob > > recvJobs = m_receiveJobs.values();
 	for (const auto &job : recvJobs) {
-		cleanupReceive(job);
+		cleanupReceive(job, false);
 	}
 }
 
@@ -80,13 +134,28 @@ void FileTransferEngine::setPinLookup(PinLookup lookup) {
 	m_pinLookup = std::move(lookup);
 }
 
+void FileTransferEngine::setPeerNameLookup(std::function< QString(unsigned int) > lookup) {
+	m_peerNameLookup = std::move(lookup);
+}
+
 void FileTransferEngine::setIdentity(QByteArray identityPublicKey, IdentitySign sign) {
 	m_identityPk = std::move(identityPublicKey);
 	m_sign		 = std::move(sign);
 }
 
 void FileTransferEngine::setConfig(const Config &config) {
+	const bool rateChanged = m_config.sendRateBytesPerSecond != config.sendRateBytesPerSecond
+							 || m_config.aggregateSendRate != config.aggregateSendRate;
 	m_config = config;
+	// Pin-cache refreshes and new sends also apply configuration. Preserve
+	// earned credit unless the rate itself changes, so these cannot starve sends.
+	if (rateChanged) {
+		m_sendCreditMilliBytes = 0;
+		m_sendCreditLastNSecs  = 0;
+		m_sendCreditRemainder  = 0;
+		if (m_sendPaceTimer->isActive())
+			m_sendPaceClock.start();
+	}
 }
 
 QByteArray FileTransferEngine::preManifestKey(unsigned int peerSession) {
@@ -96,19 +165,49 @@ QByteArray FileTransferEngine::preManifestKey(unsigned int peerSession) {
 // ---------------------------------------------------------------------------
 // Inbound control
 
-void FileTransferEngine::onControlMessage(unsigned int actorSession, const QByteArray &payload) {
+void FileTransferEngine::onControlMessage(unsigned int actorSession, const QByteArray &payload,
+										  const std::optional< PeerSnapshot > &observedPeer) {
 	// Established/pending send sessions with this peer
 	for (auto &jobIt : m_sendJobs) {
 		SendJob &job = *jobIt;
 		for (SendPeer &peer : job.peers) {
 			if (peer.session == actorSession && peer.session_ && !peer.failed) {
 				const auto st = peer.session_->state();
-				if (st == FileTransferSession::State::AwaitingM2
-					|| st == FileTransferSession::State::AwaitingM4) {
+				if (st == FileTransferSession::State::AwaitingM2 || st == FileTransferSession::State::AwaitingM4) {
 					processControlForSend(job, peer, payload);
 					return;
 				}
 			}
+		}
+	}
+
+	// A receipt is authenticated with the selected recipient's pairwise session.
+	for (const auto &jobPtr : m_sendJobs) {
+		SendJob &job = *jobPtr;
+		for (SendPeer &peer : job.peers) {
+			if (peer.session != actorSession || !peer.established || peer.failed || !peer.session_)
+				continue;
+			quint8 type = 0;
+			QByteArray body;
+			if (!peer.session_->tryOpenControl(type, body, payload))
+				continue;
+			if (type == FTFrame::TypeReceipt && body == encodeCanonical(QCborValue(job.transferId))) {
+				peer.received    = true;
+				bool allReceived = true;
+				for (const SendPeer &recipient : job.peers)
+					allReceived = allReceived && recipient.established && !recipient.failed && recipient.received;
+				if (allReceived && job.lastState == FTTransferInfo::State::Verifying)
+					finishSend(job, true, QString());
+			} else if (type == FTFrame::TypeProgress
+					   && body == encodeCanonical(QCborValue(QStringLiteral("waiting-password")))) {
+				peer.waitingPassword = true;
+				if (job.lastState == FTTransferInfo::State::Verifying)
+					job.handshakeTimer->start(300000);
+			} else if (type == FTFrame::TypeAbort) {
+				peer.failed = true;
+				finishSend(job, false, tr("A recipient cancelled or could not verify the file"));
+			}
+			return;
 		}
 	}
 
@@ -124,8 +223,7 @@ void FileTransferEngine::onControlMessage(unsigned int actorSession, const QByte
 	//     consulted, and a record no session can open is dropped — a stray
 	//     frame must not kill unrelated transfers of the same peer.
 	quint8 headerType = 0;
-	const bool isM1 =
-		FTFrame::decodeHeader(payload, headerType) && headerType == FTFrame::TypeM1;
+	const bool isM1   = FTFrame::decodeHeader(payload, headerType) && headerType == FTFrame::TypeM1;
 
 	if (!isM1) {
 		std::shared_ptr< ReceiveJob > awaitingM3;
@@ -138,8 +236,7 @@ void FileTransferEngine::onControlMessage(unsigned int actorSession, const QByte
 				continue;
 			}
 			if (jobIt->session_->state() != FileTransferSession::State::Established
-				|| jobIt->lastState == FTTransferInfo::State::Ready
-				|| jobIt->lastState == FTTransferInfo::State::Saved
+				|| jobIt->lastState == FTTransferInfo::State::Ready || jobIt->lastState == FTTransferInfo::State::Saved
 				|| jobIt->lastState == FTTransferInfo::State::Failed
 				|| jobIt->lastState == FTTransferInfo::State::Aborted) {
 				continue;
@@ -159,13 +256,11 @@ void FileTransferEngine::onControlMessage(unsigned int actorSession, const QByte
 				if (!m4.isEmpty() && m_transportControl) {
 					m_transportControl(actorSession, m4);
 				} else {
-					updateReceiveState(*awaitingM3, FTTransferInfo::State::Failed,
-									   genericDecryptionError());
+					updateReceiveState(*awaitingM3, FTTransferInfo::State::Failed, genericDecryptionError());
 					cleanupReceive(awaitingM3);
 				}
 			} else {
-				updateReceiveState(*awaitingM3, FTTransferInfo::State::Failed,
-								   genericDecryptionError());
+				updateReceiveState(*awaitingM3, FTTransferInfo::State::Failed, genericDecryptionError());
 				cleanupReceive(awaitingM3);
 			}
 			return;
@@ -173,11 +268,10 @@ void FileTransferEngine::onControlMessage(unsigned int actorSession, const QByte
 		return;   // nothing claims this record: drop it
 	}
 
-	handleIncomingM1(actorSession, payload);
+	handleIncomingM1(actorSession, payload, observedPeer);
 }
 
-void FileTransferEngine::processControlForSend(SendJob &job, SendPeer &peer,
-											   const QByteArray &payload) {
+void FileTransferEngine::processControlForSend(SendJob &job, SendPeer &peer, const QByteArray &payload) {
 	quint8 type = 0;
 	if (!FTFrame::decodeHeader(payload, type)) {
 		return;
@@ -198,17 +292,15 @@ void FileTransferEngine::processControlForSend(SendJob &job, SendPeer &peer,
 			break;
 		case FileTransferSession::State::AwaitingM4:
 			if (type == FTFrame::TypeM4 && peer.session_->processM4(payload)) {
-				peer.established = true;
-				if (peer.pinnedFingerprint.isEmpty()) {
-					// First use: the presented (signature-verified) identity
-					// becomes the pin; surface it for the safety-number flow.
-					// The handshake has authenticated the key, so
-					// pin-on-observation (the documented sender-side TOFU
-					// deviation) is sound here.
+				if (peer.pinnedFingerprint.isEmpty() || m_config.authorizeSendPeers) {
+					peer.awaitingAuthorization = true;
+					job.handshakeTimer->start(60000);
+					updateSendState(job, FTTransferInfo::State::VerifyingIdentity);
 					const QByteArray peerFp = peer.session_->peerFingerprint();
-					emit firstContact(peer.session, peerFp,
-									  safetyNumber(identityFingerprint(m_identityPk), peerFp),
-									  job.transferId, true);
+					emit firstContact(peer.session, peerFp, safetyNumber(identityFingerprint(m_identityPk), peerFp),
+									  job.transferId, true, 0, peer.name, job.sendContext);
+				} else {
+					peer.established = true;
 				}
 			} else {
 				peer.failed = true;
@@ -221,19 +313,17 @@ void FileTransferEngine::processControlForSend(SendJob &job, SendPeer &peer,
 	maybeStartHandshakePhase2(job);
 }
 
-void FileTransferEngine::processControlForReceive(std::shared_ptr< ReceiveJob > jobPtr,
-												  quint8 type, const QByteArray &body) {
+void FileTransferEngine::processControlForReceive(std::shared_ptr< ReceiveJob > jobPtr, quint8 type,
+												  const QByteArray &body) {
 	ReceiveJob &job = *jobPtr;
 
 	if (type == FTFrame::TypeManifest && !job.haveManifest) {
-		auto verify = [&job](const QByteArray &message, const QByteArray &signature,
-							 const QByteArray &context) {
+		auto verify = [&job](const QByteArray &message, const QByteArray &signature, const QByteArray &context) {
 			SigMLDSA65 sig;
 			return sig.verify(job.session_->peerIdentityKey(), message, signature, context);
 		};
 		FTManifest manifest;
-		if (!parseAndVerifyManifest(manifest, body, job.session_->peerFingerprint(),
-									m_config.maxReceiveSize, verify)) {
+		if (!parseAndVerifyManifest(manifest, body, job.session_->peerFingerprint(), m_config.maxReceiveSize, verify)) {
 			updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 			cleanupReceive(jobPtr);
 			return;
@@ -251,13 +341,21 @@ void FileTransferEngine::processControlForReceive(std::shared_ptr< ReceiveJob > 
 		m_receiveJobs.insert(job.transferId, jobPtr);
 		m_receiveJobs.remove(preManifestKey(job.peerSession));
 
-		job.tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/mumble-ft/"
-					  + QString::fromLatin1(manifest.transferId.toHex());
-		QDir().mkpath(job.tempDir);
+		// QTemporaryDir creates an unpredictable owner-only directory atomically,
+		// so other local users cannot pre-create a path or redirect plaintext writes.
+		job.tempDirectory = std::make_unique< QTemporaryDir >(
+			QDir::temp().filePath("mumble-ft-" + QString::fromLatin1(manifest.transferId.toHex()) + "-XXXXXX"));
+		if (!job.tempDirectory->isValid()) {
+			updateReceiveState(job, FTTransferInfo::State::Failed, tr("storage error"));
+			cleanupReceive(jobPtr);
+			return;
+		}
+		job.tempDir  = job.tempDirectory->path();
 		job.tempFile = job.tempDir + "/content.bin";
 		{
 			QFile temp(job.tempFile);
 			if (!temp.open(QIODevice::ReadWrite | QIODevice::Truncate)
+				|| !temp.setPermissions(QFile::ReadOwner | QFile::WriteOwner)
 				|| !temp.resize(static_cast< qint64 >(manifest.fileSize))) {
 				updateReceiveState(job, FTTransferInfo::State::Failed, tr("storage error"));
 				cleanupReceive(jobPtr);
@@ -265,7 +363,7 @@ void FileTransferEngine::processControlForReceive(std::shared_ptr< ReceiveJob > 
 			}
 		}
 		job.receivedBits = QByteArray(static_cast< qsizetype >((manifest.chunkCount + 7) / 8), '\0');
-		job.spooledBits	= QByteArray(static_cast< qsizetype >((manifest.chunkCount + 7) / 8), '\0');
+		job.spooledBits  = QByteArray(static_cast< qsizetype >((manifest.chunkCount + 7) / 8), '\0');
 		job.leafHashes.resize(static_cast< int >(manifest.chunkCount));
 		job.idleTimer->start(m_config.receiveIdleTimeoutMSecs);
 
@@ -273,14 +371,20 @@ void FileTransferEngine::processControlForReceive(std::shared_ptr< ReceiveJob > 
 			job.waitingPassword = true;
 			updateReceiveState(job, FTTransferInfo::State::WaitingPassword);
 			emit passwordRequired(manifest.transferId);
+			if (m_transportControl) {
+				const QByteArray progress = job.session_->sealControl(
+					FTFrame::TypeProgress, encodeCanonical(QCborValue(QStringLiteral("waiting-password"))));
+				if (!progress.isEmpty())
+					m_transportControl(job.peerSession, progress);
+			}
 			return;
 		}
 
 		const QByteArray sessionKek = job.session_->deriveSessionKek(manifest.transferId);
 		const QByteArray wrapNonce1  = job.session_->deriveWrapNonce1(manifest.transferId);
 		QByteArray fileKey;
-		if (!unwrapFileKeySessionLayer(fileKey, manifest.wrappedFileKey, sessionKek, wrapNonce1,
-									   manifest.transferId, false, manifest.fpA, manifest.fpB)) {
+		if (!unwrapFileKeySessionLayer(fileKey, manifest.wrappedFileKey, sessionKek, wrapNonce1, manifest.transferId,
+									   false, manifest.fpA, manifest.fpB)) {
 			updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 			cleanupReceive(jobPtr);
 			return;
@@ -300,21 +404,22 @@ void FileTransferEngine::processControlForReceive(std::shared_ptr< ReceiveJob > 
 }
 
 void FileTransferEngine::drainEarlyChunks(std::shared_ptr< ReceiveJob > jobPtr) {
-	const QVector< QByteArray > early = std::move(jobPtr->earlyChunks);
+	const QVector< ReceiveJob::EarlyChunk > early = std::move(jobPtr->earlyChunks);
 	jobPtr->earlyChunks.clear();
-	for (const QByteArray &blob : early) {
-		quint64 index = 0;
-		QByteArray ciphertext;
-		if (earlyChunkSplit(blob, index, ciphertext)) {
-			feedReceiveChunk(jobPtr, index, ciphertext);
+	for (const auto &chunk : early) {
+		if (shutdownRequested())
+			return;
+		if (chunk.transferId == jobPtr->manifest.transferId) {
+			feedReceiveChunk(jobPtr, chunk.index, chunk.ciphertext);
 		}
 	}
 }
 
 bool FileTransferEngine::openSpool(ReceiveJob &job) {
 	job.spoolFile = job.tempDir + "/chunks.spool";
-	job.spool	 = new QFile(job.spoolFile);
-	if (!job.spool->open(QIODevice::WriteOnly | QIODevice::Append)) {
+	job.spool     = new QFile(job.spoolFile);
+	if (!job.spool->open(QIODevice::WriteOnly | QIODevice::Append)
+		|| !job.spool->setPermissions(QFile::ReadOwner | QFile::WriteOwner)) {
 		delete job.spool;
 		job.spool = nullptr;
 		return false;
@@ -335,7 +440,7 @@ void FileTransferEngine::drainSpooledChunks(std::shared_ptr< ReceiveJob > jobPtr
 	if (!spool.open(QIODevice::ReadOnly)) {
 		return;   // nothing was ever spooled
 	}
-	forever {
+	while (!shutdownRequested()) {
 		QByteArray header = spool.read(4);
 		if (header.size() < 4) {
 			break;   // clean end (or a truncated spool: the Merkle/AEAD checks
@@ -357,8 +462,7 @@ void FileTransferEngine::drainSpooledChunks(std::shared_ptr< ReceiveJob > jobPtr
 		if (earlyChunkSplit(payload, index, ciphertext)) {
 			feedReceiveChunk(jobPtr, index, ciphertext);
 		}
-		if (job.lastState == FTTransferInfo::State::Failed
-			|| job.lastState == FTTransferInfo::State::Aborted) {
+		if (job.lastState == FTTransferInfo::State::Failed || job.lastState == FTTransferInfo::State::Aborted) {
 			break;   // the replay killed the job; everything is cleaned up
 		}
 	}
@@ -366,7 +470,8 @@ void FileTransferEngine::drainSpooledChunks(std::shared_ptr< ReceiveJob > jobPtr
 	QFile::remove(job.spoolFile);
 }
 
-void FileTransferEngine::handleIncomingM1(unsigned int actorSession, const QByteArray &payload) {
+void FileTransferEngine::handleIncomingM1(unsigned int actorSession, const QByteArray &payload,
+										  const std::optional< PeerSnapshot > &observedPeer) {
 	quint8 type = 0;
 	if (!FTFrame::decodeHeader(payload, type) || type != FTFrame::TypeM1) {
 		return;
@@ -377,7 +482,14 @@ void FileTransferEngine::handleIncomingM1(unsigned int actorSession, const QByte
 		return; // malformed: ignore
 	}
 	const QByteArray peerFp = identityFingerprint(peerPk);
-	const QByteArray pinned = m_pinLookup ? m_pinLookup(actorSession) : QByteArray();
+	const PeerSnapshot snapshot = observedPeer ? *observedPeer
+								  : m_peerLookup
+									  ? m_peerLookup(actorSession)
+									  : PeerSnapshot{ m_peerNameLookup ? m_peerNameLookup(actorSession) : QString(),
+													  m_pinLookup ? m_pinLookup(actorSession) : QByteArray(), true };
+	if (!snapshot.available)
+		return;
+	const QByteArray pinned = snapshot.pinnedFingerprint;
 
 	if (!pinned.isEmpty() && pinned != peerFp) {
 		// TOFU change: hard block with a loud warning (§5); nothing is answered
@@ -388,45 +500,55 @@ void FileTransferEngine::handleIncomingM1(unsigned int actorSession, const QByte
 	if (pinned.isEmpty()) {
 		// First contact: park the handshake until the user verifies the
 		// safety number (mandatory out-of-band verification, §5).
-		if (m_pendingHandshakes.contains(actorSession)) {
+		// One prompt per peer: refuse replacements until its exact request is resolved or expires.
+		if (m_pendingHandshakes.contains(actorSession) || m_pendingHandshakes.size() >= 32)
 			return;
-		}
 		PendingHandshake pending;
-		pending.peerSession	   = actorSession;
+		pending.peerSession     = actorSession;
 		pending.peerFingerprint = peerFp;
-		pending.m1Frame		   = payload;
-		pending.timeout		   = new QTimer(this);
+		pending.m1Frame         = payload;
+		pending.peerName           = snapshot.name;
+		pending.requestToken       = ++m_nextHandshakeToken;
+		const quint64 requestToken = pending.requestToken;
+		pending.timeout         = std::make_unique< QTimer >(this).release();
 		pending.timeout->setSingleShot(true);
-		connect(pending.timeout, &QTimer::timeout, this,
-				[this, actorSession]() { m_pendingHandshakes.remove(actorSession); });
+		QTimer *timer = pending.timeout;
+		connect(timer, &QTimer::timeout, this, [this, actorSession, timer]() {
+			const auto it = m_pendingHandshakes.find(actorSession);
+			if (it != m_pendingHandshakes.end() && it->timeout == timer) {
+				emit firstContactRetired(actorSession, it->requestToken);
+				m_pendingHandshakes.erase(it);
+			}
+			timer->deleteLater();
+		});
 		pending.timeout->start(60'000);
 		m_pendingHandshakes.insert(actorSession, std::move(pending));
 
 		FTTransferInfo info;
 		info.transferId  = QByteArray();
 		info.peerSession = actorSession;
-		info.incoming	= true;
+		info.incoming    = true;
 		info.state		 = FTTransferInfo::State::VerifyingIdentity;
 		emitInfo(info);
 		// Plain M1: the fingerprint is an unauthenticated claim until the
 		// handshake completes — pin only after the user verifies (§5).
-		emit firstContact(actorSession, peerFp,
-						  safetyNumber(identityFingerprint(m_identityPk), peerFp), QByteArray(),
-						  false);
+		emit firstContact(actorSession, peerFp, safetyNumber(identityFingerprint(m_identityPk), peerFp), QByteArray(),
+						  false, requestToken, snapshot.name);
 		return;
 	}
 
-	startResponder(actorSession, payload, peerFp);
+	startResponder(actorSession, payload, peerFp, snapshot.name);
 }
 
 void FileTransferEngine::startResponder(unsigned int actorSession, const QByteArray &m1Frame,
-										 const QByteArray &peerFingerprint) {
-	if (m_receiveJobs.contains(preManifestKey(actorSession))) {
+										const QByteArray &peerFingerprint, const QString &peerName) {
+	if (m_receiveJobs.size() >= 32 || m_receiveJobs.contains(preManifestKey(actorSession))) {
 		return; // already handshaking with this peer
 	}
 
 	auto job			= std::make_shared< ReceiveJob >();
 	job->peerSession  = actorSession;
+	job->peerName       = peerName;
 	job->idleTimer	= std::make_unique< QTimer >(this);
 	job->idleTimer->setSingleShot(true);
 	// Target THIS job, not "the first job of that peer": several transfers
@@ -458,20 +580,22 @@ void FileTransferEngine::startResponder(unsigned int actorSession, const QByteAr
 	// Handshake refused; drop silently (the initiator will time out)
 }
 
-void FileTransferEngine::onDataMessage(unsigned int actorSession, const QByteArray &transferId,
-									   quint64 chunkIndex, quint64 chunkCountHint,
-									   const QByteArray &data) {
+void FileTransferEngine::onDataMessage(unsigned int actorSession, const QByteArray &transferId, quint64 chunkIndex,
+									   quint64 chunkCountHint, const QByteArray &data) {
 	Q_UNUSED(chunkCountHint);
 
+	if (transferId.size() != TransferIdSize || data.size() < TagSize || data.size() > MaxChunkSize + TagSize)
+		return;
 	std::shared_ptr< ReceiveJob > job = findReceiveByPeer(actorSession, transferId);
 	if (!job) {
 		return;
 	}
-	job->idleTimer->start(m_config.receiveIdleTimeoutMSecs);
-
 	if (!job->haveManifest) {
+		// The sender may be relaying another transfer to the channel. Keep its
+		// ID until the authenticated manifest can identify our own chunks, and
+		// never extend a handshake timeout for unauthenticated early data.
 		if (job->earlyChunks.size() < EarlyChunkBufferMax) {
-			job->earlyChunks.append(blobForEarlyChunk(chunkIndex, data));
+			job->earlyChunks.append({ transferId, chunkIndex, data });
 		}
 		return;
 	}
@@ -516,8 +640,7 @@ void FileTransferEngine::feedReceiveChunk(std::shared_ptr< ReceiveJob > jobPtr, 
 		// Every accepted record is exactly (framing 12 + tag 16 + expected
 		// plaintext) bytes and each index at most once, so this cap can only
 		// trip if that invariant is broken — enforced anyway to stay fail-closed.
-		const quint64 spoolCapacity =
-			job.manifest.fileSize + 28 * job.manifest.chunkCount;
+		const quint64 spoolCapacity = job.manifest.fileSize + 28 * job.manifest.chunkCount;
 		if (!job.spool && !openSpool(job)) {
 			updateReceiveState(job, FTTransferInfo::State::Failed, tr("storage error"));
 			cleanupReceive(jobPtr);
@@ -533,15 +656,13 @@ void FileTransferEngine::feedReceiveChunk(std::shared_ptr< ReceiveJob > jobPtr, 
 			cleanupReceive(jobPtr);
 			return;
 		}
+		job.idleTimer->start(m_config.receiveIdleTimeoutMSecs);
 		job.spoolBytes += static_cast< quint64 >(record.size());
-		job.spooledBits[byteIndex] =
-			static_cast< char >(job.spooledBits.at(byteIndex) | bitMask);
+		job.spooledBits[byteIndex] = static_cast< char >(job.spooledBits.at(byteIndex) | bitMask);
 		return;
 	}
-	if (index >= job.manifest.chunkCount || job.fileKey.isEmpty()
-		|| job.lastState == FTTransferInfo::State::Ready
-		|| job.lastState == FTTransferInfo::State::Saved
-		|| job.lastState == FTTransferInfo::State::Failed
+	if (index >= job.manifest.chunkCount || job.fileKey.isEmpty() || job.lastState == FTTransferInfo::State::Ready
+		|| job.lastState == FTTransferInfo::State::Saved || job.lastState == FTTransferInfo::State::Failed
 		|| job.lastState == FTTransferInfo::State::Aborted) {
 		return;
 	}
@@ -570,8 +691,8 @@ void FileTransferEngine::feedReceiveChunk(std::shared_ptr< ReceiveJob > jobPtr, 
 	}
 
 	QByteArray plaintext;
-	if (!decryptChunk(plaintext, job.fileKey, job.manifest.transferId, job.manifest.transferDigest(),
-					  index, job.manifest.chunkCount, ciphertext)) {
+	if (!decryptChunk(plaintext, job.fileKey, job.manifest.transferId, job.manifest.transferDigest(), index,
+					  job.manifest.chunkCount, ciphertext)) {
 		updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 		cleanupReceive(jobPtr);
 		return;
@@ -580,14 +701,14 @@ void FileTransferEngine::feedReceiveChunk(std::shared_ptr< ReceiveJob > jobPtr, 
 	{
 		QFile file(job.tempFile);
 		const qint64 offset = static_cast< qint64 >(index) * job.manifest.chunkSize;
-		if (!file.open(QIODevice::ReadWrite) || !file.seek(offset)
-			|| file.write(plaintext) != plaintext.size()) {
+		if (!file.open(QIODevice::ReadWrite) || !file.seek(offset) || file.write(plaintext) != plaintext.size()) {
 			updateReceiveState(job, FTTransferInfo::State::Failed, tr("storage error"));
 			cleanupReceive(jobPtr);
 			return;
 		}
 	}
 
+	job.idleTimer->start(m_config.receiveIdleTimeoutMSecs);
 	job.leafHashes[static_cast< int >(index)] = merkleChunkHash(plaintext);
 	job.receivedBits[byteIndex] = static_cast< char >(job.receivedBits.at(byteIndex) | bitMask);
 	++job.receivedCount;
@@ -608,7 +729,10 @@ bool FileTransferEngine::tryCompleteReceive(std::shared_ptr< ReceiveJob > jobPtr
 		return false;
 	}
 
-	if (merkleRoot(job.leafHashes) != job.manifest.merkleRoot) {
+	const QByteArray root = merkleRoot(job.leafHashes, shutdownRequested);
+	if (shutdownRequested())
+		return false;
+	if (root != job.manifest.merkleRoot) {
 		updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 		cleanupReceive(jobPtr);
 		return false;
@@ -620,55 +744,73 @@ bool FileTransferEngine::tryCompleteReceive(std::shared_ptr< ReceiveJob > jobPtr
 	// (and delete its verified temp copy) underneath the user.
 	job.idleTimer->stop();
 	updateReceiveState(job, FTTransferInfo::State::Ready);
+	if (m_transportControl) {
+		const QByteArray receipt =
+			job.session_->sealControl(FTFrame::TypeReceipt, encodeCanonical(QCborValue(job.transferId)));
+		if (!receipt.isEmpty())
+			m_transportControl(job.peerSession, receipt);
+	}
 	return true;
 }
 
 // ---------------------------------------------------------------------------
 // Sending
 
+quint32 FileTransferEngine::sendChunkSize(const Config &config, qsizetype recipientCount) {
+	quint32 chunkSize =
+		qBound< quint32 >(static_cast< quint32 >(MinChunkSize), config.chunkSize, static_cast< quint32 >(MaxChunkSize));
+	if (config.sendRateBytesPerSecond > 0) {
+		// Aim for progress every quarter second, respecting the protocol's
+		// minimum. At the UI's minimum 1 KiB/s, a 16 KiB chunk takes ~16 s,
+		// rather than letting a configured 1 MiB chunk exceed the 60 s idle limit.
+		const quint32 rateChunk = qMax< quint32 >(MinChunkSize, config.sendRateBytesPerSecond / 4);
+		chunkSize               = qMin(chunkSize, rateChunk);
+	}
+	if (config.aggregateSendRate > 0) {
+		const quint64 share =
+			config.aggregateSendRate / static_cast< quint64 >(qMax(1, static_cast< int >(recipientCount)));
+		const quint32 rateChunk = static_cast< quint32 >(qBound< quint64 >(MinChunkSize, share / 4, MaxChunkSize));
+		chunkSize               = qMin(chunkSize, rateChunk);
+	}
+	return chunkSize;
+}
+
 quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mimeType, bool passwordMode,
-									  QByteArray password, const QSet< unsigned int > &recipients) {
+									  QByteArray password, const QHash< unsigned int, QByteArray > &recipients,
+									  const QHash< unsigned int, QString > &names, quint64 sendContext) {
 	QFileInfo fileInfo(filePath);
-	if (!fileInfo.exists() || !fileInfo.isFile() || !fileInfo.isReadable() || fileInfo.size() <= 0) {
+	if (m_sendJobs.size() >= 32 || shutdownRequested() || !fileInfo.exists() || !fileInfo.isFile()
+		|| !fileInfo.isReadable() || fileInfo.size() <= 0) {
 		zeroize(password);
 		return 0;
 	}
 
 	auto job			= std::make_shared< SendJob >();
 	job->transferId		= randomBytes(TransferIdSize);
+	job->sendContext        = sendContext;
 	job->sourcePath		= fileInfo.absoluteFilePath();
 	job->fileName		= fileInfo.fileName();
 	job->mimeType		= mimeType.isEmpty() ? QStringLiteral("application/octet-stream") : mimeType;
 	job->passwordMode	= passwordMode;
 	job->password		= passwordMode ? password : QByteArray();
 	job->fileSize		= static_cast< quint64 >(fileInfo.size());
-	job->effectiveChunkSize = qBound< quint32 >(static_cast< quint32 >(MinChunkSize), m_config.chunkSize,
-												static_cast< quint32 >(MaxChunkSize));
+	job->effectiveChunkSize = sendChunkSize(m_config, recipients.size());
 	job->file			= new QFile(fileInfo.absoluteFilePath());
 	if (!job->file->open(QIODevice::ReadOnly)) {
-		delete job->file;
+		cleanupSend(*job, true);
 		zeroize(password);
 		return 0;
 	}
 	const quint32 chunkSize  = job->effectiveChunkSize;
 	const quint64 chunkCount = (job->fileSize + chunkSize - 1) / chunkSize;
 
-	// One hashing pass: chunk digests -> Merkle root
-	QVector< QByteArray > digests;
-	digests.reserve(static_cast< int >(chunkCount));
-	while (!job->file->atEnd()) {
-		const QByteArray chunk = job->file->read(chunkSize);
-		if (chunk.isEmpty()) {
-			break;
-		}
-		digests.append(merkleChunkHash(chunk));
-	}
-	if (static_cast< quint64 >(digests.size()) != chunkCount) {
-		delete job->file;
+	// One hashing pass, cancellable between bounded chunks and Merkle nodes.
+	job->merkleRoot = merkleRootFromDevice(*job->file, chunkSize, chunkCount, shutdownRequested);
+	if (shutdownRequested() || job->merkleRoot.isEmpty()) {
+		cleanupSend(*job, true);
 		zeroize(password);
 		return 0;
 	}
-	job->merkleRoot = merkleRoot(digests);
 	job->chunkCount = chunkCount;
 	job->fileKey	= randomBytes(KeySize);
 
@@ -690,21 +832,32 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 
 	// Per-recipient sessions (peers must be pinned already)
 	bool anyPeer = false;
-	for (unsigned int session : recipients) {
-		const QByteArray pinned = m_pinLookup ? m_pinLookup(session) : QByteArray();
+	for (auto recipient = recipients.cbegin(); recipient != recipients.cend(); ++recipient) {
+		if (shutdownRequested()) {
+			cleanupSend(*job, true);
+			zeroize(password);
+			return 0;
+		}
+		const unsigned int session = recipient.key();
+		const QByteArray pinned    = recipient.value();
+		if (!pinned.isEmpty() && pinned.size() != HashSize) {
+			cleanupSend(*job, true);
+			zeroize(password);
+			return 0;
+		}
 		SendPeer peer;
 		peer.session  = session;
+		peer.name              = names.value(session);
 		peer.pinnedFingerprint = pinned;
 		SessionIdentity identity;
 		identity.publicKey = m_identityPk;
 		identity.sign		= m_sign;
-		peer.session_ = new FileTransferSession(FileTransferSession::Role::Initiator, std::move(identity),
-												 pinned);
+		peer.session_      = new FileTransferSession(FileTransferSession::Role::Initiator, std::move(identity), pinned);
 		job->peers.append(std::move(peer));
 		anyPeer = true;
 	}
 	if (!anyPeer) {
-		delete job->file;
+		cleanupSend(*job, true);
 		zeroize(password);
 		return 0;
 	}
@@ -731,6 +884,7 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 
 	FTTransferInfo info;
 	info.transferId   = job->transferId;
+	info.sendContext  = job->sendContext;
 	info.peerSession  = job->peers.first().session;
 	info.incoming	  = false;
 	info.fileName	  = job->fileName;
@@ -747,11 +901,14 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 void FileTransferEngine::maybeStartHandshakePhase2(SendJob &job) {
 	bool pending = false;
 	for (const SendPeer &peer : job.peers) {
+		if (peer.awaitingAuthorization) {
+			if (!job.handshakeTimer->isActive())
+				finishSend(job, false, tr("Recipient identity authorization timed out"));
+			return;
+		}
 		if (!peer.established && !peer.failed) {
-			const auto st = peer.session_ ? peer.session_->state()
-										 : FileTransferSession::State::Failed;
-			if (st == FileTransferSession::State::AwaitingM2
-				|| st == FileTransferSession::State::AwaitingM4
+			const auto st = peer.session_ ? peer.session_->state() : FileTransferSession::State::Failed;
+			if (st == FileTransferSession::State::AwaitingM2 || st == FileTransferSession::State::AwaitingM4
 				|| st == FileTransferSession::State::Created) {
 				pending = true;
 			}
@@ -769,8 +926,11 @@ void FileTransferEngine::maybeStartHandshakePhase2(SendJob &job) {
 			anyEstablished = true;
 		}
 	}
-	if (!anyEstablished) {
-		finishSend(job, false, tr("No recipient could be reached"));
+	bool anyFailed = false;
+	for (const SendPeer &peer : job.peers)
+		anyFailed = anyFailed || peer.failed;
+	if (!anyEstablished || anyFailed) {
+		finishSend(job, false, tr("Not every selected recipient could be reached; no file content was sent"));
 		return;
 	}
 	if (!job.manifestSent) {
@@ -779,6 +939,8 @@ void FileTransferEngine::maybeStartHandshakePhase2(SendJob &job) {
 }
 
 void FileTransferEngine::buildAndSendManifests(SendJob &job) {
+	if (shutdownRequested())
+		return;
 	// Password-layer material is shared by every recipient of the transfer
 	SecureBytes pwKey;
 	QByteArray salt;
@@ -796,6 +958,8 @@ void FileTransferEngine::buildAndSendManifests(SendJob &job) {
 	const QByteArray fpA = identityFingerprint(m_identityPk);
 
 	for (SendPeer &peer : job.peers) {
+		if (shutdownRequested())
+			return;
 		if (!peer.established || !peer.session_) {
 			continue;
 		}
@@ -804,8 +968,8 @@ void FileTransferEngine::buildAndSendManifests(SendJob &job) {
 		const QByteArray fpB		  = peer.session_->peerFingerprint();
 
 		QByteArray layer1;
-		if (!wrapFileKeySessionLayer(layer1, job.fileKey, sessionKek, wrapNonce1, job.transferId,
-									 job.passwordMode, fpA, fpB)) {
+		if (!wrapFileKeySessionLayer(layer1, job.fileKey, sessionKek, wrapNonce1, job.transferId, job.passwordMode, fpA,
+									 fpB)) {
 			peer.failed = true;
 			continue;
 		}
@@ -826,11 +990,10 @@ void FileTransferEngine::buildAndSendManifests(SendJob &job) {
 		if (job.passwordMode) {
 			manifest.argon2	 = Argon2Params();
 			manifest.argon2Salt = salt;
-			const QByteArray pwWrapKey =
-				passwordWrapKey(pwKey.toByteArray(), job.transferId, fpA, fpB);
+			const QByteArray pwWrapKey = passwordWrapKey(pwKey.toByteArray(), job.transferId, fpA, fpB);
 			QByteArray layer2;
-			if (!wrapLayer1WithPassword(layer2, layer1, pwWrapKey, job.transferId, true, fpA, fpB,
-										Argon2Params(), salt)) {
+			if (!wrapLayer1WithPassword(layer2, layer1, pwWrapKey, job.transferId, true, fpA, fpB, Argon2Params(),
+										salt)) {
 				peer.failed = true;
 				continue;
 			}
@@ -844,8 +1007,7 @@ void FileTransferEngine::buildAndSendManifests(SendJob &job) {
 			continue;
 		}
 
-		const QByteArray frame =
-			peer.session_->sealControl(FTFrame::TypeManifest, encodeManifest(manifest));
+		const QByteArray frame = peer.session_->sealControl(FTFrame::TypeManifest, encodeManifest(manifest));
 		if (frame.isEmpty() || !m_transportControl) {
 			peer.failed = true;
 			continue;
@@ -866,82 +1028,335 @@ void FileTransferEngine::buildAndSendManifests(SendJob &job) {
 	}
 
 	job.manifestSent = true;
+	job.progressClock.start();
+	job.stallTimer      = std::make_unique< QTimer >(this);
+	const QByteArray id = job.transferId;
+	connect(job.stallTimer.get(), &QTimer::timeout, this, [this, id]() {
+		const auto active = m_sendJobs.value(id);
+		if (active && active->lastState == FTTransferInfo::State::Transferring
+			&& active->progressClock.elapsed() >= m_config.receiveIdleTimeoutMSecs)
+			finishSend(*active, false,
+					   active->lastRelayError.isEmpty() ? tr("File delivery stalled; try a lower sending rate")
+														: active->lastRelayError);
+	});
+	job.stallTimer->start(1000);
 	updateSendState(job, FTTransferInfo::State::Transferring);
 
-	job.paceTimer = std::make_unique< QTimer >(this);
-	connect(job.paceTimer.get(), &QTimer::timeout, this, [this, tid = job.transferId]() {
-		auto it = m_sendJobs.find(tid);
-		if (it == m_sendJobs.end()) {
-			return;
-		}
-		SendJob &j = *it->get();
-		const qint64 budget =
-			m_config.sendRateBytesPerSecond > 0
-				? qMax< qint64 >(m_config.sendRateBytesPerSecond / 20,
-								 static_cast< qint64 >(j.effectiveChunkSize))
-				: std::numeric_limits< qint64 >::max();
-		sendNextChunks(j, budget);
-	});
-	job.paceTimer->start(50);
+	if (job.lastState != FTTransferInfo::State::Transferring)
+		return;
+	m_sendPaceOrder.append(job.transferId);
+	if (!m_sendPaceTimer->isActive()) {
+		m_sendCreditMilliBytes = 0;
+		m_sendCreditLastNSecs  = 0;
+		m_sendCreditRemainder  = 0;
+		m_sendPaceClock.start();
+		m_sendPaceTimer->start(50);
+	}
 }
 
-void FileTransferEngine::sendNextChunks(SendJob &job, qint64 budgetBytes) {
-	if (job.lastState == FTTransferInfo::State::Aborted
-		|| job.lastState == FTTransferInfo::State::Failed) {
+void FileTransferEngine::refillSendCredit() {
+	// Keep the clock running: restarting it for every packet would discard
+	// all sub-millisecond time. Carry the division remainder as well.
+	const qint64 nowNSecs     = m_sendPaceClock.nsecsElapsed();
+	const qint64 elapsedNSecs = qBound< qint64 >(qint64(0), nowNSecs - m_sendCreditLastNSecs, qint64(1000000000));
+	m_sendCreditLastNSecs     = nowNSecs;
+	qint64 rate               = m_config.sendRateBytesPerSecond;
+	if (m_config.aggregateSendRate > 0) {
+		int maximumRecipients = 1;
+		for (const auto &job : m_sendJobs)
+			maximumRecipients = qMax(maximumRecipients, static_cast< int >(job->peers.size()));
+		const qint64 aggregateRate = static_cast< qint64 >(
+			qMax< quint64 >(1, m_config.aggregateSendRate / static_cast< quint64 >(maximumRecipients)));
+		rate                       = rate == 0 ? aggregateRate : qMin(rate, aggregateRate);
+	}
+	if (rate > 0) {
+		// Accumulate enough credit for one whole chunk, even at low rates.
+		// Late timer delivery permits at most a chunk plus one normal tick's burst.
+		qint64 capacity = 0;
+		for (const QByteArray &id : m_sendPaceOrder) {
+			const auto job = m_sendJobs.value(id);
+			if (job)
+				capacity = qMax(capacity, qint64(job->effectiveChunkSize) + TagSize);
+		}
+		capacity += rate / 20;
+		// Even the full quint32 rate times the capped one-second interval
+		// fits qint64. Credit is stored in thousandths of a ciphertext byte.
+		const qint64 earned    = rate * elapsedNSecs + m_sendCreditRemainder;
+		m_sendCreditRemainder  = earned % 1000000;
+		m_sendCreditMilliBytes = qMin(capacity * 1000, m_sendCreditMilliBytes + earned / 1000000);
+		if (m_sendCreditMilliBytes == capacity * 1000)
+			m_sendCreditRemainder = 0;
+	}
+}
+
+void FileTransferEngine::paceSends() {
+	// Yield to cancellation and incoming controls, including at unlimited rate.
+	// This bounds one engine dispatch, not the downstream GUI/socket queues.
+	qint64 dispatchedBytes = 0;
+	int dispatchedChunks   = 0;
+	bool waitingForCredit  = false;
+	int waitingJobs        = 0;
+	while (!m_sendPaceOrder.isEmpty() && dispatchedChunks < 32 && dispatchedBytes < 4 * 1024 * 1024) {
+		if (shutdownRequested())
+			return;
+		const QByteArray id = m_sendPaceOrder.first();
+		const auto job      = m_sendJobs.value(id); // Keep it alive across synchronous test callbacks.
+		if (!job || job->lastState != FTTransferInfo::State::Transferring) {
+			m_sendPaceOrder.removeFirst();
+			continue;
+		}
+		if (job->awaitingRelay || job->retryAtMSecs > m_sendPaceClock.elapsed()) {
+			m_sendPaceOrder.move(0, m_sendPaceOrder.size() - 1);
+			if (++waitingJobs >= m_sendPaceOrder.size()) {
+				waitingForCredit = true;
+				break;
+			}
+			continue;
+		}
+		waitingJobs = 0;
+		const qint64 bytes =
+			static_cast< qint64 >(qMin< quint64 >(job->effectiveChunkSize, job->fileSize - job->bytesDone)) + TagSize;
+		refillSendCredit();
+		if (m_config.sendRateBytesPerSecond > 0 || m_config.aggregateSendRate > 0) {
+			if (m_sendCreditMilliBytes < bytes * 1000) {
+				waitingForCredit = true;
+				break;
+			}
+		}
+		const quint64 previousIndex = job->nextChunkIndex;
+		// Keep this job queued during callbacks so cleaning up another job
+		// cannot mistake an active sender for an empty queue and stop its timer.
+		sendNextChunk(*job);
+		if (job->lastState == FTTransferInfo::State::Transferring && job->nextChunkIndex == previousIndex
+			&& !job->awaitingRelay) {
+			waitingForCredit = true;
+			break;
+		}
+		m_sendPaceOrder.removeAll(id);
+		++dispatchedChunks;
+		dispatchedBytes += bytes;
+		if (m_sendJobs.value(id) == job && job->lastState == FTTransferInfo::State::Transferring)
+			m_sendPaceOrder.append(id);
+	}
+	if (m_sendPaceOrder.isEmpty()) {
+		m_sendPaceTimer->stop();
+		m_sendCreditMilliBytes = 0;
+	} else {
+		// Yield to controls without imposing a 50 ms throughput cap per batch.
+		m_sendPaceTimer->start(waitingForCredit || dispatchedBytes == 0 ? 50 : 10);
+	}
+}
+
+void FileTransferEngine::sendNextChunk(SendJob &job) {
+	if (job.lastState == FTTransferInfo::State::Aborted || job.lastState == FTTransferInfo::State::Failed) {
 		return;
 	}
 	const quint32 chunkSize = job.effectiveChunkSize;
 
-	while (budgetBytes > 0 && job.nextChunkIndex < job.chunkCount) {
-		const qint64 offset = static_cast< qint64 >(job.nextChunkIndex) * chunkSize;
-		if (!job.file->seek(offset)) {
-			finishSend(job, false, tr("Read error"));
+	if (job.nextChunkIndex < job.chunkCount) {
+		if (shutdownRequested())
 			return;
-		}
-		const QByteArray chunk = job.file->read(chunkSize);
-		if (chunk.isEmpty()) {
-			finishSend(job, false, tr("Read error"));
-			return;
-		}
-
-		QByteArray ciphertext;
-		if (!encryptChunk(ciphertext, job.fileKey, job.transferId, job.transferDigest,
-						  job.nextChunkIndex, job.chunkCount, chunk)) {
-			finishSend(job, false, tr("Encryption error"));
-			return;
-		}
-		if (m_transportChunk) {
-			m_transportChunk(job.transferId, job.nextChunkIndex, job.chunkCount, ciphertext);
-		}
-
-		budgetBytes -= chunk.size();
-		job.bytesDone += static_cast< quint64 >(chunk.size());
-		++job.nextChunkIndex;
-	}
-
-	if (job.bytesDone - job.lastProgressBytes >= 1024 * 1024
-		|| job.nextChunkIndex >= job.chunkCount) {
-		job.lastProgressBytes = job.bytesDone;
-		updateSendState(job, FTTransferInfo::State::Transferring);
-	}
-
-	if (job.nextChunkIndex >= job.chunkCount) {
-		for (SendPeer &peer : job.peers) {
-			if (peer.established && peer.session_) {
-				const QByteArray frame =
-					peer.session_->sealControl(FTFrame::TypeComplete, canonicalEmptyMap);
-				if (!frame.isEmpty() && m_transportControl) {
-					m_transportControl(peer.session, frame);
-				}
+		if (job.pendingCiphertext.isEmpty()) {
+			const qint64 offset = static_cast< qint64 >(job.nextChunkIndex) * chunkSize;
+			if (!job.file->seek(offset)) {
+				finishSend(job, false, tr("Read error"));
+				return;
+			}
+			const QByteArray chunk = job.file->read(chunkSize);
+			if (chunk.isEmpty()) {
+				finishSend(job, false, tr("Read error"));
+				return;
+			}
+			if (!encryptChunk(job.pendingCiphertext, job.fileKey, job.transferId, job.transferDigest,
+							  job.nextChunkIndex, job.chunkCount, chunk)) {
+				finishSend(job, false, tr("Encryption error"));
+				return;
 			}
 		}
-		finishSend(job, true, QString());
+		const QByteArray ciphertext = job.pendingCiphertext;
+		if (shutdownRequested())
+			return;
+		QList< unsigned int > targets;
+		for (const SendPeer &peer : job.peers)
+			if (peer.established && !peer.failed)
+				targets.append(peer.session);
+		// Reserve credit and the acknowledgement state before a transport callback,
+		// which may synchronously accept, reject, or abort this job.
+		refillSendCredit();
+		const bool rateLimited = m_config.sendRateBytesPerSecond > 0 || m_config.aggregateSendRate > 0;
+		const qint64 charge    = static_cast< qint64 >(ciphertext.size()) * 1000;
+		if (rateLimited)
+			m_sendCreditMilliBytes -= charge;
+		const quint64 index = job.nextChunkIndex;
+		const bool needsAcknowledgement = m_targetedChunk && m_requireRelayAcknowledgement;
+		job.awaitingRelay               = needsAcknowledgement;
+		if (m_targetedChunk && !m_targetedChunk(targets, job.transferId, index, job.chunkCount, ciphertext)) {
+			job.awaitingRelay = false;
+			if (rateLimited)
+				m_sendCreditMilliBytes += charge;
+			return; // Local backpressure has not admitted this chunk.
+		}
+		if (needsAcknowledgement || job.lastState != FTTransferInfo::State::Transferring)
+			return;
+		job.bytesDone += static_cast< quint64 >(ciphertext.size() - TagSize);
+		++job.nextChunkIndex;
+		job.pendingCiphertext.clear();
+		job.progressClock.restart();
+		if (!m_targetedChunk && m_transportChunk)
+			m_transportChunk(job.transferId, index, job.chunkCount, ciphertext);
+		if (job.lastState != FTTransferInfo::State::Transferring)
+			return;
+	}
+
+	if (job.bytesDone - job.lastProgressBytes >= 1024 * 1024 || job.nextChunkIndex >= job.chunkCount) {
+		job.lastProgressBytes = job.bytesDone;
+		updateSendState(job, FTTransferInfo::State::Transferring);
+		if (job.lastState != FTTransferInfo::State::Transferring)
+			return;
+	}
+
+	if (job.nextChunkIndex >= job.chunkCount)
+		completeSendUpload(job);
+}
+
+void FileTransferEngine::completeSendUpload(SendJob &job) {
+	if (job.stallTimer)
+		job.stallTimer->stop();
+	if (job.nextChunkIndex >= job.chunkCount) {
+		QList< QPair< unsigned int, QByteArray > > completions;
+		for (const SendPeer &peer : job.peers) {
+			if (peer.established && peer.session_) {
+				const QByteArray frame = peer.session_->sealControl(FTFrame::TypeComplete, canonicalEmptyMap);
+				if (!frame.isEmpty())
+					completions.append({ peer.session, frame });
+			}
+		}
+		for (const auto &completion : completions) {
+			if (m_transportControl)
+				m_transportControl(completion.first, completion.second);
+			if (job.lastState != FTTransferInfo::State::Transferring)
+				return;
+		}
+		updateSendState(job, FTTransferInfo::State::Verifying);
+		if (job.lastState != FTTransferInfo::State::Verifying)
+			return;
+		bool allReceived = true;
+		for (const SendPeer &peer : job.peers)
+			allReceived = allReceived && peer.established && !peer.failed && peer.received;
+		if (allReceived) {
+			finishSend(job, true, QString());
+		} else {
+			const QByteArray id = job.transferId;
+			disconnect(job.handshakeTimer.get(), nullptr, this, nullptr);
+			connect(job.handshakeTimer.get(), &QTimer::timeout, this, [this, id]() {
+				const auto waiting = m_sendJobs.value(id);
+				if (waiting)
+					finishSend(*waiting, false, tr("Recipient did not confirm file delivery"));
+			});
+			bool waitingPassword = false;
+			for (const SendPeer &peer : job.peers)
+				waitingPassword = waitingPassword || peer.waitingPassword;
+			job.handshakeTimer->start(waitingPassword ? 300000 : m_config.receiveIdleTimeoutMSecs);
+		}
+	}
+}
+
+void FileTransferEngine::relayResponse(const QByteArray &transferId, quint64 index, bool accepted,
+									   quint32 retryAfterMSecs, const QString &reason) {
+	const auto job = m_sendJobs.value(transferId);
+	if (!job || !job->awaitingRelay || index != job->nextChunkIndex)
+		return;
+	job->awaitingRelay = false;
+	if (accepted) {
+		job->bytesDone += static_cast< quint64 >(job->pendingCiphertext.size() - TagSize);
+		++job->nextChunkIndex;
+		job->pendingCiphertext.clear();
+		job->progressClock.restart();
+		job->lastRelayError.clear();
+		if (job->nextChunkIndex >= job->chunkCount) {
+			updateSendState(*job, FTTransferInfo::State::Transferring);
+			if (job->lastState != FTTransferInfo::State::Transferring)
+				return;
+			completeSendUpload(*job);
+		} else if (job->bytesDone - job->lastProgressBytes >= 1024 * 1024) {
+			job->lastProgressBytes = job->bytesDone;
+			updateSendState(*job, FTTransferInfo::State::Transferring);
+		}
+	} else if (retryAfterMSecs > 0) {
+		job->lastRelayError = reason;
+		// Bound server backoff and stagger competing sends without duplicating a delivered chunk.
+		job->retryAtMSecs = m_sendPaceClock.elapsed() + qBound< quint32 >(100, retryAfterMSecs, 5000)
+							+ static_cast< unsigned char >(job->transferId[0]);
+	} else {
+		finishSend(*job, false, reason);
+	}
+	if (!m_sendPaceOrder.isEmpty())
+		m_sendPaceTimer->start(0);
+}
+
+void FileTransferEngine::relayFailed(const QByteArray &transferId, const QString &reason) {
+	const auto job = m_sendJobs.value(transferId);
+	if (job)
+		finishSend(*job, false, reason);
+}
+
+void FileTransferEngine::transportFailed(unsigned int actor, const QByteArray &transferId, const QString &reason) {
+	const auto job = findReceiveByPeer(actor, transferId);
+	if (!job)
+		return;
+	QByteArray abort;
+	if (job->session_ && m_transportControl)
+		abort = job->session_->sealControl(FTFrame::TypeAbort, canonicalEmptyMap);
+	updateReceiveState(*job, FTTransferInfo::State::Failed, reason);
+	cleanupReceive(job);
+	// Retire local state before a synchronous peer response can re-enter us.
+	if (!abort.isEmpty() && m_transportControl)
+		m_transportControl(actor, abort);
+}
+
+void FileTransferEngine::resolveSendAuthorization(unsigned int peerSession, const QByteArray &transferId,
+												  bool verified) {
+	const auto job = m_sendJobs.value(transferId);
+	if (!job)
+		return;
+	for (SendPeer &peer : job->peers) {
+		if (peer.session == peerSession && peer.awaitingAuthorization) {
+			peer.awaitingAuthorization = false;
+			if (!verified) {
+				finishSend(*job, false, tr("Recipient identity was not authorized"));
+				return;
+			}
+			peer.established = true;
+			maybeStartHandshakePhase2(*job);
+			return;
+		}
 	}
 }
 
 void FileTransferEngine::finishSend(SendJob &job, bool success, const QString &error) {
-	updateSendState(job, success ? FTTransferInfo::State::Saved : FTTransferInfo::State::Failed, error);
+	if (job.finishing)
+		return;
+	job.finishing     = true;
+	bool anyDelivered = false;
+	QList< QPair< unsigned int, QByteArray > > aborts;
+	for (const SendPeer &peer : job.peers) {
+		anyDelivered = anyDelivered || peer.received;
+		if (!success && peer.session_ && !peer.received
+			&& peer.session_->state() == FileTransferSession::State::Established) {
+			const QByteArray abort = peer.session_->sealControl(FTFrame::TypeAbort, canonicalEmptyMap);
+			if (!abort.isEmpty())
+				aborts.append({ peer.session, abort });
+		}
+	}
+	updateSendState(job,
+					success        ? FTTransferInfo::State::Saved
+					: anyDelivered ? FTTransferInfo::State::PartiallyDelivered
+								   : FTTransferInfo::State::Failed,
+					error);
 	cleanupSend(job, true);
+	for (const auto &abort : aborts)
+		if (m_transportControl)
+			m_transportControl(abort.first, abort.second);
 }
 
 void FileTransferEngine::cleanupSend(SendJob &job, bool keepCard) {
@@ -953,8 +1368,14 @@ void FileTransferEngine::cleanupSend(SendJob &job, bool keepCard) {
 	}
 	zeroize(job.fileKey);
 	zeroize(job.password);
-	job.paceTimer.reset();
+	m_sendPaceOrder.removeAll(job.transferId);
+	if (m_sendPaceOrder.isEmpty()) {
+		m_sendPaceTimer->stop();
+		m_sendCreditMilliBytes = 0;
+	}
 	job.handshakeTimer.reset();
+	job.stallTimer.reset();
+	job.pendingCiphertext.clear();
 	for (SendPeer &peer : job.peers) {
 		delete peer.session_;
 		peer.session_ = nullptr;
@@ -963,18 +1384,17 @@ void FileTransferEngine::cleanupSend(SendJob &job, bool keepCard) {
 	m_sendJobs.remove(job.transferId);
 }
 
-void FileTransferEngine::cleanupReceive(std::shared_ptr< ReceiveJob > jobPtr) {
+void FileTransferEngine::cleanupReceive(std::shared_ptr< ReceiveJob > jobPtr, bool keepReady) {
 	ReceiveJob &job = *jobPtr;
 	// The map's entry may be the only owning reference. The by-value
 	// parameter took its own owning copy at the call, so erasing the entry
 	// here cannot destroy the job (or the shared_ptr the caller passed, which
 	// may literally live inside the map node) while we still work on it.
-	const QByteArray transferId	= job.transferId;
+	const QByteArray transferId    = job.transferId;
 	const unsigned int peerSession = job.peerSession;
-	// Temp files survive only for Ready transfers (until saved); every other
-	// outcome removes all partial output (§13).
-	const bool keepTemp			   = (job.lastState == FTTransferInfo::State::Ready);
-	const QString tempDir		   = job.tempDir;
+	// Ready output may survive while the engine is alive. Shutdown also
+	// removes unsaved plaintext; files explicitly saved elsewhere are untouched.
+	const bool keepTemp = (keepReady && job.lastState == FTTransferInfo::State::Ready);
 
 	if (!transferId.isEmpty()) {
 		m_receiveJobs.remove(transferId);
@@ -990,8 +1410,8 @@ void FileTransferEngine::cleanupReceive(std::shared_ptr< ReceiveJob > jobPtr) {
 		delete job.spool;
 		job.spool = nullptr;
 	}
-	if (!keepTemp && !tempDir.isEmpty()) {
-		QDir(tempDir).removeRecursively();
+	if (!keepTemp) {
+		job.tempDirectory.reset();
 	}
 	zeroize(job.fileKey);
 	job.idleTimer.reset();
@@ -1005,10 +1425,11 @@ void FileTransferEngine::abortTransfer(const QByteArray &transferId) {
 	auto sendIt = m_sendJobs.find(transferId);
 	if (sendIt != m_sendJobs.end()) {
 		SendJob &job = *sendIt->get();
+		if (job.finishing)
+			return;
 		for (SendPeer &peer : job.peers) {
 			if (peer.established && peer.session_ && m_transportControl) {
-				const QByteArray frame =
-					peer.session_->sealControl(FTFrame::TypeAbort, canonicalEmptyMap);
+				const QByteArray frame = peer.session_->sealControl(FTFrame::TypeAbort, canonicalEmptyMap);
 				if (!frame.isEmpty()) {
 					m_transportControl(peer.session, frame);
 				}
@@ -1026,7 +1447,8 @@ void FileTransferEngine::abortTransfer(const QByteArray &transferId) {
 	}
 }
 
-void FileTransferEngine::saveTransferAs(const QByteArray &transferId, const QString &targetPath) {
+void FileTransferEngine::saveTransferAs(const QByteArray &transferId, const QString &targetPath,
+										bool replaceConfirmed) {
 	auto it = m_receiveJobs.find(transferId);
 	if (it == m_receiveJobs.end() || it->get()->lastState != FTTransferInfo::State::Ready) {
 		return;
@@ -1035,26 +1457,98 @@ void FileTransferEngine::saveTransferAs(const QByteArray &transferId, const QStr
 	ReceiveJob &job									  = *jobPtr;
 
 	const QFileInfo targetInfo(targetPath);
-	if (!targetInfo.dir().mkpath(".")) {
+	if (targetInfo.isSymLink() || !targetInfo.dir().mkpath(".")) {
 		emitSaveFailed(job);
 		return;
 	}
 
-	// Atomic rename when possible; cross-device falls back to copy+rename
-	if (QFile::rename(job.tempFile, targetPath)) {
-		emitSaveDone(jobPtr);
+	QFile source(job.tempFile);
+	if (!source.open(QIODevice::ReadOnly)) {
+		emitSaveFailed(job);
 		return;
 	}
-	const QString partPath = targetPath + ".part";
-	if (QFile::copy(job.tempFile, partPath) && QFile::rename(partPath, targetPath)) {
-		emitSaveDone(jobPtr);
-		return;
+	const auto copyReceived = [&](QIODevice &output) {
+		quint64 copied = 0;
+		while (!source.atEnd()) {
+			if (shutdownRequested())
+				return false;
+			const QByteArray block = source.read(256 * 1024);
+			if (block.isEmpty() || output.write(block) != block.size())
+				return false;
+			copied += static_cast< quint64 >(block.size());
+		}
+		return source.error() == QFile::NoError && copied == job.fileSize;
+	};
+	bool committed = false;
+	bool stageRemoved = true;
+	if (replaceConfirmed) {
+		QSaveFile output(targetPath);
+		// Never truncate the original as a fallback when staging is unavailable.
+		output.setDirectWriteFallback(false);
+		if (output.open(QIODevice::WriteOnly) && copyReceived(output) && m_syncSaveFile(output)) {
+			source.close();
+			committed = output.commit();
+		} else {
+			output.cancelWriting();
+		}
+	} else {
+		// Own an unpredictable stage in the destination directory. Publishing
+		// a hard link is atomic and refuses even a target created during the copy.
+		// A filesystem without hard-link support fails closed, leaving Ready.
+		QFile modeProbe(targetInfo.dir().filePath(".mumble-ft-mode-" + QString::fromLatin1(randomBytes(16).toHex())));
+		if (!modeProbe.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
+			emitSaveFailed(job);
+			return;
+		}
+		const auto targetPermissions = modeProbe.permissions();
+		modeProbe.close();
+		if (!modeProbe.remove()) {
+			emitSaveFailed(job);
+			return;
+		}
+		QTemporaryFile stage(targetInfo.dir().filePath(".mumble-ft-save-XXXXXX"));
+		if (stage.open() && copyReceived(stage) && stage.setPermissions(targetPermissions) && m_syncSaveFile(stage)) {
+			const QString stagePath = stage.fileName();
+			stage.close();
+			source.close();
+#ifdef Q_OS_WIN
+			const std::filesystem::path from(stagePath.toStdWString()), to(targetPath.toStdWString());
+#else
+			const std::filesystem::path from(QFile::encodeName(stagePath).constData()),
+				to(QFile::encodeName(targetPath).constData());
+#endif
+			std::error_code error;
+			if (stage.error() == QFile::NoError)
+				std::filesystem::create_hard_link(from, to, error);
+			else
+				error = std::make_error_code(std::errc::io_error);
+			committed = !error;
+			if (committed)
+				stageRemoved = stage.remove();
+		}
 	}
-	QFile::remove(partPath);
-	emitSaveFailed(job);
+	source.close();
+	if (!committed) {
+		emitSaveFailed(job);
+	} else if (!stageRemoved) {
+		emitSaveFailed(
+			job,
+			tr("The file was written, but its temporary copy could not be removed. Received data is kept for retry."));
+	} else if (!m_syncSavePublication(targetPath)) {
+		// Publication has already changed the destination. Do not pretend that
+		// this is a pre-commit failure or discard our retryable received copy.
+		emitSaveFailed(job, tr("The file was written, but disk synchronization could not be confirmed. Received data "
+							   "is kept for retry."));
+	} else {
+		emitSaveDone(jobPtr);
+	}
 }
 
 void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArray password) {
+	if (shutdownRequested()) {
+		zeroize(password);
+		return;
+	}
 	auto it = m_receiveJobs.find(transferId);
 	if (it == m_receiveJobs.end() || !it->get()->waitingPassword) {
 		zeroize(password);
@@ -1073,13 +1567,14 @@ void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArra
 			return;
 		}
 		zeroize(password);
+		if (shutdownRequested())
+			return;
 
 		const QByteArray pwWrapKey =
 			passwordWrapKey(pwKey.toByteArray(), job.transferId, job.manifest.fpA, job.manifest.fpB);
 		QByteArray layer1;
-		if (!unwrapPasswordLayer(layer1, job.manifest.wrappedFileKey, pwWrapKey, job.transferId,
-								 true, job.manifest.fpA, job.manifest.fpB, *job.manifest.argon2,
-								 job.manifest.argon2Salt)) {
+		if (!unwrapPasswordLayer(layer1, job.manifest.wrappedFileKey, pwWrapKey, job.transferId, true, job.manifest.fpA,
+								 job.manifest.fpB, *job.manifest.argon2, job.manifest.argon2Salt)) {
 			updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 			cleanupReceive(jobPtr);
 			return;
@@ -1088,8 +1583,8 @@ void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArra
 		const QByteArray sessionKek = job.session_->deriveSessionKek(job.transferId);
 		const QByteArray wrapNonce1  = job.session_->deriveWrapNonce1(job.transferId);
 		QByteArray fileKey;
-		if (!unwrapFileKeySessionLayer(fileKey, layer1, sessionKek, wrapNonce1, job.transferId, true,
-									   job.manifest.fpA, job.manifest.fpB)) {
+		if (!unwrapFileKeySessionLayer(fileKey, layer1, sessionKek, wrapNonce1, job.transferId, true, job.manifest.fpA,
+									   job.manifest.fpB)) {
 			updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 			cleanupReceive(jobPtr);
 			return;
@@ -1108,6 +1603,31 @@ void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArra
 	}
 }
 
+void FileTransferEngine::abortPeer(unsigned int session) {
+	for (const auto &id : m_sendJobs.keys()) {
+		const auto job = m_sendJobs.value(id);
+		if (!job)
+			continue;
+		for (const auto &peer : job->peers)
+			if (peer.session == session) {
+				abortTransfer(id);
+				break;
+			}
+	}
+	for (const auto &id : m_receiveJobs.keys()) {
+		const auto job = m_receiveJobs.value(id);
+		if (job && job->peerSession == session)
+			abortTransfer(id);
+	}
+	auto pending = m_pendingHandshakes.find(session);
+	if (pending != m_pendingHandshakes.end()) {
+		const quint64 token = pending->requestToken;
+		stopPendingHandshakeTimer(*pending);
+		m_pendingHandshakes.erase(pending);
+		emit firstContactRetired(session, token);
+	}
+}
+
 void FileTransferEngine::abortAll() {
 	const QList< QByteArray > sendKeys = m_sendJobs.keys();
 	for (const QByteArray &key : sendKeys) {
@@ -1118,20 +1638,33 @@ void FileTransferEngine::abortAll() {
 		// Synthetic pre-manifest keys are removed by cleanupReceive too
 		abortTransfer(key);
 	}
+	for (PendingHandshake &pending : m_pendingHandshakes) {
+		emit firstContactRetired(pending.peerSession, pending.requestToken);
+		stopPendingHandshakeTimer(pending);
+	}
 	m_pendingHandshakes.clear();
 }
 
-void FileTransferEngine::resolveFirstContact(unsigned int peerSession, bool verified) {
+void FileTransferEngine::stopPendingHandshakeTimer(PendingHandshake &pending) {
+	if (pending.timeout) {
+		pending.timeout->stop();
+		pending.timeout->deleteLater();
+		pending.timeout = nullptr;
+	}
+}
+
+void FileTransferEngine::resolveFirstContact(unsigned int peerSession, bool verified, quint64 requestToken) {
 	auto it = m_pendingHandshakes.find(peerSession);
-	if (it == m_pendingHandshakes.end()) {
+	if (it == m_pendingHandshakes.end() || (requestToken == 0 || it->requestToken != requestToken)) {
 		return;
 	}
 	PendingHandshake pending = std::move(it.value());
 	m_pendingHandshakes.erase(it);
+	stopPendingHandshakeTimer(pending);
 
 	if (verified) {
 		// The manager has pinned the fingerprint; run the M1 now
-		handleIncomingM1(peerSession, pending.m1Frame);
+		startResponder(peerSession, pending.m1Frame, pending.peerFingerprint, pending.peerName);
 	}
 	// Declined: nothing was ever answered — the initiator times out
 }
@@ -1139,12 +1672,12 @@ void FileTransferEngine::resolveFirstContact(unsigned int peerSession, bool veri
 // ---------------------------------------------------------------------------
 // Helpers
 
-void FileTransferEngine::updateSendState(SendJob &job, FTTransferInfo::State state,
-										 const QString &error) {
+void FileTransferEngine::updateSendState(SendJob &job, FTTransferInfo::State state, const QString &error) {
 	job.lastState = state;
 
 	FTTransferInfo info;
 	info.transferId   = job.transferId;
+	info.sendContext  = job.sendContext;
 	info.peerSession  = job.peers.isEmpty() ? 0 : job.peers.first().session;
 	info.incoming	  = false;
 	info.fileName	  = job.fileName;
@@ -1154,16 +1687,23 @@ void FileTransferEngine::updateSendState(SendJob &job, FTTransferInfo::State sta
 	info.passwordMode = job.passwordMode;
 	info.state		  = state;
 	info.error		  = error;
+	for (const SendPeer &peer : job.peers) {
+		if (peer.received)
+			info.deliveredRecipients.append(peer.session);
+		else if (state == FTTransferInfo::State::Failed || state == FTTransferInfo::State::PartiallyDelivered)
+			info.failedRecipients.append(peer.session);
+	}
 	emitInfo(info);
 }
 
-void FileTransferEngine::updateReceiveState(ReceiveJob &job, FTTransferInfo::State state,
-											const QString &error) {
+void FileTransferEngine::updateReceiveState(ReceiveJob &job, FTTransferInfo::State state, const QString &error) {
 	job.lastState = state;
 
 	FTTransferInfo info;
 	info.transferId   = job.transferId.isEmpty() ? job.manifest.transferId : job.transferId;
 	info.peerSession  = job.peerSession;
+	info.peerName        = job.peerName;
+	info.peerFingerprint = job.session_ ? job.session_->peerFingerprint() : QByteArray();
 	info.incoming	  = true;
 	info.fileName	  = job.fileName;
 	info.mimeType	  = job.mimeType;
@@ -1185,29 +1725,32 @@ void FileTransferEngine::emitSaveDone(std::shared_ptr< ReceiveJob > jobPtr) {
 	FTTransferInfo info;
 	info.transferId  = job.transferId;
 	info.peerSession = job.peerSession;
+	info.peerName        = job.peerName;
+	info.peerFingerprint = job.session_ ? job.session_->peerFingerprint() : QByteArray();
 	info.incoming	= true;
 	info.fileName	= job.fileName;
 	info.fileSize	= job.fileSize;
 	info.state		 = FTTransferInfo::State::Saved;
 	emitInfo(info);
-	QDir(job.tempDir).removeRecursively();
 	cleanupReceive(jobPtr);
 }
 
-void FileTransferEngine::emitSaveFailed(ReceiveJob &job) {
+void FileTransferEngine::emitSaveFailed(ReceiveJob &job, const QString &error) {
 	FTTransferInfo info;
 	info.transferId  = job.transferId;
 	info.peerSession = job.peerSession;
+	info.peerName        = job.peerName;
+	info.peerFingerprint = job.session_ ? job.session_->peerFingerprint() : QByteArray();
 	info.incoming	= true;
 	info.fileName	= job.fileName;
 	info.fileSize	= job.fileSize;
 	info.state		 = FTTransferInfo::State::Ready;
-	info.error		 = tr("Could not save the file");
+	info.error       = error.isEmpty() ? tr("Could not save the file") : error;
 	emitInfo(info);
 }
 
-std::shared_ptr< FileTransferEngine::ReceiveJob > FileTransferEngine::findReceiveByPeer(
-	unsigned int peerSession, const QByteArray &transferId) {
+std::shared_ptr< FileTransferEngine::ReceiveJob > FileTransferEngine::findReceiveByPeer(unsigned int peerSession,
+																						const QByteArray &transferId) {
 	auto it = m_receiveJobs.find(transferId);
 	if (it != m_receiveJobs.end() && it->get()->peerSession == peerSession) {
 		return *it;

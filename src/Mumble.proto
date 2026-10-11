@@ -251,6 +251,8 @@ message UserState {
 	// (FileTransferControl / FileData messages). The server uses this to
 	// skip clients that cannot receive them.
 	optional bool file_transfer_capable = 25;
+	// Can confirm authenticated receipt after file verification (relay version 1).
+	optional bool file_transfer_delivery_receipts = 26;
 }
 
 // Relays information on the bans. The client may send the BanList message to
@@ -613,6 +615,11 @@ message ServerConfig {
 	optional uint32 max_users = 6;
 	// The maximum file size (in bytes) accepted for chat file transfers.
 	optional uint64 max_file_transfer_size = 8;
+	// Version 1: recipient-only chunks, explicit relay refusals and delivery receipts.
+	optional uint32 file_transfer_relay_version = 9;
+	// Ciphertext upload/aggregate egress budgets, in bytes per second; zero = unlimited.
+	optional uint64 file_transfer_rate = 10;
+	optional uint64 file_transfer_aggregate_rate = 11;
 	// Whether using Mumble's recording feature is allowed on the server
 	optional bool recording_allowed = 7;
 }
@@ -660,9 +667,7 @@ message FileTransferControl {
 	required bytes payload = 3;
 }
 
-// Chat file transfer: one encrypted chunk of a file. The server broadcasts
-// it to all other file-transfer-capable users in the sender's channel and
-// never stores it.
+// Chat file transfer: one encrypted chunk, relayed only to explicit recipients.
 message FileData {
 	// The session ID of the client this chunk was sent from. Set by the
 	// server.
@@ -675,4 +680,11 @@ message FileData {
 	optional uint64 chunk_count = 4;
 	// AEAD ciphertext including the 16-byte authentication tag.
 	required bytes data = 5;
+	// Required for relay version 1; empty targets never broadcast.
+	repeated uint32 target_session = 6;
+	// Server-only refusal to the authenticated sender. Clients cannot set this.
+	optional string relay_error = 7;
+	// Server-only admission response. Retry means no recipient received this chunk.
+	optional uint32 relay_retry_after_ms = 8;
+	optional bool relay_accepted = 9;
 }

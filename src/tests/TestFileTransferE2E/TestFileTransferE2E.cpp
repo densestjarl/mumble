@@ -23,15 +23,19 @@
 #include "PQFileTransfer/identity/PeerTrustStore.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QSignalSpy>
-#include <QSslSocket>
 #include <QSqlDatabase>
+#include <QSslSocket>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtEndian>
 
 #include <memory>
@@ -66,13 +70,27 @@ public:
 			PQFT::PinnedPeer peer;
 			return m_trust->lookup(peer, m_serverDigest, username) ? peer.fingerprint : QByteArray();
 		});
+		m_pingTimer.setInterval(5000);
+		QObject::connect(&m_pingTimer, &QTimer::timeout, context, [this]() {
+			if (m_ownSession != 0) {
+				MumbleProto::Ping ping;
+				ping.set_timestamp(static_cast< quint64 >(QDateTime::currentMSecsSinceEpoch()));
+				sendMessage(Mumble::Protocol::TCPMessageType::Ping, ping);
+			}
+		});
+		m_pingTimer.start();
 	}
 
 	~E2EClient() {
 		// Members destroy in reverse declaration order (engine, trust,
 		// identity, then the DB handle), so the connection's users are gone
 		// by the time the handle closes.
+		m_engine.abortAll();
+		m_engine.setTransport({}, {});
+		m_engine.setTargetedChunkTransport({});
 		m_socket->abort();
+		delete m_socket;
+		m_socket = nullptr;
 		m_db.close();
 	}
 
@@ -99,6 +117,7 @@ public:
 		MumbleProto::UserState state;
 		state.set_session(m_ownSession);
 		state.set_file_transfer_capable(true);
+		state.set_file_transfer_delivery_receipts(true);
 		sendMessage(Mumble::Protocol::TCPMessageType::UserState, state);
 	}
 
@@ -115,14 +134,20 @@ public:
 				msg.set_payload(payload.constData(), static_cast< size_t >(payload.size()));
 				sendMessage(Mumble::Protocol::TCPMessageType::FileTransferControl, msg);
 			},
-			[this](const QByteArray &transferId, quint64 index, quint64 total, const QByteArray &data) {
+			{});
+		m_engine.setTargetedChunkTransport(
+			[this](const QList< unsigned int > &targets, const QByteArray &transferId, quint64 index, quint64 total,
+				   const QByteArray &data) {
 				MumbleProto::FileData msg;
+				for (unsigned int target : targets)
+					msg.add_target_session(target);
 				msg.set_transfer_id(transferId.constData(), static_cast< size_t >(transferId.size()));
 				msg.set_chunk_index(index);
 				msg.set_chunk_count(total);
 				msg.set_data(data.constData(), static_cast< size_t >(data.size()));
-				sendMessage(Mumble::Protocol::TCPMessageType::FileData, msg);
-			});
+				return sendMessage(Mumble::Protocol::TCPMessageType::FileData, msg);
+			},
+			true);
 	}
 
 	quint32 ownSession() const { return m_ownSession; }
@@ -138,6 +163,7 @@ public:
 
 	quint64 receivedFileControl = 0;
 	quint64 receivedFileData	= 0;
+	quint64 relayRetries        = 0;
 
 private:
 	template< typename Msg >
@@ -214,6 +240,21 @@ private:
 				MumbleProto::FileData msg;
 				if (msg.ParseFromArray(payload.constData(), static_cast< int >(payload.size()))
 					&& msg.has_actor() && msg.has_transfer_id() && msg.has_data()) {
+					if (msg.has_relay_accepted() || msg.has_relay_retry_after_ms()) {
+						if (msg.relay_retry_after_ms() > 0)
+							++relayRetries;
+						m_engine.relayResponse(
+							QByteArray(msg.transfer_id().data(), static_cast< int >(msg.transfer_id().size())),
+							msg.chunk_index(), msg.relay_accepted(), msg.relay_retry_after_ms(),
+							QString::fromStdString(msg.relay_error()));
+						break;
+					}
+					if (msg.has_relay_error()) {
+						m_engine.relayFailed(
+							QByteArray(msg.transfer_id().data(), static_cast< int >(msg.transfer_id().size())),
+							QString::fromStdString(msg.relay_error()));
+						break;
+					}
 					m_engine.onDataMessage(
 						msg.actor(),
 						QByteArray(msg.transfer_id().data(),
@@ -228,6 +269,7 @@ private:
 		}
 	}
 
+	QTimer m_pingTimer;
 	QString m_name;
 	QSslSocket *m_socket = nullptr;
 	QByteArray m_buffer;
@@ -252,6 +294,8 @@ private slots:
 	void endToEndTransfer();
 	void endToEndPasswordTransfer();
 	void capabilityGating();
+	void concurrentTargetedLargeDelivery();
+	void competingSendersRetryAggregateBudget();
 
 private:
 	bool startMurmur();
@@ -281,6 +325,7 @@ bool TestFileTransferE2E::startMurmur() {
 								 "port=%2\n"
 								 "autobanAttempts=0\n"
 								 "autobanTimeframe=0\n"
+								 "filebandwidthaggregate=8000000\n"
 								 "bonjour=false\n")
 					  .arg(m_serverDir.absolutePath())
 					  .arg(MurmurPort)
@@ -288,20 +333,35 @@ bool TestFileTransferE2E::startMurmur() {
 	}
 
 	m_murmur.setProcessChannelMode(QProcess::ForwardedChannels);
-	m_murmur.start(QStringLiteral(MUMBLE_TEST_MURMUR_BINARY), { "--ini", iniPath });
+#ifdef Q_OS_WIN
+	// The test runner uses the offscreen plugin, while the static Windows
+	// server only imports the native platform plugin.
+	QProcessEnvironment serverEnvironment = QProcessEnvironment::systemEnvironment();
+	serverEnvironment.remove(QStringLiteral("QT_QPA_PLATFORM"));
+	m_murmur.setProcessEnvironment(serverEnvironment);
+#endif
+	// Unix servers detach by default. Keep the fixture owned by QProcess so
+	// startup failures are visible and cleanup cannot leave a daemon behind.
+	m_murmur.start(QStringLiteral(MUMBLE_TEST_MURMUR_BINARY), { "--foreground", "--ini", iniPath });
 	if (!m_murmur.waitForStarted(10000)) {
 		return false;
 	}
 
 	// First start generates the server certificate; give it up to 60 s
-	return waitFor(
-		[]() {
+	bool ready = false;
+	waitFor(
+		[this, &ready]() {
+			if (m_murmur.state() == QProcess::NotRunning) {
+				return true;
+			}
 			QTcpSocket probe;
 			probe.connectToHost(QHostAddress::LocalHost, MurmurPort);
 			probe.waitForConnected(200);
-			return probe.state() == QAbstractSocket::ConnectedState;
+			ready = probe.state() == QAbstractSocket::ConnectedState;
+			return ready;
 		},
 		60000);
+	return ready;
 }
 
 bool TestFileTransferE2E::waitFor(const std::function< bool() > &predicate, int timeoutMSecs) {
@@ -355,10 +415,10 @@ void TestFileTransferE2E::endToEndTransfer() {
 	const QByteArray bobFp   = bob.identity()->fingerprint();
 	alice.trust()->checkAndPin(alice.serverDigest(), "bob", bobFp,
 							   PQFT::safetyNumber(aliceFp, bobFp));
-	alice.trust()->markVerified(alice.serverDigest(), "bob");
+	QVERIFY(alice.trust()->markVerified(alice.serverDigest(), "bob", bobFp));
 	bob.trust()->checkAndPin(bob.serverDigest(), "alice", aliceFp,
 							 PQFT::safetyNumber(aliceFp, bobFp));
-	bob.trust()->markVerified(bob.serverDigest(), "alice");
+	QVERIFY(bob.trust()->markVerified(bob.serverDigest(), "alice", aliceFp));
 
 	alice.installEngine();
 	bob.installEngine();
@@ -368,7 +428,7 @@ void TestFileTransferE2E::endToEndTransfer() {
 	const QString source = writeTestFile("e2e-payload.bin", 1536 * 1024);   // 6 chunks
 	QVERIFY(!source.isEmpty());
 	QCOMPARE(alice.engine().startSend(source, "application/octet-stream", false, QByteArray(),
-									  { bob.sessionOf("bob") }),
+									  { { bob.sessionOf("bob"), bobFp } }),
 			 1536ull * 1024);
 
 	QByteArray readyTransfer;
@@ -420,10 +480,10 @@ void TestFileTransferE2E::endToEndPasswordTransfer() {
 	const QByteArray bobFp   = bob.identity()->fingerprint();
 	alice.trust()->checkAndPin(alice.serverDigest(), "dave", bobFp,
 							   PQFT::safetyNumber(aliceFp, bobFp));
-	alice.trust()->markVerified(alice.serverDigest(), "dave");
+	QVERIFY(alice.trust()->markVerified(alice.serverDigest(), "dave", bobFp));
 	bob.trust()->checkAndPin(bob.serverDigest(), "carol", aliceFp,
 							 PQFT::safetyNumber(aliceFp, bobFp));
-	bob.trust()->markVerified(bob.serverDigest(), "carol");
+	QVERIFY(bob.trust()->markVerified(bob.serverDigest(), "carol", aliceFp));
 
 	alice.installEngine();
 	bob.installEngine();
@@ -433,8 +493,8 @@ void TestFileTransferE2E::endToEndPasswordTransfer() {
 
 	const QString source = writeTestFile("e2e-pw-payload.bin", 512 * 1024);
 	QVERIFY(!source.isEmpty());
-	QCOMPARE(alice.engine().startSend(source, "application/octet-stream", true,
-									  QByteArray("e2e file password"), { bob.sessionOf("dave") }),
+	QCOMPARE(alice.engine().startSend(source, "application/octet-stream", true, QByteArray("e2e file password"),
+									  { { bob.sessionOf("dave"), bobFp } }),
 			 512ull * 1024);
 
 	QByteArray passwordTransfer;
@@ -494,7 +554,7 @@ void TestFileTransferE2E::capabilityGating() {
 
 	QVERIFY(eve.connectToServer());
 	QVERIFY(waitFor([&]() { return eve.ownSession() != 0; }, 15000));
-	// eve never announces the capability
+	eve.announceCapability(); // Capable but deliberately unselected.
 
 	QVERIFY(waitFor([&]() { return alice.knowsPeer("frank") && alice.knowsPeer("eve"); }, 15000));
 	QVERIFY(waitFor([&]() { return alice.peerIsCapable("frank"); }, 15000));
@@ -505,10 +565,10 @@ void TestFileTransferE2E::capabilityGating() {
 	const QByteArray bobFp   = bob.identity()->fingerprint();
 	alice.trust()->checkAndPin(alice.serverDigest(), "frank", bobFp,
 							   PQFT::safetyNumber(aliceFp, bobFp));
-	alice.trust()->markVerified(alice.serverDigest(), "frank");
+	QVERIFY(alice.trust()->markVerified(alice.serverDigest(), "frank", bobFp));
 	bob.trust()->checkAndPin(bob.serverDigest(), "erin", aliceFp,
 							 PQFT::safetyNumber(aliceFp, bobFp));
-	bob.trust()->markVerified(bob.serverDigest(), "erin");
+	QVERIFY(bob.trust()->markVerified(bob.serverDigest(), "erin", aliceFp));
 
 	alice.installEngine();
 	bob.installEngine();
@@ -518,7 +578,7 @@ void TestFileTransferE2E::capabilityGating() {
 	const QString source = writeTestFile("e2e-gate-payload.bin", 64 * 1024);
 	QVERIFY(!source.isEmpty());
 	QCOMPARE(alice.engine().startSend(source, "application/octet-stream", false, QByteArray(),
-									  { bob.sessionOf("frank") }),
+									  { { bob.sessionOf("frank"), bobFp } }),
 			 64ull * 1024);
 
 	QByteArray readyTransfer;
@@ -535,10 +595,167 @@ void TestFileTransferE2E::capabilityGating() {
 		},
 		60000));
 
-	// The plain client saw nothing at all
+	// Even a capable unselected client receives no file chunks.
 	QCOMPARE(eve.receivedFileControl, quint64(0));
 	QCOMPARE(eve.receivedFileData, quint64(0));
 	QVERIFY(!readyTransfer.isEmpty());
+}
+
+void TestFileTransferE2E::concurrentTargetedLargeDelivery() {
+	E2EClient sender("large-sender", m_tempDir.filePath("large-sender.sqlite"), this);
+	E2EClient first("large-first", m_tempDir.filePath("large-first.sqlite"), this);
+	E2EClient second("large-second", m_tempDir.filePath("large-second.sqlite"), this);
+	E2EClient other("large-other", m_tempDir.filePath("large-other.sqlite"), this);
+	for (E2EClient *client : { &sender, &first, &second, &other }) {
+		QVERIFY(client->connectToServer());
+		QVERIFY(waitFor([&]() { return client->ownSession() != 0; }, 15000));
+		client->announceCapability();
+	}
+	QVERIFY(waitFor(
+		[&]() {
+			return sender.peerIsCapable("large-first") && sender.peerIsCapable("large-second")
+				   && sender.peerIsCapable("large-other") && first.knowsPeer("large-sender")
+				   && second.knowsPeer("large-sender");
+		},
+		15000));
+	for (E2EClient *client : { &sender, &first, &second })
+		QVERIFY(client->identity()->createIdentity(QStringLiteral("large-isolated-passphrase")));
+	const QByteArray senderFp = sender.identity()->fingerprint();
+	for (const auto &pair :
+		 { qMakePair(&first, QStringLiteral("large-first")), qMakePair(&second, QStringLiteral("large-second")) }) {
+		QCOMPARE(sender.trust()->checkAndPin(sender.serverDigest(), pair.second, pair.first->identity()->fingerprint(),
+											 "test"),
+				 PQFT::TrustState::Pinned);
+		QCOMPARE(pair.first->trust()->checkAndPin(pair.first->serverDigest(), "large-sender", senderFp, "test"),
+				 PQFT::TrustState::Pinned);
+	}
+	for (E2EClient *client : { &sender, &first, &second })
+		client->installEngine();
+	PQFT::FileTransferEngine::Config config;
+	config.sendRateBytesPerSecond = 900000;
+	config.aggregateSendRate      = 900000;
+	config.chunkSize              = 128 * 1024;
+	sender.engine().setConfig(config);
+	QSignalSpy sent(&sender.engine(), &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy firstUpdates(&first.engine(), &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy secondUpdates(&second.engine(), &PQFT::FileTransferEngine::transferUpdated);
+	const QString large = writeTestFile("beyond-meter-window.bin", 96 * 1024 * 1024);
+	const QString small = writeTestFile("concurrent-distinct.bin", 3 * 1024 * 1024);
+	QCOMPARE(sender.engine().startSend(large, "application/octet-stream", false, {},
+									   { { first.ownSession(), first.identity()->fingerprint() } }),
+			 96ull * 1024 * 1024);
+	QCOMPARE(sender.engine().startSend(small, "application/octet-stream", false, {},
+									   { { second.ownSession(), second.identity()->fingerprint() } }),
+			 3ull * 1024 * 1024);
+	auto readyId = [](const QSignalSpy &updates) {
+		for (const auto &event : updates) {
+			const auto info = event.first().value< PQFT::FTTransferInfo >();
+			if (info.state == PQFT::FTTransferInfo::State::Ready)
+				return info.transferId;
+		}
+		return QByteArray();
+	};
+	QVERIFY(waitFor([&]() { return !readyId(firstUpdates).isEmpty() && !readyId(secondUpdates).isEmpty(); }, 180000));
+	QCOMPARE(other.receivedFileData, quint64(0));
+	QCOMPARE(other.receivedFileControl, quint64(0));
+	QCOMPARE(first.receivedFileData, quint64(768));
+	QCOMPARE(second.receivedFileData, quint64(24));
+	auto deliveredCount = [&]() {
+		int delivered = 0;
+		for (const auto &event : sent)
+			if (event.first().value< PQFT::FTTransferInfo >().state == PQFT::FTTransferInfo::State::Saved)
+				++delivered;
+		return delivered;
+	};
+	QTRY_COMPARE_WITH_TIMEOUT(deliveredCount(), 2, 10000);
+	const QString firstTarget  = m_tempDir.filePath("large-first-delivered.bin");
+	const QString secondTarget = m_tempDir.filePath("large-second-delivered.bin");
+	first.engine().saveTransferAs(readyId(firstUpdates), firstTarget);
+	second.engine().saveTransferAs(readyId(secondUpdates), secondTarget);
+	auto hash = [](const QString &path) {
+		QFile file(path);
+		if (!file.open(QIODevice::ReadOnly))
+			return QByteArray();
+		QCryptographicHash digest(QCryptographicHash::Sha256);
+		if (!digest.addData(&file))
+			return QByteArray();
+		return digest.result();
+	};
+	QVERIFY(!hash(firstTarget).isEmpty());
+	QCOMPARE(hash(firstTarget), hash(large));
+	QCOMPARE(hash(secondTarget), hash(small));
+}
+
+void TestFileTransferE2E::competingSendersRetryAggregateBudget() {
+	E2EClient first("competing-first", m_tempDir.filePath("competing-first.sqlite"), this);
+	E2EClient second("competing-second", m_tempDir.filePath("competing-second.sqlite"), this);
+	E2EClient recipient("competing-recipient", m_tempDir.filePath("competing-recipient.sqlite"), this);
+	for (E2EClient *client : { &first, &second, &recipient }) {
+		QVERIFY(client->connectToServer());
+		QVERIFY(waitFor([&]() { return client->ownSession() != 0; }, 15000));
+		client->announceCapability();
+		QVERIFY(client->identity()->createIdentity(QStringLiteral("competing-isolated-passphrase")));
+	}
+	QVERIFY(waitFor(
+		[&]() {
+			return first.peerIsCapable("competing-recipient") && second.peerIsCapable("competing-recipient")
+				   && recipient.knowsPeer("competing-first") && recipient.knowsPeer("competing-second");
+		},
+		15000));
+	for (const auto &pair : { qMakePair(&first, QStringLiteral("competing-first")),
+							  qMakePair(&second, QStringLiteral("competing-second")) }) {
+		QCOMPARE(pair.first->trust()->checkAndPin(pair.first->serverDigest(), "competing-recipient",
+												  recipient.identity()->fingerprint(), "test"),
+				 PQFT::TrustState::Pinned);
+		QCOMPARE(recipient.trust()->checkAndPin(recipient.serverDigest(), pair.second,
+												pair.first->identity()->fingerprint(), "test"),
+				 PQFT::TrustState::Pinned);
+	}
+	for (E2EClient *client : { &first, &second, &recipient })
+		client->installEngine();
+	PQFT::FileTransferEngine::Config config;
+	config.sendRateBytesPerSecond = 900000;
+	config.aggregateSendRate      = 900000;
+	config.chunkSize              = 128 * 1024;
+	first.engine().setConfig(config);
+	second.engine().setConfig(config);
+	QSignalSpy firstUpdates(&first.engine(), &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy secondUpdates(&second.engine(), &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy received(&recipient.engine(), &PQFT::FileTransferEngine::transferUpdated);
+	const QString sourceA = writeTestFile("competing-a.bin", 48 * 1024 * 1024);
+	const QString sourceB = writeTestFile("competing-b.bin", 48 * 1024 * 1024);
+	QVERIFY(first.engine().startSend(sourceA, "application/octet-stream", false, {},
+									 { { recipient.ownSession(), recipient.identity()->fingerprint() } })
+			> 0);
+	QVERIFY(second.engine().startSend(sourceB, "application/octet-stream", false, {},
+									  { { recipient.ownSession(), recipient.identity()->fingerprint() } })
+			> 0);
+	auto delivered = [](const QSignalSpy &updates) {
+		for (const auto &event : updates)
+			if (event.first().value< PQFT::FTTransferInfo >().state == PQFT::FTTransferInfo::State::Saved)
+				return true;
+		return false;
+	};
+	QVERIFY(waitFor([&]() { return delivered(firstUpdates) && delivered(secondUpdates); }, 180000));
+	QVERIFY(first.relayRetries + second.relayRetries > 0);
+	QCOMPARE(recipient.receivedFileData, quint64(768));
+	QCOMPARE(first.receivedFileControl > 0 && second.receivedFileControl > 0, true);
+	int readyCount = 0;
+	for (const auto &event : received) {
+		const auto info = event.first().value< PQFT::FTTransferInfo >();
+		if (info.state != PQFT::FTTransferInfo::State::Ready)
+			continue;
+		const QString target = m_tempDir.filePath(QStringLiteral("competing-received-%1.bin").arg(++readyCount));
+		recipient.engine().saveTransferAs(info.transferId, target);
+		QFile original(info.peerSession == first.ownSession() ? sourceA : sourceB), saved(target);
+		QVERIFY(original.open(QIODevice::ReadOnly));
+		QVERIFY(saved.open(QIODevice::ReadOnly));
+		QCryptographicHash sourceHash(QCryptographicHash::Sha256), targetHash(QCryptographicHash::Sha256);
+		QVERIFY(sourceHash.addData(&original));
+		QVERIFY(targetHash.addData(&saved));
+		QCOMPARE(sourceHash.result(), targetHash.result());
+	}
+	QCOMPARE(readyCount, 2);
 }
 
 void TestFileTransferE2E::cleanupTestCase() {

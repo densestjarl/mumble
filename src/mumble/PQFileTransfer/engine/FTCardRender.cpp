@@ -36,17 +36,24 @@ QString stateLabel(const FTTransferInfo &info) {
 		case FTTransferInfo::State::Handshaking:
 			return FileTransferEngine::tr("Connecting…");
 		case FTTransferInfo::State::VerifyingIdentity:
-			return FileTransferEngine::tr("Verify sender identity");
+			return info.incoming ? FileTransferEngine::tr("Verify sender identity")
+								 : FileTransferEngine::tr("Verify recipient identity");
 		case FTTransferInfo::State::WaitingPassword:
 			return FileTransferEngine::tr("Password required — click to enter");
 		case FTTransferInfo::State::Transferring:
 			return FileTransferEngine::tr("Transferring…");
 		case FTTransferInfo::State::Verifying:
-			return FileTransferEngine::tr("Verifying…");
+			return info.incoming ? FileTransferEngine::tr("Verifying…")
+								 : FileTransferEngine::tr("Waiting for delivery confirmation…");
 		case FTTransferInfo::State::Ready:
 			return FileTransferEngine::tr("Click to save");
 		case FTTransferInfo::State::Saved:
-			return FileTransferEngine::tr("Saved");
+			return info.incoming ? FileTransferEngine::tr("Saved") : FileTransferEngine::tr("Delivered");
+		case FTTransferInfo::State::PartiallyDelivered:
+			return FileTransferEngine::tr("Delivered to %1 of %2 recipients. %3")
+				.arg(info.deliveredRecipients.size())
+				.arg(info.deliveredRecipients.size() + info.failedRecipients.size())
+				.arg(info.error);
 		case FTTransferInfo::State::Failed:
 			return info.error.isEmpty() ? FileTransferEngine::tr("Failed") : info.error;
 		case FTTransferInfo::State::Aborted:
@@ -57,9 +64,27 @@ QString stateLabel(const FTTransferInfo &info) {
 } // namespace
 
 QString fileCardToHtml(const QByteArray &transferId) {
-	return QStringLiteral("<br /><img src=\"data:application/mumble-file;base64,%1\" alt=\"%2\" />")
-		.arg(QString::fromLatin1(transferId.toBase64()),
-			 QString::fromLatin1(transferId.toHex()));
+	const QString id = QString::fromLatin1(transferId.toHex());
+	return QStringLiteral("<br /><img src=\"data:application/mumble-file;base64,%1\" alt=\"%2\" />"
+						  "<br /><a href=\"mumble-file:/%3\">%4</a>")
+		.arg(QString::fromLatin1(transferId.toBase64()), FileTransferEngine::tr("File transfer").toHtmlEscaped(), id,
+			 FileTransferEngine::tr("Save or manage file").toHtmlEscaped());
+}
+
+QByteArray fileCardActionId(const QUrl &url, bool &ok) {
+	ok = false;
+	if (url.scheme() != QLatin1String("mumble-file") || !url.authority().isEmpty() || url.hasQuery()
+		|| url.hasFragment())
+		return {};
+	const QByteArray path = url.path(QUrl::FullyEncoded).toLatin1();
+	if (path.size() != TransferIdSize * 2 + 1 || !path.startsWith('/'))
+		return {};
+	const QByteArray hex = path.mid(1);
+	const QByteArray id  = QByteArray::fromHex(hex);
+	if (id.size() != TransferIdSize || id.toHex() != hex)
+		return {};
+	ok = true;
+	return id;
 }
 
 QByteArray fileCardTransferId(const QUrl &url, bool &ok) {
@@ -81,6 +106,8 @@ QByteArray fileCardTransferId(const QUrl &url, bool &ok) {
 		payload = QByteArray::fromBase64(payload);
 		data.chop(7);
 	}
+	if (data != QByteArray("application/mumble-file"))
+		return {};
 	if (payload.size() == TransferIdSize) {
 		ok = true;
 	}

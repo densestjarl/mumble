@@ -388,6 +388,10 @@ add_custom_command(
 	ARGS "${CMAKE_SOURCE_DIR}/scripts/generate_flag_qrc.py" --flag-dir "${CMAKE_SOURCE_DIR}/3rdparty/flag-icons/flags/4x3" --output "${CMAKE_BINARY_DIR}/mumble_flags.qrc"
 	COMMENT "Generating mumble_flags.qrc"
 )
+if(NOT file-sharing)
+	list(REMOVE_ITEM MUMBLE_SOURCES "FileTransferConfig.cpp" "FileTransferConfig.h" "FileTransferConfig.ui")
+endif()
+
 list(APPEND MUMBLE_SOURCES "${CMAKE_BINARY_DIR}/mumble_flags.qrc")
 
 add_library(mumble_client_object_lib OBJECT ${MUMBLE_SOURCES})
@@ -743,6 +747,8 @@ else()
 		)
 
 		if(static AND TARGET Qt6::QCocoaIntegrationPlugin)
+			include("${CMAKE_SOURCE_DIR}/cmake/qt-macos-accessibility.cmake")
+			mumble_repair_qt_macos_accessibility()
 			include_qt_plugin(mumble_client_object_lib PRIVATE QCocoaIntegrationPlugin)
 			target_link_libraries(mumble_client_object_lib PUBLIC Qt6::QCocoaIntegrationPlugin)
 		endif()
@@ -992,6 +998,7 @@ if(screen-sharing)
 		)
 
 		file(GLOB FFMPEG_RUNTIME_LIBRARIES CONFIGURE_DEPENDS "${FFMPEG_DIR}/bin/*.dll")
+		set_property(TARGET mumble_client_object_lib PROPERTY MUMBLE_FFMPEG_RUNTIME_DIRECTORY "${FFMPEG_DIR}/bin")
 		if(NOT FFMPEG_RUNTIME_LIBRARIES)
 			message(FATAL_ERROR "No FFmpeg runtime libraries found in ${FFMPEG_DIR}/bin")
 		endif()
@@ -1253,6 +1260,7 @@ if(file-sharing)
 		"PQFileTransfer/engine/FileTransferEngine.h"
 		"PQFileTransfer/engine/FileTransferEngine.cpp"
 		"PQFileTransfer/engine/FileTransferManager.h"
+		"PQFileTransfer/engine/FileTransferTransport.h"
 		"PQFileTransfer/engine/FileTransferManager.cpp"
 		"PQFileTransfer/engine/FileTransferSession.h"
 		"PQFileTransfer/engine/FileTransferSession.cpp"
@@ -1260,6 +1268,8 @@ if(file-sharing)
 		"PQFileTransfer/engine/FTManifest.cpp"
 		"PQFileTransfer/engine/FTCardRender.h"
 		"PQFileTransfer/engine/FTCardRender.cpp"
+		"PQFileTransfer/engine/FTSavePolicy.h"
+		"PQFileTransfer/engine/FTSavePolicy.cpp"
 		"PQFileTransfer/widgets/FileTransferDialogs.h"
 		"PQFileTransfer/widgets/FileTransferDialogs.cpp"
 	)

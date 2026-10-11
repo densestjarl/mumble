@@ -36,6 +36,7 @@
 #include "ServerAddress.h"
 #include "Timer.h"
 
+#include <atomic>
 #include <memory>
 
 class Connection;
@@ -50,6 +51,12 @@ public:
 	Mumble::Protocol::TCPMessageType type;
 	QByteArray qbaMsg;
 	bool bFlush;
+	int sourceConnectionID = -1;
+	std::shared_ptr< std::atomic< qint64 > > inboundBudget;
+	~ServerHandlerMessageEvent() override {
+		if (inboundBudget)
+			inboundBudget->fetch_sub(qbaMsg.size());
+	}
 	ServerHandlerMessageEvent(const QByteArray &msg, Mumble::Protocol::TCPMessageType type, bool flush = false);
 };
 
@@ -74,6 +81,12 @@ private:
 	Q_DISABLE_COPY(ServerHandler)
 
 	Database *database;
+	std::shared_ptr< std::atomic< qint64 > > m_fileInboundBytes = std::make_shared< std::atomic< qint64 > >(0);
+	std::shared_ptr< std::atomic< qint64 > > m_fileWorkerInboundBytes;
+	QMutex m_fileReceiveBudgetMutex;
+	std::atomic< qint64 > m_fileQueuedBytes{ 0 };
+	std::atomic< qint64 > m_fileControlQueuedBytes{ 0 };
+	std::atomic< qint64 > m_fileSocketBytes{ 0 };
 
 	static QMutex nextConnectionIDMutex;
 	static int nextConnectionID;
@@ -91,7 +104,7 @@ protected:
 	unsigned short usResolvedPort;
 	bool bUdp;
 	bool bStrong;
-	int connectionID;
+	std::atomic< int > connectionID;
 	Mumble::Protocol::UDPPingEncoder< Mumble::Protocol::Role::Client > m_udpPingEncoder;
 	Mumble::Protocol::UDPDecoder< Mumble::Protocol::Role::Client > m_udpDecoder;
 	Mumble::Protocol::UDPDecoder< Mumble::Protocol::Role::Client > m_tcpTunnelDecoder;
@@ -168,7 +181,9 @@ public:
 	void setServerSynchronized(bool synchronized);
 
 #define PROCESS_MUMBLE_TCP_MESSAGE(name, value) \
-	void sendMessage(const MumbleProto::name &msg) { sendProtoMessage(msg, Mumble::Protocol::TCPMessageType::name); }
+	void sendMessage(const MumbleProto::name &msg) {                   \
+		sendProtoMessage(msg, Mumble::Protocol::TCPMessageType::name); \
+	}
 	MUMBLE_ALL_TCP_MESSAGES
 #undef PROCESS_MUMBLE_TCP_MESSAGE
 
@@ -189,7 +204,14 @@ public:
 	void banUser(unsigned int uiSession, const QString &reason, bool banCertificate, bool banIP);
 	void sendUserTextMessage(unsigned int uiSession, const QString &message_);
 	void sendChannelTextMessage(unsigned int channel, const QString &message_, bool tree);
+	void setFileTransferReceiveBudget(std::shared_ptr< std::atomic< qint64 > > budget) {
+		QMutexLocker lock(&m_fileReceiveBudgetMutex);
+		m_fileWorkerInboundBytes = std::move(budget);
+	}
 	void sendFileTransferControl(const QList< unsigned int > &targetSessions, const QByteArray &payload);
+	bool queueFileTransferControl(unsigned int target, const QByteArray &payload, int expectedConnectionID);
+	bool queueFileData(const QList< unsigned int > &targets, const QByteArray &transferId, quint64 index, quint64 total,
+					   const QByteArray &data, int expectedConnectionID);
 	void sendFileData(const QByteArray &transferId, quint64 chunkIndex, std::optional< quint64 > chunkCount,
 					  const QByteArray &data);
 	void setUserComment(unsigned int uiSession, const QString &comment);
@@ -220,6 +242,8 @@ signals:
 	void abortRequested();
 protected slots:
 	void message(Mumble::Protocol::TCPMessageType type, const QByteArray &);
+	void fileMessageRejected(Mumble::Protocol::TCPMessageType type, const QByteArray &);
+	void handleMessage(Mumble::Protocol::TCPMessageType type, const QByteArray &, bool admissionExpired);
 	void serverConnectionConnected();
 	void serverConnectionTimeoutOnConnect();
 	void serverConnectionStateChanged(QAbstractSocket::SocketState);
