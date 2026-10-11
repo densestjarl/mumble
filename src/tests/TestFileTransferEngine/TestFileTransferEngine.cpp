@@ -55,6 +55,9 @@ using namespace PQFTTest;
 class TestFileTransferEngine : public QObject {
 	Q_OBJECT
 private slots:
+	void relayRetriesKeepCiphertextAndRequireAdmission();
+	void incompleteRecipientHandshakeSendsNoContent();
+	void missingReceiptReportsPartialDelivery();
 	void initTestCase();
 	void cleanupTestCase();
 
@@ -142,7 +145,7 @@ void TestFileTransferEngine::cancelledPromptTimerCannotRemoveReplacementHandshak
 	const QPointer< QTimer > oldTimer = timers.first();
 	QVERIFY(oldTimer->isActive());
 	if (decline) {
-		engine.resolveFirstContact(AliceSession, false);
+		engine.resolveFirstContact(AliceSession, false, prompts.first().at(5).toULongLong());
 	} else {
 		engine.abortAll();
 	}
@@ -232,6 +235,109 @@ struct EnginePair {
 	}
 };
 } // namespace
+
+void TestFileTransferEngine::relayRetriesKeepCiphertextAndRequireAdmission() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config config;
+	config.sendRateBytesPerSecond = 0;
+	config.chunkSize              = 64 * 1024;
+	pair.alice.setConfig(config);
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy received(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	QByteArray firstCiphertext;
+	QByteArray transfer;
+	int attempts           = 0;
+	bool ciphertextChanged = false;
+	pair.alice.setTargetedChunkTransport(
+		[&](const QList< unsigned int > &targets, const QByteArray &id, quint64 index, quint64 total,
+			const QByteArray &ciphertext) {
+			transfer = id;
+			if (firstCiphertext.isEmpty())
+				firstCiphertext = ciphertext;
+			ciphertextChanged = ciphertextChanged || firstCiphertext != ciphertext || index != 0
+								|| targets != QList< unsigned int >{ BobSession };
+			++attempts;
+			if (attempts == 1)
+				return false; // local queue backpressure
+			QTimer::singleShot(0, &pair.alice, [&, id, index, total, ciphertext]() {
+				if (attempts == 2) {
+					pair.alice.relayResponse(id, index, false, 100, QStringLiteral("aggregate busy"));
+				} else {
+					pair.bob.onDataMessage(AliceSession, id, index, total, ciphertext);
+					pair.alice.relayResponse(id, index + 1, true, 0, {}); // unrelated acknowledgement
+					pair.alice.relayResponse(id, index, true, 0, {});
+				}
+			});
+			return true;
+		},
+		true);
+	QVERIFY(pair.alice.startSend(writeTestFile(64 * 1024), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp } })
+			> 0);
+	QTRY_VERIFY_WITH_TIMEOUT(attempts >= 2, 5000);
+	QVERIFY(!sawState(sent, transfer, PQFT::FTTransferInfo::State::Saved));
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, transfer, PQFT::FTTransferInfo::State::Saved), 10000);
+	QVERIFY(sawState(received, transfer, PQFT::FTTransferInfo::State::Ready));
+	QCOMPARE(attempts, 3);
+	QVERIFY(!ciphertextChanged);
+}
+
+void TestFileTransferEngine::incompleteRecipientHandshakeSendsNoContent() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config config;
+	config.handshakeTimeoutMSecs = 100;
+	pair.alice.setConfig(config);
+	int chunks = 0;
+	pair.alice.setTransport(
+		[&](unsigned int target, const QByteArray &frame) {
+			if (target == BobSession)
+				pair.bob.onControlMessage(AliceSession, frame);
+		},
+		[&](const QByteArray &, quint64, quint64, const QByteArray &) { ++chunks; });
+	QSignalSpy updates(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QVERIFY(pair.alice.startSend(writeTestFile(64 * 1024), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp }, { 3, m_bobFp } })
+			> 0);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(updates, {}, PQFT::FTTransferInfo::State::Failed), 5000);
+	QCOMPARE(chunks, 0);
+	QVERIFY(!sawState(updates, {}, PQFT::FTTransferInfo::State::Saved));
+}
+
+void TestFileTransferEngine::missingReceiptReportsPartialDelivery() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine third;
+	third.setIdentity(m_bob.publicKey, [&](QByteArray &sig, const QByteArray &msg, const QByteArray &ctx) {
+		PQFT::SigMLDSA65 signer;
+		return signer.sign(sig, m_bob.secretKey, msg, ctx);
+	});
+	third.setPinLookup([&](unsigned int) { return m_aliceFp; });
+	third.setTransport(
+		[&](unsigned int, const QByteArray &frame) {
+			if ((static_cast< unsigned char >(frame[0]) & 15) != PQFT::FTFrame::TypeReceipt)
+				pair.alice.onControlMessage(3, frame);
+		},
+		{});
+	pair.alice.setTransport(
+		[&](unsigned int target, const QByteArray &frame) {
+			(target == BobSession ? pair.bob : third).onControlMessage(AliceSession, frame);
+		},
+		[&](const QByteArray &id, quint64 index, quint64 total, const QByteArray &ciphertext) {
+			pair.bob.onDataMessage(AliceSession, id, index, total, ciphertext);
+			third.onDataMessage(AliceSession, id, index, total, ciphertext);
+		});
+	PQFT::FileTransferEngine::Config config;
+	config.receiveIdleTimeoutMSecs = 1000;
+	pair.alice.setConfig(config);
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QVERIFY(pair.alice.startSend(writeTestFile(64 * 1024), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp }, { 3, m_bobFp } })
+			> 0);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::PartiallyDelivered), 10000);
+	QVERIFY(!sawState(sent, {}, PQFT::FTTransferInfo::State::Saved));
+	const auto final = sent.last().first().value< PQFT::FTTransferInfo >();
+	QCOMPARE(final.deliveredRecipients, QList< unsigned int >{ BobSession });
+	QCOMPARE(final.failedRecipients, QList< unsigned int >{ 3 });
+}
 
 void TestFileTransferEngine::sendingRespectsConfiguredRate_data() {
 	QTest::addColumn< quint32 >("rate");
@@ -739,7 +845,11 @@ void TestFileTransferEngine::privateReceiveStorage() {
 	QVERIFY(pair.alice.startSend(source, "application/octet-stream", passwordMode,
 								 QByteArray("private fixture password"), { { BobSession, m_bobFp } })
 			> 0);
-	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::Saved), 10000);
+	QTRY_VERIFY_WITH_TIMEOUT(
+		sawState(sent, {}, passwordMode ? PQFT::FTTransferInfo::State::Verifying : PQFT::FTTransferInfo::State::Saved),
+		10000);
+	if (passwordMode)
+		QVERIFY(!sawState(sent, {}, PQFT::FTTransferInfo::State::Saved));
 	QByteArray transfer;
 	for (const auto &args : updates) {
 		const auto info = args.at(0).value< PQFT::FTTransferInfo >();
@@ -841,7 +951,8 @@ void TestFileTransferEngine::earlyChunksKeepTheirTransferIdentity() {
 	QVERIFY(unrelated != transfer);
 	pair.bob.onDataMessage(AliceSession, unrelated, 0, 1, QByteArray(100, 'x'));
 	// Legitimate early chunks must still survive until their own manifest arrives.
-	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, transfer, PQFT::FTTransferInfo::State::Saved), 3000);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, transfer, PQFT::FTTransferInfo::State::Verifying), 3000);
+	QVERIFY(!sawState(sent, transfer, PQFT::FTTransferInfo::State::Saved));
 	while (!controls.isEmpty())
 		pair.bob.onControlMessage(AliceSession, controls.takeFirst());
 	QVERIFY(sawState(received, transfer, PQFT::FTTransferInfo::State::Ready));
@@ -1273,10 +1384,9 @@ void TestFileTransferEngine::latePasswordSpoolsAllChunks() {
 								  { { BobSession, m_bobFp } }),
 			 200ull * 1024);
 
-	// Let the sender run to completion BEFORE any password is provided.
-	QTRY_VERIFY_WITH_TIMEOUT(sawState(aliceUpdates, QByteArray(),
-									 PQFT::FTTransferInfo::State::Saved),
-							 30000);
+	// Let the sender finish uploading BEFORE any password is provided.
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(aliceUpdates, QByteArray(), PQFT::FTTransferInfo::State::Verifying), 30000);
+	QVERIFY(!sawState(aliceUpdates, {}, PQFT::FTTransferInfo::State::Saved));
 	QVERIFY(sawState(bobUpdates, QByteArray(), PQFT::FTTransferInfo::State::WaitingPassword));
 
 	QByteArray passwordTransfer;
@@ -1456,7 +1566,7 @@ void TestFileTransferEngine::firstContactPinFlags() {
 		QTRY_VERIFY_WITH_TIMEOUT(bobFirstContact.count() >= 1, 10000);
 		QCOMPARE(bobFirstContact.first().at(4).toBool(), false);
 
-		pair.bob.resolveFirstContact(AliceSession, false);   // declined
+		pair.bob.resolveFirstContact(AliceSession, false, bobFirstContact.first().at(5).toULongLong()); // declined
 
 		// No M2 was ever sent: the initiator fails once its handshake
 		// timeout expires instead of hanging.
@@ -1484,6 +1594,8 @@ void TestFileTransferEngine::firstContactPinFlags() {
 
 		QTRY_VERIFY_WITH_TIMEOUT(aliceFirstContact.count() >= 1, 30000);
 		QCOMPARE(aliceFirstContact.first().at(4).toBool(), true);
+		QVERIFY(!sawState(bobUpdates, QByteArray(), PQFT::FTTransferInfo::State::Ready));
+		pair.alice.resolveSendAuthorization(BobSession, aliceFirstContact.first().at(3).toByteArray(), true);
 		QTRY_VERIFY_WITH_TIMEOUT(sawState(bobUpdates, QByteArray(),
 										 PQFT::FTTransferInfo::State::Ready),
 								 30000);

@@ -124,6 +124,9 @@ class Peer:
 async def scenario(args, process):
     peers = []
     received = []
+    slow_received = []
+    admissions = asyncio.Queue()
+    retries = 0
     latencies = []
     rss = []
     pending = {}
@@ -137,13 +140,25 @@ async def scenario(args, process):
         peer = Peer(args, name)
         peers.append(peer)
         await peer.connect()
-        await peer.send(9, integer(25, 1))
+        await peer.send(9, integer(25, 1) + integer(26, 1))
         return peer
 
-    async def consume(peer, collect=False):
+    async def consume(peer, collect=False, slow_collect=False):
         try:
             while True:
                 kind, data = await peer.packet()
+                if kind == 28 and peer is sender:
+                    assert one(data, 1) == sender.session and one(data, 2) == transfer
+                    if one(data, 9) == 1:
+                        admissions.put_nowait((True, 0))
+                    elif one(data, 8, 0) > 0:
+                        admissions.put_nowait((False, one(data, 8)))
+                    else:
+                        raise AssertionError("Unexpected fatal relay refusal")
+                if kind == 28 and slow_collect:
+                    assert one(data, 2) == transfer and one(data, 5) == payload
+                    assert one(data, 1) == sender.session
+                    slow_received.append(one(data, 3))
                 if kind == 28 and collect:
                     assert one(data, 2) == transfer and one(data, 5) == payload
                     assert one(data, 1) == sender.session
@@ -189,62 +204,46 @@ async def scenario(args, process):
         )
         assert one(healthy.users[sender.session], 25) == 1
         slow.writer.transport.pause_reading()
+        async def resume_slow():
+            await asyncio.sleep(8)
+            slow.writer.transport.resume_reading()
+
         tasks = [
             asyncio.create_task(consume(healthy, True)),
             asyncio.create_task(consume(sender)),
+            asyncio.create_task(consume(slow, slow_collect=True)),
             asyncio.create_task(monitor()),
+            asyncio.create_task(resume_slow()),
         ]
         await asyncio.sleep(0.6)
         initial = rss[-1]
         started = time.monotonic()
         for index in range(count):
-            await sender.send(
-                28,
-                blob(2, transfer)
-                + integer(3, index)
-                + integer(4, count)
-                + blob(5, payload),
-            )
-            await asyncio.sleep(0.04)
-        deadline = time.monotonic() + 5
-        while len(received) < count and time.monotonic() < deadline:
-            await asyncio.sleep(0.05)
-        assert received == list(
-            range(count)
-        ), f"Healthy receiver got {len(received)}/{count} chunks"
-        await asyncio.sleep(0.5)
-        paused = rss[-1]
-        running = False
-        await tasks[-1]
-        slow.writer.transport.resume_reading()
-        slow_count = 0
-        slow_closed = False
-        try:
             while True:
-                kind, data = await asyncio.wait_for(slow.packet(), 3)
-                if kind == 28:
-                    assert (
-                        one(data, 2) == transfer
-                        and one(data, 5) == payload
-                        and one(data, 3) == slow_count
-                    )
-                    slow_count += 1
-                    if slow_count == count:
-                        break
-        except (asyncio.IncompleteReadError, ConnectionError, ssl.SSLError):
-            slow_closed = True
-        except (TimeoutError, asyncio.TimeoutError):
-            pass
+                await sender.send(
+                    28,
+                    blob(2, transfer) + integer(3, index) + integer(4, count)
+                    + blob(5, payload) + integer(6, healthy.session) + integer(6, slow.session),
+                )
+                accepted, delay = await asyncio.wait_for(admissions.get(), 10)
+                if accepted:
+                    break
+                retries += 1
+                await asyncio.sleep(min(delay, 5000) / 1000)
+            await asyncio.sleep(0.04)
+        deadline = time.monotonic() + 10
+        while (len(received) < count or len(slow_received) < count) and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        assert received == list(range(count)), "Healthy receiver lost or duplicated a selected chunk"
+        assert slow_received == list(range(count)), "Paused receiver lost or duplicated a selected chunk"
+        paused = rss[-1]
         assert latencies and not pending, "Control ping responses missing"
-        assert not tasks[0].done(), "Healthy receiver disconnected"
-        if args.expect_disconnect:
-            assert (
-                slow_closed and slow_count < count
-            ), "Stalled receiver was not disconnected"
-            assert (
-                slow.session in removed
-            ), "Healthy receiver did not observe stalled user removal"
-        for task in tasks[:-1]:
+        assert not tasks[0].done() and not tasks[2].done(), "A selected receiver disconnected"
+        assert slow.session not in removed, "Healthy receiver observed paused user removal"
+        slow_count, slow_closed = len(slow_received), False
+        running = False
+        await tasks[3]
+        for task in tasks[:3]:
             if task.done():
                 task.result()
         result = {
@@ -258,7 +257,8 @@ async def scenario(args, process):
             "slow_chunks_after_resume": slow_count,
             "slow_closed": slow_closed,
             "healthy_observed_slow_removal": slow.session in removed,
-            "expected_disconnect_asserted": args.expect_disconnect,
+            "selected_recipients_stay_connected": True,
+            "relay_retry_responses": retries,
             "rss_initial_bytes": initial,
             "rss_paused_bytes": paused,
             "rss_peak_bytes": max(rss),
@@ -268,7 +268,7 @@ async def scenario(args, process):
             "duration_seconds": time.monotonic() - started,
             "filebandwidth_bits_per_second": 16000000,
             "aggregate_bits_per_second": 64000000,
-            "limits": "Opaque valid-length FileData relay, not a cryptographic file engine or native media test",
+            "limits": "Selected opaque valid-length relay with per-chunk admission, paused TCP reading, and control pings; cryptographic verification is covered separately by native engine/E2E tests",
         }
         args.output.write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result))
@@ -282,6 +282,8 @@ async def scenario(args, process):
 
 
 async def main(args):
+    if args.expect_disconnect:
+        raise ValueError("The targeted relay now keeps receivers connected and retries bounded output queues; remove --expect-disconnect")
     args.server = args.server.resolve()
     args.profile = args.profile.resolve()
     args.output = args.output.resolve()

@@ -206,6 +206,9 @@ FileSendDialog::FileSendDialog(const QString &fileName, quint64 fileSize,
 			case PQFT::TrustState::Pinned:
 				trust = tr("pinned (not verified yet)");
 				break;
+			case PQFT::TrustState::StorageError:
+				trust = tr("Cannot read saved identity — unavailable");
+				break;
 			case PQFT::TrustState::Changed:
 				trust = tr("IDENTITY CHANGED — blocked");
 				break;
@@ -217,7 +220,8 @@ FileSendDialog::FileSendDialog(const QString &fileName, quint64 fileSize,
 		item->setText(tr("%1 — %2").arg(recipient.name.toHtmlEscaped()).arg(trust));
 		item->setData(Qt::UserRole, recipient.session);
 		item->setData(Qt::UserRole + 1, recipient.trustState);
-		if (recipient.trustState == static_cast< int >(PQFT::TrustState::Changed)) {
+		if (recipient.trustState == static_cast< int >(PQFT::TrustState::Changed)
+			|| recipient.trustState == static_cast< int >(PQFT::TrustState::StorageError)) {
 			// Hard exclusion: a peer whose pinned identity changed is never a
 			// valid recipient. Gray the entry out and make it inert (the
 			// engine refuses the handshake anyway — this is UX only).

@@ -59,6 +59,7 @@ public slots:
 	void proceedAnyway();
 signals:
 	void encrypted();
+	void outputProgress(qint64 pendingBytes);
 	void connectionClosed(QAbstractSocket::SocketError, const QString &reason);
 	void message(Mumble::Protocol::TCPMessageType type, const QByteArray &);
 	void handleSslErrors(const QList< QSslError > &);
@@ -74,6 +75,7 @@ public:
 	/// Limit pending plaintext and encrypted output together. Zero leaves output unlimited.
 	/// A connection that exceeds the limit stops accepting output and closes asynchronously.
 	void setMaxPendingSendBytes(qint64 bytes);
+	qint64 pendingSendBytes() const;
 	void disconnectSocket(bool force = false);
 	void forceFlush();
 	qint64 activityTime() const;

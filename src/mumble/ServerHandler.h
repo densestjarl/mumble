@@ -36,6 +36,7 @@
 #include "ServerAddress.h"
 #include "Timer.h"
 
+#include <atomic>
 #include <memory>
 
 class Connection;
@@ -50,6 +51,12 @@ public:
 	Mumble::Protocol::TCPMessageType type;
 	QByteArray qbaMsg;
 	bool bFlush;
+	int sourceConnectionID = -1;
+	std::shared_ptr< std::atomic< qint64 > > inboundBudget;
+	~ServerHandlerMessageEvent() override {
+		if (inboundBudget)
+			inboundBudget->fetch_sub(qbaMsg.size());
+	}
 	ServerHandlerMessageEvent(const QByteArray &msg, Mumble::Protocol::TCPMessageType type, bool flush = false);
 };
 
@@ -74,6 +81,10 @@ private:
 	Q_DISABLE_COPY(ServerHandler)
 
 	Database *database;
+	std::shared_ptr< std::atomic< qint64 > > m_fileInboundBytes = std::make_shared< std::atomic< qint64 > >(0);
+	std::atomic< qint64 > m_fileQueuedBytes{ 0 };
+	std::atomic< qint64 > m_fileControlQueuedBytes{ 0 };
+	std::atomic< qint64 > m_fileSocketBytes{ 0 };
 
 	static QMutex nextConnectionIDMutex;
 	static int nextConnectionID;
@@ -91,7 +102,7 @@ protected:
 	unsigned short usResolvedPort;
 	bool bUdp;
 	bool bStrong;
-	int connectionID;
+	std::atomic< int > connectionID;
 	Mumble::Protocol::UDPPingEncoder< Mumble::Protocol::Role::Client > m_udpPingEncoder;
 	Mumble::Protocol::UDPDecoder< Mumble::Protocol::Role::Client > m_udpDecoder;
 	Mumble::Protocol::UDPDecoder< Mumble::Protocol::Role::Client > m_tcpTunnelDecoder;
@@ -190,6 +201,9 @@ public:
 	void sendUserTextMessage(unsigned int uiSession, const QString &message_);
 	void sendChannelTextMessage(unsigned int channel, const QString &message_, bool tree);
 	void sendFileTransferControl(const QList< unsigned int > &targetSessions, const QByteArray &payload);
+	bool queueFileTransferControl(unsigned int target, const QByteArray &payload, int expectedConnectionID);
+	bool queueFileData(const QList< unsigned int > &targets, const QByteArray &transferId, quint64 index, quint64 total,
+					   const QByteArray &data, int expectedConnectionID);
 	void sendFileData(const QByteArray &transferId, quint64 chunkIndex, std::optional< quint64 > chunkCount,
 					  const QByteArray &data);
 	void setUserComment(unsigned int uiSession, const QString &comment);

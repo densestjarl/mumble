@@ -28,6 +28,8 @@ struct BandwidthRecord {
 
 	BandwidthRecord();
 	bool addFrame(int size, int maxpersec);
+	bool canAddFrame(int size, int maxpersec) const;
+	bool frameAllowedUnlocked(int size, int maxpersec, qint64 &sum) const;
 	int onlineSeconds() const;
 	int idleSeconds() const;
 	void resetIdleSeconds();

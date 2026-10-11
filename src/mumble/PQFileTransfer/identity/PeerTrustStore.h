@@ -30,6 +30,7 @@ struct PinnedPeer {
 enum class TrustState {
 	/// No pin yet (first contact).
 	NewPeer,
+	StorageError,
 	/// Pinned (TOFU) but not yet verified out-of-band.
 	Pinned,
 	/// Pinned and verified via safety number.
@@ -55,7 +56,7 @@ public:
 	bool markVerified(const QByteArray &serverDigest, const QString &username, const QByteArray &expectedFingerprint);
 
 	/// Drop the pin entirely (used by the explicit re-verification flow).
-	bool removePin(const QByteArray &serverDigest, const QString &username);
+	bool removePin(const QByteArray &serverDigest, const QString &username, const QByteArray &expectedFingerprint);
 
 	/// Optional querySucceeded distinguishes an absent pin from storage/fetch failure.
 	bool lookup(PinnedPeer &out, const QByteArray &serverDigest, const QString &username,

@@ -1865,6 +1865,27 @@ void MainWindow::qmUser_aboutToShow() {
 	bool isSelf            = p == self;
 
 	qmUser->clear();
+#ifdef USE_FILE_SHARING
+	if (p && !isSelf && Global::get().fileTransferManager) {
+		auto *manager    = Global::get().fileTransferManager;
+		const auto shown = manager->sendRecipient(p->uiSession);
+		if (shown && !shown->fingerprint.isEmpty()) {
+			QAction *reset = qmUser->addAction(tr("Reset file identity…"));
+			connect(reset, &QAction::triggered, this, [this, manager, shown]() {
+				const auto answer = QMessageBox::question(
+					this, tr("Reset file identity?"),
+					tr("Forget the saved file identity for %1?\nSaved fingerprint: %2\n\nContact them through a "
+					   "trusted channel and compare safety numbers before your next transfer.")
+						.arg(shown->name, QString::fromLatin1(shown->fingerprint.toHex())),
+					QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+				if (answer == QMessageBox::Yes && !manager->resetPeerTrust(*shown))
+					Global::get().l->log(Log::Warning,
+										 tr("The peer or saved identity changed. The identity was not reset."));
+			});
+		}
+	}
+#endif
+
 
 	if (self && p && !isSelf && self->cChannel != p->cChannel) {
 		qmUser->addAction(qaUserJoin);
@@ -4036,6 +4057,9 @@ void MainWindow::customEvent(QEvent *evt) {
 	}
 
 	ServerHandlerMessageEvent *shme = static_cast< ServerHandlerMessageEvent * >(evt);
+	if (shme->sourceConnectionID >= 0
+		&& (!Global::get().sh || Global::get().sh->getConnectionID() != shme->sourceConnectionID))
+		return;
 
 #ifdef QT_NO_DEBUG
 #	define PROCESS_MUMBLE_TCP_MESSAGE(name, value)                                                    \
@@ -4051,7 +4075,9 @@ void MainWindow::customEvent(QEvent *evt) {
 			MumbleProto::name msg;                                                                       \
 			if (msg.ParseFromArray(shme->qbaMsg.constData(), static_cast< int >(shme->qbaMsg.size()))) { \
 				printf("%s:\n", #name);                                                                  \
-				msg.PrintDebugString();                                                                  \
+				if (shme->type != Mumble::Protocol::TCPMessageType::FileData                             \
+					&& shme->type != Mumble::Protocol::TCPMessageType::FileTransferControl)              \
+					msg.PrintDebugString();                                                              \
 				msg##name(msg);                                                                          \
 			}                                                                                            \
 			break;                                                                                       \
@@ -4921,38 +4947,56 @@ void MainWindow::onFileCardClicked(const QByteArray &transferId) {
 	}
 }
 
+void MainWindow::drainFileVerifications() {
+	if (m_fileVerificationActive || m_fileVerificationQueue.isEmpty())
+		return;
+	auto request = m_fileVerificationQueue.takeFirst();
+	request();
+	if (!m_fileVerificationActive)
+		QTimer::singleShot(0, this, &MainWindow::drainFileVerifications);
+}
+
 void MainWindow::onFileFirstContact(unsigned int peerSession, const QByteArray &peerFingerprint,
 									const QString &safetyNumber) {
 	auto *manager = Global::get().fileTransferManager;
-	if (!manager) {
+	if (!manager)
 		return;
-	}
-	const QPointer< ClientUser > user = ClientUser::get(peerSession);
-	if (!user) {
-		return;
-	}
-	const QString name       = user->qsName;
+	const quint64 token      = manager->firstContactToken(peerSession);
 	const quint64 generation = manager->connectionGeneration();
-	const quint64 promptToken = manager->firstContactToken(peerSession);
-
-	QByteArray qrPayload;
-	if (manager->identity() && manager->identity()->isUnlocked()) {
-		qrPayload = PQFT::safetyQrPayload(manager->identity()->fingerprint(), peerFingerprint);
-	}
-
-	SafetyNumberDialog dialog(name, safetyNumber, qrPayload, this);
-	const bool verified = (dialog.exec() == QDialog::Accepted) && dialog.verified();
-	// Modal dialogs process disconnects and user-list changes. Never apply
-	// their result to a replacement connection or a reused session number.
-	if (generation != manager->connectionGeneration() || !user || ClientUser::get(peerSession) != user.data()) {
+	if (m_fileVerificationQueue.size() >= 64) {
+		manager->resolveFirstContact(peerSession, peerFingerprint, token, false);
 		return;
 	}
-
-	if (!manager->resolveFirstContact(peerSession, peerFingerprint, promptToken, verified) && verified) {
-		Global::get().l->log(
-			Log::Warning,
-			tr("The peer or connection changed while verifying. Their identity was not marked verified. Try again."));
-	}
+	m_fileVerificationQueue.append([this, manager, peerSession, peerFingerprint, safetyNumber, token, generation]() {
+		const QPointer< ClientUser > user = ClientUser::get(peerSession);
+		if (!user || generation != manager->connectionGeneration()
+			|| !manager->contactRequestCurrent(peerSession, peerFingerprint, token))
+			return;
+		QByteArray qrPayload;
+		if (manager->identity() && manager->identity()->isUnlocked())
+			qrPayload = PQFT::safetyQrPayload(manager->identity()->fingerprint(), peerFingerprint);
+		auto *dialog = new SafetyNumberDialog(user->qsName, safetyNumber, qrPayload, this);
+		dialog->setAttribute(Qt::WA_DeleteOnClose);
+		m_fileVerificationActive = true;
+		connect(
+			manager, &FileTransferManager::firstContactCancelled, dialog,
+			[dialog, token](quint64 cancelled) {
+				if (cancelled == token)
+					dialog->reject();
+			},
+			Qt::QueuedConnection);
+		connect(dialog, &QDialog::finished, this,
+				[this, manager, dialog, user, peerSession, peerFingerprint, token, generation](int result) {
+					if (generation == manager->connectionGeneration() && user
+						&& ClientUser::get(peerSession) == user.data())
+						manager->resolveFirstContact(peerSession, peerFingerprint, token,
+													 result == QDialog::Accepted && dialog->verified());
+					m_fileVerificationActive = false;
+					QTimer::singleShot(0, this, &MainWindow::drainFileVerifications);
+				});
+		dialog->open();
+	});
+	drainFileVerifications();
 }
 
 void MainWindow::onFilePeerBlocked(unsigned int peerSession, const QString &peerName) {
@@ -5062,9 +5106,7 @@ void MainWindow::startFileSend(const QString &path) {
 	const QMimeType mimeType = QMimeDatabase().mimeTypeForFile(path);
 	// The card appears via the manager's first transferUpdated signal.
 	if (!manager->startSend(path, mimeType.name(), dialog.passwordEnabled(), dialog.password(), selected)) {
-		QMessageBox::information(
-			this, tr("File transfer"),
-			tr("The recipient identity could not be confirmed. Choose the file and recipients again."));
+		QMessageBox::information(this, tr("File transfer"), manager->sendAvailabilityError());
 	}
 }
 
@@ -5160,6 +5202,7 @@ void MainWindow::announceFileTransferCapability() {
 	MumbleProto::UserState mpus;
 	mpus.set_session(Global::get().uiSession);
 	mpus.set_file_transfer_capable(true);
+	mpus.set_file_transfer_delivery_receipts(true);
 	if (auto sh = Global::get().sh) {
 		sh->sendMessage(mpus);
 	}

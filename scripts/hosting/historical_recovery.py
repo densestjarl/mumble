@@ -156,7 +156,8 @@ def unpack(archive, destination):
     return metadata
 
 
-def fresh_or_owned(sha256, port):
+def fresh_or_owned(sha256, port, ssh_port=22):
+    validate_ports(port, ssh_port)
     release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     if release.get('ID', '').strip('"') != 'debian' or release.get('VERSION_ID', '').strip('"') != '12' \
             or deployment.run('dpkg', '--print-architecture') != 'amd64' or not Path('/run/systemd/system').is_dir():
@@ -167,7 +168,8 @@ def fresh_or_owned(sha256, port):
     if marker.exists():
         state = json.loads(marker.read_text())
         if state.get('phase') != 'restoring' or state.get('sha256') != sha256 \
-                or state.get('profile') != PROFILE or state.get('port') != port:
+                or state.get('profile') != PROFILE or state.get('port') != port \
+                or state.get('ssh_port', 22) != ssh_port:
             raise ValueError('Existing historical state does not belong to this restore')
         return
     installed = subprocess.run(['dpkg-query', '-W', '-f=${Status}', 'mumble-server'],
@@ -181,7 +183,29 @@ def fresh_or_owned(sha256, port):
     ROOT.chmod(0o750)
     STATE.mkdir(mode=0o700)
     deployment.atomic(marker, json.dumps({'phase': 'restoring', 'sha256': sha256,
-                                         'profile': PROFILE, 'port': port}) + '\n')
+                                         'profile': PROFILE, 'port': port, 'ssh_port': ssh_port}) + '\n')
+
+
+def validate_ports(port, ssh_port):
+    if not 1024 <= port <= 65535 or not 1 <= ssh_port <= 65535 or port == ssh_port:
+        raise ValueError('Distinct valid server and SSH ports are required')
+
+
+def firewall_rules(port, ssh_port):
+    validate_ports(port, ssh_port)
+    return f'''table inet mumble_history {{
+ chain input {{
+  type filter hook input priority 0; policy drop;
+  iifname "lo" accept
+  ct state established,related accept
+  udp sport 67 udp dport 68 accept
+  tcp dport {{ {ssh_port}, {port} }} accept
+  udp dport {port} accept
+  ip protocol icmp accept
+  ip6 nexthdr ipv6-icmp accept
+ }}
+}}
+'''
 
 
 def local_tls_ready(port, certificate, timeout=10):
@@ -207,6 +231,7 @@ def local_tls_ready(port, certificate, timeout=10):
 
 def restore(args):
     started = time.monotonic()
+    validate_ports(args.port, args.ssh_port)
     if not re.fullmatch(r'[a-f0-9]{64}', args.sha256) or deployment.digest(args.archive) != args.sha256:
         raise ValueError('Historical ciphertext differs from the trusted operator pin')
     if not 1024 <= args.port <= 65535 or args.archive.stat().st_size > MAX_ARCHIVE + 1024 * 1024:
@@ -221,7 +246,8 @@ def restore(args):
         stage.mkdir(mode=0o700)
         metadata = unpack(archive, stage)
         # No server state is touched until every cipher/package/database/config check passes.
-        fresh_or_owned(args.sha256, args.port)
+        deployment.verify_ssh_port(args.ssh_port)
+        fresh_or_owned(args.sha256, args.port, args.ssh_port)
         if subprocess.run(['systemctl', 'is-active', '--quiet', UNIT.name],
                           capture_output=True).returncode == 0:
             deployment.run('systemctl', 'stop', UNIT.name)
@@ -282,18 +308,7 @@ TasksMax=128
 WantedBy=multi-user.target
 ''', 0o644)
         firewall = ROOT / 'firewall.nft'
-        deployment.atomic(firewall, f'''table inet mumble_history {{
- chain input {{
-  type filter hook input priority 0; policy drop;
-  iifname "lo" accept
-  ct state established,related accept
-  tcp dport {{ 22, {args.port} }} accept
-  udp dport {args.port} accept
-  ip protocol icmp accept
-  ip6 nexthdr ipv6-icmp accept
- }}
-}}
-''', 0o600)
+        deployment.atomic(firewall, firewall_rules(args.port, args.ssh_port), 0o600)
         deployment.atomic(FW_UNIT, f'''[Unit]
 Description=Owned historical rehearsal firewall
 Before=mumble-historical-rehearsal.service
@@ -308,13 +323,13 @@ WantedBy=multi-user.target
         deployment.run('nft', '--check', '-f', str(firewall))
         deployment.run('systemctl', 'daemon-reload')
         deployment.run('systemctl', 'enable', '--now', FW_UNIT.name, UNIT.name)
-        local_tls_ready(args.port, ROOT / 'server.crt')
+        deployment.wait_ready(args.port, ROOT / 'server.crt', UNIT.name)
         deployment.run('systemctl', 'is-active', UNIT.name)
         deployment.atomic(STATE / 'restore.json', json.dumps({'phase': 'ready', 'sha256': args.sha256,
-                                                            'profile': PROFILE, 'port': args.port}) + '\n')
+                                                            'profile': PROFILE, 'port': args.port, 'ssh_port': args.ssh_port}) + '\n')
     return {'status': 'restored', 'profile': PROFILE, 'database_tls_hashes_match': True,
             'local_tls_certificate_matches': True, 'original_ini_retained': True, 'configuration_overrides': ['database', 'sslCert', 'sslKey', 'host', 'port'],
-            'seconds': round(time.monotonic() - started, 3), 'external_readiness_required': True}
+            'ssh_port': args.ssh_port, 'seconds': round(time.monotonic() - started, 3), 'external_readiness_required': True}
 
 
 def main():
@@ -329,6 +344,8 @@ def main():
     recover.add_argument('--sha256', required=True)
     recover.add_argument('--identity', type=Path, required=True)
     recover.add_argument('--port', type=int, default=64738)
+    recover.add_argument('--ssh-port', type=int, default=22,
+                         help='SSH listener port to preserve through firewall setup and resume')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('Run as root inside the explicitly designated historical/disposable guest')

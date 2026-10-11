@@ -204,6 +204,23 @@ class HistoricalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'does not belong'):
                 history.fresh_or_owned('a' * 64, 64739)
 
+    def test_custom_ssh_port_is_preserved_and_bound_to_resume(self):
+        with self.guest_context() as directory:
+            history.fresh_or_owned('a' * 64, 64738, 2222)
+            self.assertEqual(json.loads((directory / 'state/restore.json').read_text())['ssh_port'], 2222)
+            history.fresh_or_owned('a' * 64, 64738, 2222)
+            with self.assertRaisesRegex(ValueError, 'does not belong'):
+                history.fresh_or_owned('a' * 64, 64738, 22)
+        self.assertIn('tcp dport { 2222, 64738 } accept', history.firewall_rules(64738, 2222))
+        self.assertIn('tcp dport { 22, 64738 } accept', history.firewall_rules(64738, 22))
+
+    def test_invalid_or_conflicting_ssh_port_precedes_guest_mutation(self):
+        for port in (0, -1, 65536, 64738):
+            with self.subTest(port=port), self.guest_context() as directory:
+                with self.assertRaisesRegex(ValueError, 'SSH ports'):
+                    history.fresh_or_owned('a' * 64, 64738, port)
+                self.assertFalse(directory.exists())
+
     def test_completed_restore_is_never_overwritten(self):
         with self.guest_context() as directory:
             history.fresh_or_owned('a' * 64, 64738)
@@ -226,7 +243,7 @@ class HistoricalTests(unittest.TestCase):
     def test_wrong_ciphertext_pin_precedes_decryption_and_guest_mutation(self):
         archive = self.root / 'cipher.age'
         archive.write_bytes(b'not an age file')
-        args = SimpleNamespace(archive=archive, sha256='a' * 64, identity=self.root / 'key', port=64738)
+        args = SimpleNamespace(archive=archive, sha256='a' * 64, identity=self.root / 'key', port=64738, ssh_port=22)
         with patch.object(history, 'fresh_or_owned') as own, patch.object(deploy_guest, 'run') as run:
             with self.assertRaisesRegex(ValueError, 'operator pin'):
                 history.restore(args)
@@ -237,7 +254,7 @@ class HistoricalTests(unittest.TestCase):
         archive = self.root / 'cipher.age'
         archive.write_bytes(b'not an age file')
         args = SimpleNamespace(archive=archive, sha256=deploy_guest.digest(archive),
-                               identity=self.root / 'key', port=64738)
+                               identity=self.root / 'key', port=64738, ssh_port=22)
         original = tempfile.TemporaryDirectory
         with patch.object(history.tempfile, 'TemporaryDirectory',
                           side_effect=lambda **kw: original(dir=self.root)), \

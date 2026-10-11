@@ -15,6 +15,7 @@ User::User() {
 	bRecording            = false;
 	bScreenSharing        = false;
 	bFileTransferCapable  = false;
+	bFileTransferDeliveryReceipts = false;
 	bSuppress             = false;
 	cChannel              = 0;
 }

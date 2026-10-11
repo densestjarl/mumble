@@ -19,13 +19,15 @@ namespace PQFT {
 namespace FTFrame {
 	/// Frame types (low nibble of the header byte).
 	enum FrameType : quint8 {
-		TypeM1          = 1,
-		TypeM2          = 2,
-		TypeM3          = 3,
-		TypeM4          = 4,
-		TypeManifest    = 5,
-		TypeComplete    = 6,
-		TypeAbort       = 7,
+		TypeM1       = 1,
+		TypeM2       = 2,
+		TypeM3       = 3,
+		TypeM4       = 4,
+		TypeManifest = 5,
+		TypeComplete = 6,
+		TypeAbort    = 7,
+		TypeReceipt  = 8,
+		TypeProgress = 9,
 	};
 
 	/// Encode a handshake frame (header + canonical-CBOR body).

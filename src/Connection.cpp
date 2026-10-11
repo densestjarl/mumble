@@ -31,6 +31,10 @@ Connection::Connection(QObject *p, QSslSocket *qtsSock) : QObject(p) {
 	bDisconnectedEmitted = false;
 	csCrypt              = std::make_unique< CryptStateOCB2 >();
 
+	connect(qtsSocket, &QSslSocket::bytesWritten, this, [this](qint64) { emit outputProgress(pendingSendBytes()); });
+	connect(qtsSocket, &QSslSocket::encryptedBytesWritten, this,
+			[this](qint64) { emit outputProgress(pendingSendBytes()); });
+
 	static bool bDeclared = false;
 	if (!bDeclared) {
 		bDeclared = true;
@@ -222,6 +226,11 @@ void Connection::sendMessage(const QByteArray &qbaMsg) {
 	}
 
 	qtsSocket->write(qbaMsg);
+	emit outputProgress(pendingSendBytes());
+}
+
+qint64 Connection::pendingSendBytes() const {
+	return qtsSocket->bytesToWrite() + qtsSocket->encryptedBytesToWrite();
 }
 
 void Connection::setMaxPendingSendBytes(qint64 bytes) {

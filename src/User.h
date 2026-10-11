@@ -32,6 +32,7 @@ public:
 	bool bRecording;
 	bool bScreenSharing;
 	bool bFileTransferCapable;
+	bool bFileTransferDeliveryReceipts;
 	Channel *cChannel;
 	QByteArray qbaTexture;
 	QByteArray qbaTextureHash;

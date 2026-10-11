@@ -523,6 +523,8 @@ void Server::msgAuthenticate(ServerUser *uSource, MumbleProto::Authenticate &msg
 			mpus.set_screen_sharing(true);
 		if (u->bFileTransferCapable)
 			mpus.set_file_transfer_capable(true);
+		if (u->bFileTransferDeliveryReceipts)
+			mpus.set_file_transfer_delivery_receipts(true);
 		if (u->bSelfDeaf)
 			mpus.set_self_deaf(true);
 		else if (u->bSelfMute)
@@ -605,6 +607,10 @@ void Server::msgAuthenticate(ServerUser *uSource, MumbleProto::Authenticate &msg
 	mpsc.set_image_message_length(static_cast< unsigned int >(iMaxImageMessageLength));
 	mpsc.set_max_users(static_cast< unsigned int >(iMaxUsers));
 	mpsc.set_recording_allowed(allowRecording);
+	mpsc.set_max_file_transfer_size(iMaxFileSize);
+	mpsc.set_file_transfer_relay_version(1);
+	mpsc.set_file_transfer_rate(qMax(0, iMaxFileBandwidth) / 8);
+	mpsc.set_file_transfer_aggregate_rate(qMax(0, iMaxFileBandwidthAggregate) / 8);
 	sendMessage(uSource, mpsc);
 
 	MumbleProto::SuggestConfig mpsug;
@@ -951,7 +957,8 @@ void Server::msgUserState(ServerUser *uSource, MumbleProto::UserState &msg) {
 	if ((pDstServerUser != uSource)
 		&& (msg.has_self_deaf() || msg.has_self_mute() || msg.has_plugin_context() || msg.has_plugin_identity()
 			|| msg.has_recording() || msg.has_screen_sharing() || msg.has_file_transfer_capable()
-			|| msg.listening_channel_add_size() > 0 || msg.listening_channel_remove_size() > 0)) {
+			|| msg.has_file_transfer_delivery_receipts() || msg.listening_channel_add_size() > 0
+			|| msg.listening_channel_remove_size() > 0)) {
 		return;
 	}
 
@@ -1088,6 +1095,13 @@ void Server::msgUserState(ServerUser *uSource, MumbleProto::UserState &msg) {
 
 		pDstServerUser->bFileTransferCapable = msg.file_transfer_capable();
 		bBroadcast = true;
+	}
+
+	if (msg.has_file_transfer_delivery_receipts()
+		&& pDstServerUser->bFileTransferDeliveryReceipts != msg.file_transfer_delivery_receipts()) {
+		assert(uSource == pDstServerUser);
+		pDstServerUser->bFileTransferDeliveryReceipts = msg.file_transfer_delivery_receipts();
+		bBroadcast                                    = true;
 	}
 
 	if (msg.has_screen_sharing() && (pDstServerUser->bScreenSharing != msg.screen_sharing())) {
@@ -2630,85 +2644,95 @@ void Server::msgFileTransferControl(ServerUser *uSource, MumbleProto::FileTransf
 void Server::msgFileData(ServerUser *uSource, MumbleProto::FileData &msg) {
 	ZoneScoped;
 	MSG_SETUP(ServerUser::Authenticated);
+	msg.DiscardUnknownFields();
 
-	// One encrypted chunk of a file transfer. Blind relay to the sender's
-	// channel (minus the sender), skipping clients that never announced
-	// file-transfer capability. Nothing is stored.
-
-	if (msg.transfer_id().size() != 16) {
-		qWarning("Dropping file chunk from \"%s\" (%d) - bad transfer id",
-				 qUtf8Printable(uSource->qsName), uSource->uiSession);
+	// Never broadcast. Validate every selected recipient before charging or sending.
+	auto refuse = [&](const char *reason, bool retry = false) {
+		MumbleProto::FileData failure;
+		failure.set_actor(uSource->uiSession);
+		failure.set_transfer_id(msg.transfer_id());
+		failure.set_chunk_index(msg.chunk_index());
+		failure.set_data("");
+		failure.set_relay_error(reason);
+		if (retry)
+			failure.set_relay_retry_after_ms(250);
+		sendMessage(uSource, failure);
+	};
+	if (msg.transfer_id().size() != 16 || msg.has_relay_error() || msg.has_relay_retry_after_ms()
+		|| msg.has_relay_accepted() || msg.data().size() < 16 || msg.data().size() > 1024 * 1024 + 16
+		|| msg.target_session_size() == 0 || msg.target_session_size() > 64 || !uSource->bFileTransferCapable) {
+		refuse("Invalid file relay request");
 		return;
 	}
-	// 1 MiB plaintext chunks carry a 16-byte AES-GCM tag on the wire; the
-	// client rejects any other length against the signed manifest, so only
-	// the hard cap lives here.
-	if (msg.data().size() > 1024 * 1024 + 16) {
-		qWarning("Dropping file chunk from \"%s\" (%d) - too large",
-				 qUtf8Printable(uSource->qsName), uSource->uiSession);
-		return;
-	}
-
-	// Per-user byte meter (TCP/IP + framing overhead included, like video).
-	const int packetsize = 20 + 8 + 6 + static_cast< int >(msg.data().size());
-	if (iMaxFileBandwidth > 0 && !uSource->bwrFile.addFrame(packetsize, iMaxFileBandwidth / 8)) {
-		return;
-	}
-
-	// Per-transfer accounting against maxfilesize (in-memory only).
-	bool tooLarge = false;
-	{
-		QMutexLocker lock(&m_qmFileTransferBytes);
-		auto &entry = m_qhFileTransferBytes[{
-			uSource->uiSession, QByteArray(msg.transfer_id().data(), static_cast< int >(msg.transfer_id().size())) }];
-		entry.bytes += static_cast< quint64 >(msg.data().size());
-		entry.lastSeenMSecs = QDateTime::currentMSecsSinceEpoch();
-		tooLarge = iMaxFileSize > 0 && entry.bytes > iMaxFileSize;
-		if (m_qhFileTransferBytes.size() > 1024) {
-			pruneFileTransferBytes();
-		}
-	}
-	if (tooLarge) {
-		log(uSource, QString("File transfer from user %1 exceeded maxfilesize").arg(uSource->uiSession));
-		return;
-	}
-
-	msg.set_actor(uSource->uiSession);
-
-	// Aggregate egress guard: charge the amplified cost up front.
-	int receivers = 0;
-	for (User *p : uSource->cChannel->qlUsers) {
-		auto *dst = static_cast< ServerUser * >(p);
-		if (dst != uSource && dst->sState == ServerUser::Authenticated && dst->bFileTransferCapable) {
-			++receivers;
-		}
-	}
-	if (receivers == 0) {
-		return;
-	}
-	{
-		QMutexLocker lock(&m_qmFileTransferBytes);
-		// addFrame() takes ints; the product of packetsize and the channel's
-		// receiver count stays well below the int range for any realistic
-		// channel, but clamp anyway rather than narrowing blindly.
-		const qint64 aggregateCharge =
-			static_cast< qint64 >(packetsize) * static_cast< qint64 >(receivers);
-		if (iMaxFileBandwidthAggregate > 0
-			&& !m_bwrFileAggregate.addFrame(
-				static_cast< int >(
-					qBound(static_cast< qint64 >(0), aggregateCharge, static_cast< qint64 >(INT_MAX))),
-				iMaxFileBandwidthAggregate / 8)) {
+	QSet< unsigned int > seen;
+	QList< ServerUser * > recipients;
+	for (unsigned int session : msg.target_session()) {
+		if (seen.contains(session))
+			continue;
+		seen.insert(session);
+		ServerUser *receiver = qhUsers.value(session);
+		if (!receiver || receiver == uSource || receiver->sState != ServerUser::Authenticated
+			|| receiver->cChannel != uSource->cChannel || !receiver->bFileTransferCapable
+			|| !receiver->bFileTransferDeliveryReceipts) {
+			refuse("A selected file recipient is no longer available");
 			return;
 		}
-	}
-
-	for (User *p : uSource->cChannel->qlUsers) {
-		auto *dst = static_cast< ServerUser * >(p);
-		if (dst == uSource || dst->sState != ServerUser::Authenticated || !dst->bFileTransferCapable) {
-			continue;
+		// Leave headroom for control and voice; refuse this file rather than disconnect the peer.
+		if (receiver->pendingSendBytes() > 4 * 1024 * 1024) {
+			refuse("Waiting for a file recipient to receive queued data", true);
+			return;
 		}
-		sendMessage(dst, msg);
+		recipients.append(receiver);
 	}
+	const int packetsize = 128 + static_cast< int >(msg.data().size());
+	{
+		QMutexLocker lock(&m_qmFileTransferBytes);
+		// Admission is all-or-nothing: a retry is never charged or delivered to any recipient.
+		if (iMaxFileBandwidth > 0 && !uSource->bwrFile.canAddFrame(packetsize, iMaxFileBandwidth / 8)) {
+			refuse("Waiting for the server file upload budget", true);
+			return;
+		}
+		const int aggregateCharge =
+			static_cast< int >(qMin< qint64 >(static_cast< qint64 >(packetsize) * recipients.size(), INT_MAX));
+		if (iMaxFileBandwidthAggregate > 0
+			&& !m_bwrFileAggregate.canAddFrame(aggregateCharge, iMaxFileBandwidthAggregate / 8)) {
+			refuse("Waiting for the server shared file delivery budget", true);
+			return;
+		}
+		const auto key = qMakePair(uSource->uiSession,
+								   QByteArray(msg.transfer_id().data(), static_cast< int >(msg.transfer_id().size())));
+		const quint64 previousBytes = m_qhFileTransferBytes.value(key).bytes;
+		if (iMaxFileSize > 0 && previousBytes + static_cast< quint64 >(msg.data().size()) > iMaxFileSize) {
+			refuse("Server maximum file transfer size exceeded");
+			return;
+		}
+		if (!m_qhFileTransferBytes.contains(key) && m_qhFileTransferBytes.size() >= 1024) {
+			pruneFileTransferBytes();
+			if (m_qhFileTransferBytes.size() >= 1024) {
+				refuse("Server has too many active file transfers; try again later");
+				return;
+			}
+		}
+		// File admission runs on the server thread under the aggregate lock; no meter
+		// writer can intervene between the non-mutating checks and these commits.
+		if (iMaxFileBandwidth > 0)
+			uSource->bwrFile.addFrame(packetsize, iMaxFileBandwidth / 8);
+		if (iMaxFileBandwidthAggregate > 0)
+			m_bwrFileAggregate.addFrame(aggregateCharge, iMaxFileBandwidthAggregate / 8);
+		auto &entry         = m_qhFileTransferBytes[key];
+		entry.bytes         = previousBytes + static_cast< quint64 >(msg.data().size());
+		entry.lastSeenMSecs = QDateTime::currentMSecsSinceEpoch();
+	}
+	msg.set_actor(uSource->uiSession);
+	for (ServerUser *receiver : recipients)
+		sendMessage(receiver, msg);
+	MumbleProto::FileData accepted;
+	accepted.set_actor(uSource->uiSession);
+	accepted.set_transfer_id(msg.transfer_id());
+	accepted.set_chunk_index(msg.chunk_index());
+	accepted.set_data("");
+	accepted.set_relay_accepted(true);
+	sendMessage(uSource, accepted);
 }
 
 #undef RATELIMIT

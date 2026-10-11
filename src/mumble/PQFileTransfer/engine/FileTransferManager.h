@@ -25,6 +25,7 @@
 #include <QSet>
 #include <QString>
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -87,6 +88,8 @@ public:
 
 	/// Token identifying the currently displayed first-contact request. GUI thread only.
 	quint64 firstContactToken(unsigned int peerSession) const;
+	bool contactRequestCurrent(unsigned int session, const QByteArray &fingerprint, quint64 token) const;
+	bool resetPeerTrust(const SendRecipient &shown);
 
 	/// Pin a peer's fingerprint (first use), optionally marking it verified.
 	/// Returns false when the peer cannot be resolved. GUI thread only.
@@ -111,6 +114,8 @@ public:
 
 	/// Apply current settings to the engine.
 	void applyEngineConfig();
+	void configureRelay(const MumbleProto::ServerConfig &config);
+	QString sendAvailabilityError() const;
 
 signals:
 	/// Queued from the worker whenever a transfer's state changes; also
@@ -121,6 +126,7 @@ signals:
 	void firstContact(unsigned int peerSession, const QByteArray &peerFingerprint, const QString &safetyNumber);
 	/// A pinned peer presented a different identity: hard-blocked.
 	void peerBlocked(unsigned int peerSession, const QString &peerName);
+	void firstContactCancelled(quint64 promptToken);
 	/// An incoming password-mode transfer needs its password.
 	void passwordRequired(const QByteArray &transferId, const QString &fileName);
 
@@ -133,7 +139,13 @@ private:
 	QByteArray serverDigest() const;
 	// Private dependency seam for isolated trust-store fixtures without a network or personal database.
 	std::function< QByteArray() > m_serverDigestProvider;
+	std::function< void(PQFT::FileTransferEngine &) > m_transportSetup;
 
+	bool m_relaySupported          = false;
+	quint64 m_relayRate            = 0;
+	quint64 m_relayAggregateRate   = 0;
+	quint64 m_relayMaxSize         = 0;
+	bool m_featureEnabled          = false;
 	quint64 m_connectionGeneration = 0; // GUI thread
 	quint64 m_engineGeneration     = 0; // worker thread
 
@@ -159,13 +171,26 @@ private:
 		QString username;
 		QByteArray serverDigest;
 		quint64 promptToken = 0;
+		QByteArray transferId;
+		quint64 workerToken      = 0;
+		bool sending             = false;
+		unsigned int channelId   = 0;
+		quint64 generation       = 0;
+		unsigned int peerSession = 0;
 	};
 	QHash< unsigned int, PendingFirstContact > m_pendingFirstContact;
+	QHash< quint64, PendingFirstContact > m_contactRequests;
+	QHash< quint64, QList< SendRecipient > > m_sendSelections;
+	quint64 m_nextSendContext = 0;
+	QSet< unsigned int > m_unavailablePeers;
 	quint64 m_nextPromptToken = 0;
 	// GUI-thread state for rechecking save requests and preserving rejection diagnostics until abort.
 	QHash< QByteArray, PQFT::FTTransferInfo > m_readyReceived;
 	QHash< QByteArray, PQFT::FTTransferInfo > m_rejectedReceived;
 	QSet< QByteArray > m_savesInFlight;
+	std::atomic< qint64 > m_inboundBytes{ 0 };
+	QSet< QByteArray > m_activeReceived;
+	QSet< QByteArray > m_inboundRejected;
 };
 
 #endif // MUMBLE_MUMBLE_PQFILETRANSFER_ENGINE_FILETRANSFERMANAGER_H_

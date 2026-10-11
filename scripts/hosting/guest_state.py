@@ -251,8 +251,7 @@ def restore(args):
         deployment.run('nft', '--check', '-f', str(deployment.FIREWALL))
         deployment.run('systemctl', 'daemon-reload')
         deployment.run('systemctl', 'enable', '--now', 'mumble-hosting-firewall.service', 'mumble-server.service')
-        time.sleep(1)
-        deployment.run('systemctl', 'is-active', 'mumble-server.service')
+        deployment.wait_ready(state['config']['port'], deployment.DATA / 'server.crt', 'mumble-server.service')
         deployment.save(state)
     return {'status': 'restored', 'source_commit': manifest['source_commit'],
             'database_schema': metadata['database_schema'], 'seconds': round(time.monotonic() - started, 3),

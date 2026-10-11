@@ -25,21 +25,9 @@ BandwidthRecord::BandwidthRecord() {
 bool BandwidthRecord::addFrame(int size, int maxpersec) {
 	QMutexLocker ml(&qmMutex);
 
-	if (size <= 0 || maxpersec <= 0)
+	qint64 nsum = 0;
+	if (!frameAllowedUnlocked(size, maxpersec, nsum))
 		return false;
-
-	const qint64 elapsed = a_qtWhen[iRecNum].elapsed().count();
-	if (elapsed <= 0)
-		return false;
-
-	const qint64 nsum = iSum - a_iBW[iRecNum] + size;
-	// At most N_BANDWIDTH_SLOTS positive int charges: the scaled sum fits qint64.
-	// Keep the elapsed time and multiplication wide on Windows as well as Unix.
-	const qint64 bw = (nsum * 1000000LL) / elapsed;
-
-	if (bw > maxpersec)
-		return false;
-
 	a_iBW[iRecNum] = size;
 	a_qtWhen[iRecNum].restart();
 
@@ -48,6 +36,31 @@ bool BandwidthRecord::addFrame(int size, int maxpersec) {
 	iRecNum++;
 	if (iRecNum == N_BANDWIDTH_SLOTS)
 		iRecNum = 0;
+
+	return true;
+}
+
+bool BandwidthRecord::canAddFrame(int size, int maxpersec) const {
+	QMutexLocker lock(&qmMutex);
+	qint64 sum = 0;
+	return frameAllowedUnlocked(size, maxpersec, sum);
+}
+
+bool BandwidthRecord::frameAllowedUnlocked(int size, int maxpersec, qint64 &nsum) const {
+	if (size <= 0 || maxpersec <= 0)
+		return false;
+
+	const qint64 elapsed = a_qtWhen[iRecNum].elapsed().count();
+	if (elapsed <= 0)
+		return false;
+
+	nsum = iSum - a_iBW[iRecNum] + size;
+	// At most N_BANDWIDTH_SLOTS positive int charges: the scaled sum fits qint64.
+	// Keep the elapsed time and multiplication wide on Windows as well as Unix.
+	const qint64 bw = (nsum * 1000000LL) / elapsed;
+
+	if (bw > maxpersec)
+		return false;
 
 	return true;
 }

@@ -12,6 +12,7 @@
 #include <QtGui/QImage>
 #include <QtNetwork/QAbstractSocket>
 #include <QtWidgets/QMainWindow>
+#include <functional>
 
 #include "CustomElements.h"
 #include "Log.h"
@@ -90,6 +91,9 @@ private:
 #ifdef USE_FILE_SHARING
 	/// Live state of every transfer card shown in the log
 	QHash< QByteArray, PQFT::FTTransferInfo > m_fileTransferCards;
+	bool m_fileVerificationActive = false;
+	QList< std::function< void() > > m_fileVerificationQueue;
+	void drainFileVerifications();
 #endif
 	Q_OBJECT
 	Q_DISABLE_COPY(MainWindow)

@@ -22,7 +22,7 @@ QByteArray encodeHandshake(quint8 type, const QByteArray &canonicalBody) {
 }
 
 QByteArray encodeControl(quint8 type, quint64 seq, const QByteArray &ciphertextAndTag) {
-	if (type < TypeManifest || type > TypeAbort)
+	if (type < TypeManifest || type > TypeProgress)
 		return QByteArray();
 	QByteArray frame;
 	frame.reserve(9 + ciphertextAndTag.size());
@@ -39,7 +39,7 @@ bool decodeHeader(const QByteArray &frame, quint8 &type) {
 	if ((header >> 4) != Version)
 		return false;
 	const quint8 t = header & 0x0f;
-	if (t < 1 || t > TypeAbort)
+	if (t < 1 || t > TypeProgress)
 		return false;
 	type = t;
 	return true;

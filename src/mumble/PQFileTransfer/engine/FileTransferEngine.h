@@ -25,6 +25,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QFile;
 class QFileDevice;
@@ -38,17 +39,19 @@ class FileTransferSession;
 struct FTTransferInfo {
 	enum class State {
 		Handshaking,
-		VerifyingIdentity,   // first contact, safety-number dialog pending
-		WaitingPassword,	 // password required to decrypt
+		VerifyingIdentity, // first contact, safety-number dialog pending
+		WaitingPassword,   // password required to decrypt
 		Transferring,
-		Verifying,		   // all bytes in, Merkle check running/ran
-		Ready,			   // verified, waiting for the user to save
+		Verifying, // all bytes in, Merkle check running/ran
+		Ready,     // verified, waiting for the user to save
 		Saved,
+		PartiallyDelivered,
 		Failed,
 		Aborted,
 	};
 
 	QByteArray transferId;
+	quint64 sendContext      = 0;
 	unsigned int peerSession = 0;   // remote peer (sender when receiving)
 	// Incoming identity: name captured at handshake start, key authenticated by the session/manifest.
 	QString peerName;
@@ -60,6 +63,8 @@ struct FTTransferInfo {
 	quint64 bytesDone		  = 0;
 	bool passwordMode		  = false;
 	State state				  = State::Handshaking;
+	QList< unsigned int > deliveredRecipients;
+	QList< unsigned int > failedRecipients;
 	QString error;				  // generic where it matters (§13)
 };
 
@@ -78,7 +83,15 @@ public:
 	using IdentitySign =
 		std::function< bool(QByteArray &sig, const QByteArray &msg, const QByteArray &ctx) >;
 
+	struct PeerSnapshot {
+		QString name;
+		QByteArray pinnedFingerprint;
+		bool available = true;
+	};
+	void setPeerLookup(std::function< PeerSnapshot(unsigned int) > lookup) { m_peerLookup = std::move(lookup); }
 	struct Config {
+		bool authorizeSendPeers   = false;
+		quint64 aggregateSendRate = 0;
 		// Maximum plaintext chunk size; low rates use smaller protocol-valid chunks.
 		quint32 chunkSize  = 256 * 1024;
 		// Shared ciphertext-byte budget across all sends; 0 = unlimited.
@@ -93,13 +106,24 @@ public:
 
 	void setTransport(TransportControl control, TransportChunk chunk);
 	void setPinLookup(PinLookup lookup);
+	using TargetedChunk =
+		std::function< bool(const QList< unsigned int > &, const QByteArray &, quint64, quint64, const QByteArray &) >;
+	void setTargetedChunkTransport(TargetedChunk transport, bool requireRelayAcknowledgement = false) {
+		m_targetedChunk               = std::move(transport);
+		m_requireRelayAcknowledgement = requireRelayAcknowledgement;
+	}
+	void relayResponse(const QByteArray &transferId, quint64 index, bool accepted, quint32 retryAfterMSecs,
+					   const QString &reason);
+	void relayFailed(const QByteArray &transferId, const QString &reason);
+	void transportFailed(unsigned int actor, const QByteArray &transferId, const QString &reason);
 	void setPeerNameLookup(std::function< QString(unsigned int) > lookup);
 	void setIdentity(QByteArray identityPublicKey, IdentitySign sign);
 	/// Call in the engine's owning thread; the manager queues configuration updates.
 	void setConfig(const Config &config);
 
 	// ---- Inbound (queued from the manager; ordering preserved) ----
-	void onControlMessage(unsigned int actorSession, const QByteArray &payload);
+	void onControlMessage(unsigned int actorSession, const QByteArray &payload,
+						  const std::optional< PeerSnapshot > &observedPeer = std::nullopt);
 	void onDataMessage(unsigned int actorSession, const QByteArray &transferId, quint64 chunkIndex,
 					   quint64 chunkCountHint, const QByteArray &data);
 
@@ -107,7 +131,8 @@ public:
 	/// Recipients map sessions to immutable expected fingerprints captured before queueing.
 	/// An empty value explicitly permits first use; sending never reads the receiver pin cache.
 	quint64 startSend(const QString &filePath, const QString &mimeType, bool passwordMode, QByteArray password,
-					  const QHash< unsigned int, QByteArray > &recipients);
+					  const QHash< unsigned int, QByteArray > &recipients,
+					  const QHash< unsigned int, QString > &names = {}, quint64 sendContext = 0);
 	void abortTransfer(const QByteArray &transferId);
 	/// Existing targets are replaced only after explicit user confirmation.
 	/// Otherwise creation is exclusive; failed writes leave the receive retryable.
@@ -115,7 +140,8 @@ public:
 	void providePassword(const QByteArray &transferId, QByteArray password);
 	/// Resume a first-contact handshake the user verified (verified=true) or
 	/// drop it (verified=false).
-	void resolveFirstContact(unsigned int peerSession, bool verified);
+	void resolveFirstContact(unsigned int peerSession, bool verified, quint64 requestToken);
+	void resolveSendAuthorization(unsigned int peerSession, const QByteArray &transferId, bool verified);
 	/// Abort every in-flight transfer (disconnect / server change).
 	void abortAll();
 
@@ -126,10 +152,11 @@ signals:
 	/// observation is the documented deviation. When false (receiver side,
 	/// plain M1) the fingerprint is an unauthenticated claim and MUST only be
 	/// pinned once the user completes the safety-number verification.
-	void firstContact(unsigned int peerSession, const QByteArray &peerFingerprint,
-					  const QString &safetyNumber, const QByteArray &pendingTransferId,
-					  bool pinOnObservation);
+	void firstContact(unsigned int peerSession, const QByteArray &peerFingerprint, const QString &safetyNumber,
+					  const QByteArray &pendingTransferId, bool pinOnObservation, quint64 requestToken = 0,
+					  const QString &capturedName = QString(), quint64 sendContext = 0);
 	void peerBlocked(unsigned int peerSession);
+	void firstContactRetired(unsigned int peerSession, quint64 requestToken);
 	void passwordRequired(const QByteArray &transferId);
 
 private:
@@ -139,6 +166,7 @@ private:
 	// --- sending ---
 	struct SendPeer {
 		unsigned int session = 0;
+		QString name;
 		/// The pinned fingerprint at send time; empty = first use (pin on
 		/// first observation after the signature verifies).
 		QByteArray pinnedFingerprint;
@@ -146,10 +174,14 @@ private:
 		/// job ends) — a plain member keeps SendPeer copyable for QList.
 		FileTransferSession *session_ = nullptr;
 		bool established	  = false;
+		bool received                 = false;
+		bool waitingPassword          = false;
+		bool awaitingAuthorization    = false;
 		bool failed		   = false;
 	};
 	struct SendJob {
 		QByteArray transferId;
+		quint64 sendContext = 0;
 		QString sourcePath;
 		QString fileName;
 		QString mimeType;
@@ -168,7 +200,14 @@ private:
 		quint64 lastProgressBytes  = 0;
 		QByteArray transferDigest;
 		bool manifestSent		= false;
+		QByteArray pendingCiphertext;
+		bool awaitingRelay  = false;
+		qint64 retryAtMSecs = 0;
+		QElapsedTimer progressClock;
+		QString lastRelayError;
+		std::unique_ptr< QTimer > stallTimer;
 		std::unique_ptr< QTimer > handshakeTimer;
+		bool finishing                  = false;
 		FTTransferInfo::State lastState = FTTransferInfo::State::Handshaking;
 	};
 
@@ -217,6 +256,8 @@ private:
 		unsigned int peerSession = 0;
 		QByteArray peerFingerprint;
 		QByteArray m1Frame;
+		QString peerName;
+		quint64 requestToken = 0;
 		QTimer *timeout = nullptr;   // parented to the engine
 	};
 	static void stopPendingHandshakeTimer(PendingHandshake &pending);
@@ -226,14 +267,16 @@ private:
 	/// onControlMessage, which probed the sessions non-destructively).
 	void processControlForReceive(std::shared_ptr< ReceiveJob > jobPtr, quint8 type,
 								  const QByteArray &body);
-	void startResponder(unsigned int actorSession, const QByteArray &m1Frame,
-						const QByteArray &peerFingerprint);
-	void handleIncomingM1(unsigned int actorSession, const QByteArray &payload);
+	void startResponder(unsigned int actorSession, const QByteArray &m1Frame, const QByteArray &peerFingerprint,
+						const QString &peerName = QString());
+	void handleIncomingM1(unsigned int actorSession, const QByteArray &payload,
+						  const std::optional< PeerSnapshot > &observedPeer);
 	void maybeStartHandshakePhase2(SendJob &job);
 	void buildAndSendManifests(SendJob &job);
 	void paceSends();
 	void refillSendCredit();
 	void sendNextChunk(SendJob &job);
+	void completeSendUpload(SendJob &job);
 	void finishSend(SendJob &job, bool success, const QString &error);
 	void updateSendState(SendJob &job, FTTransferInfo::State state, const QString &error = QString());
 	void updateReceiveState(ReceiveJob &job, FTTransferInfo::State state, const QString &error = QString());
@@ -265,7 +308,11 @@ private:
 	IdentitySign m_sign;
 	TransportControl m_transportControl;
 	TransportChunk m_transportChunk;
+	TargetedChunk m_targetedChunk;
+	bool m_requireRelayAcknowledgement = false;
 	PinLookup m_pinLookup;
+	std::function< PeerSnapshot(unsigned int) > m_peerLookup;
+	quint64 m_nextHandshakeToken = 0;
 	std::function< QString(unsigned int) > m_peerNameLookup;
 	std::unique_ptr< QTimer > m_sendPaceTimer;
 	QElapsedTimer m_sendPaceClock;

@@ -36,17 +36,24 @@ QString stateLabel(const FTTransferInfo &info) {
 		case FTTransferInfo::State::Handshaking:
 			return FileTransferEngine::tr("Connecting…");
 		case FTTransferInfo::State::VerifyingIdentity:
-			return FileTransferEngine::tr("Verify sender identity");
+			return info.incoming ? FileTransferEngine::tr("Verify sender identity")
+								 : FileTransferEngine::tr("Verify recipient identity");
 		case FTTransferInfo::State::WaitingPassword:
 			return FileTransferEngine::tr("Password required — click to enter");
 		case FTTransferInfo::State::Transferring:
 			return FileTransferEngine::tr("Transferring…");
 		case FTTransferInfo::State::Verifying:
-			return FileTransferEngine::tr("Verifying…");
+			return info.incoming ? FileTransferEngine::tr("Verifying…")
+								 : FileTransferEngine::tr("Waiting for delivery confirmation…");
 		case FTTransferInfo::State::Ready:
 			return FileTransferEngine::tr("Click to save");
 		case FTTransferInfo::State::Saved:
-			return FileTransferEngine::tr("Saved");
+			return info.incoming ? FileTransferEngine::tr("Saved") : FileTransferEngine::tr("Delivered");
+		case FTTransferInfo::State::PartiallyDelivered:
+			return FileTransferEngine::tr("Delivered to %1 of %2 recipients. %3")
+				.arg(info.deliveredRecipients.size())
+				.arg(info.deliveredRecipients.size() + info.failedRecipients.size())
+				.arg(info.error);
 		case FTTransferInfo::State::Failed:
 			return info.error.isEmpty() ? FileTransferEngine::tr("Failed") : info.error;
 		case FTTransferInfo::State::Aborted:

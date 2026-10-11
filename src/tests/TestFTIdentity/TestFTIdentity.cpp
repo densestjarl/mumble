@@ -245,9 +245,10 @@ void TestFTIdentity::replacedPinDoesNotAcceptOldVerification() {
 					 replacement = PQFT::randomBytes(PQFT::HashSize);
 	const QString name           = QStringLiteral("Replacement-key fixture");
 	QCOMPARE(store.checkAndPin(digest, name, old, QString()), PQFT::TrustState::Pinned);
-	QVERIFY(store.removePin(digest, name));
+	QVERIFY(store.removePin(digest, name, old));
 	QCOMPARE(store.checkAndPin(digest, name, replacement, QString()), PQFT::TrustState::Pinned);
 	QVERIFY(!store.markVerified(digest, name, old));
+	QVERIFY(!store.removePin(digest, name, old));
 	PQFT::PinnedPeer stored;
 	QVERIFY(store.lookup(stored, digest, name));
 	QCOMPARE(stored.fingerprint, replacement);
@@ -262,7 +263,7 @@ void TestFTIdentity::trustStoreRemovePin() {
 	const QString safety("x");
 
 	QCOMPARE(store.checkAndPin(serverDigest, username, fp, safety), PQFT::TrustState::Pinned);
-	QVERIFY(store.removePin(serverDigest, username));
+	QVERIFY(store.removePin(serverDigest, username, fp));
 	QCOMPARE(store.check(serverDigest, username, fp, safety), PQFT::TrustState::NewPeer);
 }
 

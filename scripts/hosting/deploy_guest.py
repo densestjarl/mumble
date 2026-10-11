@@ -18,6 +18,8 @@ import re
 import secrets
 import shutil
 import socket
+import ssl
+import struct
 import sqlite3
 import subprocess
 import sys
@@ -39,6 +41,19 @@ def run(*argv, input=None):
     if result.returncode:
         raise RuntimeError(f'{Path(argv[0]).name} failed (exit {result.returncode}); output withheld')
     return result.stdout.strip()
+
+
+def verify_ssh_port(port):
+    """Refuse firewall changes unless the selected SSH port is configured and listening."""
+    if not 1 <= port <= 65535:
+        raise ValueError('Invalid SSH port')
+    configured = {int(line.split()[1]) for line in run('/usr/sbin/sshd', '-T').splitlines()
+                  if line.startswith('port ')}
+    listeners = run('ss', '-H', '-ltnp').splitlines()
+    listening = any(len(line.split()) >= 5 and 'sshd' in line
+                    and line.split()[3].rsplit(':', 1)[-1] == str(port) for line in listeners)
+    if port not in configured or not listening:
+        raise ValueError('Selected SSH port is not configured and listening; firewall unchanged')
 
 
 def digest(path):
@@ -122,6 +137,57 @@ def validate_manifest(manifest, package):
         raise ValueError('Package metadata does not match manifest')
 
 
+def local_protocol_ready(port, certificate):
+    context = ssl.create_default_context(cafile=str(certificate))
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.check_hostname = False  # Exact archived leaf pin, independent of the external DNS check.
+    expected = ssl.PEM_cert_to_DER_cert(certificate.read_text())
+    with socket.create_connection(('127.0.0.1', port), timeout=1) as connection, context.wrap_socket(connection) as secure:
+        if secure.getpeercert(binary_form=True) != expected:
+            raise ValueError('Listener presents a different TLS identity')
+        def read_exact(length):
+            result = bytearray()
+            while len(result) < length:
+                part = secure.recv(length - len(result))
+                if not part:
+                    raise OSError('Listener closed before protocol readiness')
+                result.extend(part)
+            return bytes(result)
+        kind, length = struct.unpack('>HI', read_exact(6))
+        if kind != 0 or not 1 <= length <= 65536:
+            raise ValueError('Listener did not send a bounded Mumble Version greeting')
+        greeting = read_exact(length)
+        # The first Version field emitted by supported servers is the varint version.
+        if greeting[0] not in (8, 40) or len(greeting) < 2:
+            raise ValueError('Listener did not send a Mumble version')
+
+
+def wait_ready(port, certificate, unit, timeout=15, stable_seconds=2):
+    deadline = time.monotonic() + timeout
+    stable_since = None
+    incarnation = None
+    while time.monotonic() < deadline:
+        try:
+            status = run('systemctl', 'show', unit, '--property=ActiveState,NRestarts,InvocationID')
+            fields = dict(line.split('=', 1) for line in status.splitlines() if '=' in line)
+            if fields.get('ActiveState') != 'active' or not fields.get('InvocationID'):
+                raise OSError('Service is not active')
+            current = (fields['InvocationID'], fields.get('NRestarts'))
+            local_protocol_ready(port, certificate)
+            now = time.monotonic()
+            if current != incarnation:
+                incarnation, stable_since = current, now
+            elif now - stable_since >= stable_seconds:
+                return
+        except ssl.SSLCertVerificationError as error:
+            raise ValueError('Pinned TLS certificate verification failed') from error
+        except (OSError, ssl.SSLError, RuntimeError):
+            stable_since, incarnation = None, None
+        # Three probes across two seconds avoid tripping the server's login flood guard.
+        time.sleep(1)
+    raise RuntimeError('Pinned Mumble listener did not remain ready; service may be restarting')
+
+
 def deploy(args):
     manifest = json.loads(args.manifest.read_text())
     package = args.package.resolve(strict=True)
@@ -131,6 +197,7 @@ def deploy(args):
         raise ValueError('Fresh Debian 12 guest required')
     if run('dpkg', '--print-architecture') != 'amd64' or not Path('/run/systemd/system').is_dir():
         raise ValueError('amd64 guest with running systemd required')
+    verify_ssh_port(args.ssh_port)
     config = {'port': args.port, 'ssh_port': args.ssh_port, 'endpoint': args.endpoint}
     marker = STATE / 'deployment.json'
     if marker.exists():
@@ -145,6 +212,7 @@ def deploy(args):
                 raise ValueError('Installed version changed; refusing automatic repair')
             run('systemctl', 'start', 'mumble-hosting-firewall.service')
             run('systemctl', 'start', 'mumble-server.service')
+            wait_ready(args.port, DATA / 'server.crt', 'mumble-server.service')
             return {'status': 'unchanged', 'source_commit': manifest['source_commit'],
                     'credentials_file': str(STATE / 'credentials.json')}
     else:
@@ -234,8 +302,7 @@ def deploy(args):
     run('nft', '--check', '-f', str(FIREWALL))
     run('systemctl', 'daemon-reload')
     run('systemctl', 'enable', '--now', 'mumble-hosting-firewall.service', 'mumble-server.service')
-    time.sleep(1)
-    run('systemctl', 'is-active', 'mumble-server.service')
+    wait_ready(args.port, cert, 'mumble-server.service')
     state['phase'] = 'ready'
     state['managed_files'] = {str(path): digest(path) for path in (INI, DROPIN, FIREWALL, FW_UNIT, cert, key, credentials)}
     save(state)
