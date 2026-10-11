@@ -4,7 +4,7 @@ PR #40 consolidates native client/server stability fixes and disposable deployme
 
 ## Evidence retention
 
-Historical raw logs, test XML, source/binary hash inventories, review snapshots and detailed run records are retained in the [qualification evidence release](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11). The archive contains 1,509 files frozen at `8daa4c065b9ff08540b3d69b6676215141118302`, including all 1,313 PR-added files removed from these evidence directories. The 196 records already present on master are preserved in the working tree. No private lab files were added to the archive.
+Historical raw logs, test XML, source/binary hash inventories, review snapshots and detailed run records are retained in the [qualification evidence release](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11). The archive contains 1,509 files frozen at `8daa4c065b9ff08540b3d69b6676215141118302`, including all 1,313 PR-added historical records moved out of these evidence directories. The two summary paths are rewritten as curated documents. A supplemental archive retains 14 further PR-added logs and detailed run manifests removed from other stability directories. The 196 records already present on master are preserved in the working tree. No private lab files were added to the archive.
 
 Archive SHA256: `4a03155edafc422bdb61aaea4d2789aac9fae39f6f34e6a45219bd6be7f3aeec`. Every archived file was checked against the tracked source before removal; the uploaded archive was downloaded and its checksum verified. [Small archive manifest](evidence-archive.json). Extraction retains the original repository paths, including failed and superseded runs.
 

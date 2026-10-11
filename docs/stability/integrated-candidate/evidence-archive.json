@@ -12,5 +12,13 @@
   "verified": "Every archived file compared byte-for-byte with its tracked source before removal.",
   "removed_pr_added_files": 1313,
   "base_existing_files_preserved": 196,
-  "release_url": "https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11"
+  "release_url": "https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11",
+  "additional_archive": {
+    "source_commit": "8daa4c065b9ff08540b3d69b6676215141118302",
+    "archive": "pr40-additional-evidence-8daa4c0.tar.gz",
+    "sha256": "d88fbf60f0123f898d270f81347e7da94445ce209888f3cf5730ffbc6f270163",
+    "files": 14,
+    "archive_bytes": 15027,
+    "download_verified": true
+  }
 }
