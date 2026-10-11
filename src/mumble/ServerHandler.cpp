@@ -763,7 +763,12 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 								|| type == Mumble::Protocol::TCPMessageType::FileTransferControl;
 		if (fileRecord) {
 			const qint64 previous = m_fileInboundBytes->fetch_add(delivery.size());
-			if (previous + delivery.size() > 4 * 1024 * 1024) {
+			MumbleProto::FileData response;
+			const bool admission = type == Mumble::Protocol::TCPMessageType::FileData && delivery.size() <= 512
+								   && response.ParseFromArray(delivery.constData(), static_cast< int >(delivery.size()))
+								   && (response.has_relay_accepted() || response.has_relay_retry_after_ms());
+			const qint64 limit   = 4 * 1024 * 1024 + (admission ? 64 * 1024 : 0);
+			if (previous + delivery.size() > limit) {
 				m_fileInboundBytes->fetch_sub(delivery.size());
 				MumbleProto::FileData incoming;
 				if (type != Mumble::Protocol::TCPMessageType::FileData

@@ -26,7 +26,7 @@ class SafetyNumberDialog : public QDialog {
 	Q_OBJECT
 public:
 	SafetyNumberDialog(const QString &peerName, const QString &safetyDigits, const QByteArray &qrPayload,
-					   QWidget *parent = nullptr);
+					   QWidget *parent = nullptr, bool sending = false);
 
 	bool verified() const { return m_verified; }
 

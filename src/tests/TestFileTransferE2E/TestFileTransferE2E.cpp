@@ -85,7 +85,12 @@ public:
 		// Members destroy in reverse declaration order (engine, trust,
 		// identity, then the DB handle), so the connection's users are gone
 		// by the time the handle closes.
+		m_engine.abortAll();
+		m_engine.setTransport({}, {});
+		m_engine.setTargetedChunkTransport({});
 		m_socket->abort();
+		delete m_socket;
+		m_socket = nullptr;
 		m_db.close();
 	}
 
@@ -629,6 +634,7 @@ void TestFileTransferE2E::concurrentTargetedLargeDelivery() {
 	PQFT::FileTransferEngine::Config config;
 	config.sendRateBytesPerSecond = 900000;
 	config.aggregateSendRate      = 900000;
+	config.chunkSize              = 128 * 1024;
 	sender.engine().setConfig(config);
 	QSignalSpy sent(&sender.engine(), &PQFT::FileTransferEngine::transferUpdated);
 	QSignalSpy firstUpdates(&first.engine(), &PQFT::FileTransferEngine::transferUpdated);
@@ -710,6 +716,7 @@ void TestFileTransferE2E::competingSendersRetryAggregateBudget() {
 	PQFT::FileTransferEngine::Config config;
 	config.sendRateBytesPerSecond = 900000;
 	config.aggregateSendRate      = 900000;
+	config.chunkSize              = 128 * 1024;
 	first.engine().setConfig(config);
 	second.engine().setConfig(config);
 	QSignalSpy firstUpdates(&first.engine(), &PQFT::FileTransferEngine::transferUpdated);

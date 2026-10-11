@@ -4978,7 +4978,8 @@ void MainWindow::onFileFirstContact(unsigned int peerSession, const QByteArray &
 		QByteArray qrPayload;
 		if (manager->identity() && manager->identity()->isUnlocked())
 			qrPayload = PQFT::safetyQrPayload(manager->identity()->fingerprint(), peerFingerprint);
-		auto *dialog = new SafetyNumberDialog(user->qsName, safetyNumber, qrPayload, this);
+		auto *dialog = new SafetyNumberDialog(manager->contactRequestName(token), safetyNumber, qrPayload, this,
+											  manager->contactRequestSending(token));
 		dialog->setAttribute(Qt::WA_DeleteOnClose);
 		m_fileVerificationActive = true;
 		connect(

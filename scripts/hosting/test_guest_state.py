@@ -1,5 +1,5 @@
 """Recovery checks: real WAL snapshots, archive refusal, and age authentication."""
-from contextlib import closing
+from contextlib import closing, ExitStack
 import io
 import json
 from pathlib import Path
@@ -134,17 +134,72 @@ class StateTests(unittest.TestCase):
         paths = {name: self.stage / name for name in guest_state.PAYLOADS}
         with patch.object(guest_state, 'PAYLOADS', paths), \
                 patch.object(guest_state, 'SPOOL_ROOT', self.root), \
-                patch.object(guest_state, 'managed_state', return_value={'manifest': self.manifest}), \
+                patch.object(guest_state, 'managed_state', return_value={'manifest': self.manifest, 'config': {'port': 64738, 'ssh_port': 22}}), \
                 patch.object(guest_state, 'service_active', return_value=True), \
                 patch.object(guest_state, 'snapshot_database', side_effect=ValueError('snapshot failed')), \
-                patch.object(deploy_guest, 'run') as command:
+                patch.object(deploy_guest, 'run') as command, \
+                patch.object(deploy_guest, 'wait_ready') as ready:
             with self.assertRaisesRegex(ValueError, 'snapshot failed'):
                 guest_state.backup(args)
             self.assertEqual([call.args for call in command.call_args_list], [
                 ('systemctl', 'stop', 'mumble-server.service'),
-                ('systemctl', 'start', 'mumble-server.service'),
-                ('systemctl', 'is-active', 'mumble-server.service')])
+                ('systemctl', 'start', 'mumble-server.service')])
+            ready.assert_called_once_with(64738, deploy_guest.DATA / 'server.crt', 'mumble-server.service')
         self.assertFalse(args.output.exists())
+
+    def test_restore_checks_ssh_and_readiness_before_publication(self):
+        for scenario in ('ready', 'wrong-ssh', 'wrong-firewall', 'crash-loop'):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                owned = Path(directory)
+                cipher = owned / 'state.age'
+                cipher.write_bytes(b'owned encrypted fixture')
+                manifest = owned / 'manifest.json'
+                manifest.write_text(json.dumps(self.manifest))
+                args = SimpleNamespace(archive=cipher, sha256=deploy_guest.digest(cipher), manifest=manifest,
+                                       identity=owned / 'identity')
+                state = {'phase': 'ready', 'manifest': self.manifest,
+                         'config': {'port': 64738, 'ssh_port': 2222}}
+                destinations = {name: owned / ('installed-' + name) for name in guest_state.PAYLOADS}
+                def command(*argv, **kwargs):
+                    if argv[0] == 'age':
+                        Path(argv[argv.index('--output') + 1]).write_bytes(b'archive')
+                    return '0' if argv[0] == 'id' else ''
+                def unpack(archive, stage, reviewed):
+                    self.assertEqual(reviewed, self.manifest)
+                    for name in guest_state.PAYLOADS:
+                        (stage / name).write_bytes((self.stage / name).read_bytes())
+                    (stage / 'firewall.nft').write_text(' tcp dport { %d, 64738 } accept\n' %
+                                                       (22 if scenario == 'wrong-firewall' else 2222))
+                    return self.metadata, state
+                with ExitStack() as stack:
+                    stack.enter_context(patch.object(guest_state, 'SPOOL_ROOT', owned))
+                    stack.enter_context(patch.object(guest_state, 'PAYLOADS', destinations))
+                    stack.enter_context(patch.object(guest_state, 'unpack_verified_archive', side_effect=unpack))
+                    stack.enter_context(patch.object(guest_state, 'service_active', return_value=False))
+                    stack.enter_context(patch.object(guest_state.grp, 'getgrnam', return_value=SimpleNamespace(gr_gid=0)))
+                    stack.enter_context(patch.object(guest_state.os, 'chown'))
+                    stack.enter_context(patch.object(deploy_guest, 'DATA', owned / 'data'))
+                    stack.enter_context(patch.object(deploy_guest, 'FIREWALL', destinations['firewall.nft']))
+                    stack.enter_context(patch.object(deploy_guest, 'run', side_effect=command))
+                    ssh = stack.enter_context(patch.object(deploy_guest, 'verify_ssh_port',
+                        side_effect=ValueError('selected SSH port mismatch') if scenario == 'wrong-ssh' else None))
+                    mutation = stack.enter_context(patch.object(guest_state, 'fresh_or_resumable'))
+                    ready = stack.enter_context(patch.object(deploy_guest, 'wait_ready',
+                        side_effect=RuntimeError('crash loop') if scenario == 'crash-loop' else None))
+                    save = stack.enter_context(patch.object(deploy_guest, 'save'))
+                    if scenario == 'ready':
+                        self.assertEqual(guest_state.restore(args)['status'], 'restored')
+                        mutation.assert_called_once_with(args.sha256, self.manifest, 2222)
+                        ready.assert_called_once_with(64738, owned / 'data/server.crt', 'mumble-server.service')
+                        save.assert_called_once_with(state)
+                    else:
+                        with self.assertRaises((ValueError, RuntimeError)):
+                            guest_state.restore(args)
+                        save.assert_not_called()
+                        if scenario in ('wrong-ssh', 'wrong-firewall'):
+                            mutation.assert_not_called()
+                            self.assertFalse(any(path.exists() for path in destinations.values()))
+                    ssh.assert_called_once_with(2222)
 
     def key(self, name):
         identity = self.root / name

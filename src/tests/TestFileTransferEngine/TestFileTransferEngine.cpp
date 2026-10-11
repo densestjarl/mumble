@@ -58,6 +58,7 @@ private slots:
 	void relayRetriesKeepCiphertextAndRequireAdmission();
 	void incompleteRecipientHandshakeSendsNoContent();
 	void missingReceiptReportsPartialDelivery();
+	void peerResetKeepsUnrelatedReadyFileAndRetiresPrompt();
 	void initTestCase();
 	void cleanupTestCase();
 
@@ -337,6 +338,32 @@ void TestFileTransferEngine::missingReceiptReportsPartialDelivery() {
 	const auto final = sent.last().first().value< PQFT::FTTransferInfo >();
 	QCOMPARE(final.deliveredRecipients, QList< unsigned int >{ BobSession });
 	QCOMPARE(final.failedRecipients, QList< unsigned int >{ 3 });
+}
+
+void TestFileTransferEngine::peerResetKeepsUnrelatedReadyFileAndRetiresPrompt() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	QSignalSpy received(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	QVERIFY(pair.alice.startSend(writeTestFile(64 * 1024), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp } })
+			> 0);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(received, {}, PQFT::FTTransferInfo::State::Ready), 5000);
+	const QByteArray id = received.last().first().value< PQFT::FTTransferInfo >().transferId;
+	QVERIFY(pair.bob.m_receiveJobs.contains(id));
+	const auto ready        = pair.bob.m_receiveJobs.value(id);
+	const QString directory = ready->tempDirectory->path();
+	QVERIFY(QDir(directory).exists());
+	pair.bob.setPinLookup([&](unsigned int session) { return session == AliceSession ? m_aliceFp : QByteArray(); });
+	QSignalSpy prompts(&pair.bob, &PQFT::FileTransferEngine::firstContact);
+	QSignalSpy retired(&pair.bob, &PQFT::FileTransferEngine::firstContactRetired);
+	PQFT::FileTransferSession pending(PQFT::FileTransferSession::Role::Initiator, { m_alice.publicKey, {} }, {});
+	pair.bob.onControlMessage(3, pending.buildM1());
+	QCOMPARE(prompts.count(), 1);
+	pair.bob.abortPeer(3);
+	QCOMPARE(retired.count(), 1);
+	QCOMPARE(retired.first().at(1).toULongLong(), prompts.first().at(5).toULongLong());
+	QVERIFY(pair.bob.m_receiveJobs.contains(id));
+	QCOMPARE(ready->lastState, PQFT::FTTransferInfo::State::Ready);
+	QVERIFY(QDir(directory).exists());
 }
 
 void TestFileTransferEngine::sendingRespectsConfiguredRate_data() {

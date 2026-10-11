@@ -93,9 +93,6 @@ class ReadinessTests(unittest.TestCase):
         self.assertFalse(context.check_hostname)
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 
 class SSHPortTests(unittest.TestCase):
     def test_requires_configured_live_ssh_listener(self):
@@ -117,3 +114,6 @@ class SSHPortTests(unittest.TestCase):
                 patch.object(deploy_guest, 'local_protocol_ready', side_effect=ssl.SSLCertVerificationError('wrong certificate')):
             with self.assertRaisesRegex(ValueError, 'certificate verification'):
                 deploy_guest.wait_ready(64738, Path('certificate'), 'owned.service')
+
+if __name__ == '__main__':
+    unittest.main()

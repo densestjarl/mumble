@@ -798,6 +798,12 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 		const quint32 rateChunk = qMax< quint32 >(MinChunkSize, m_config.sendRateBytesPerSecond / 4);
 		job->effectiveChunkSize = qMin(job->effectiveChunkSize, rateChunk);
 	}
+	if (m_config.aggregateSendRate > 0) {
+		const quint64 share =
+			m_config.aggregateSendRate / static_cast< quint64 >(qMax(1, static_cast< int >(recipients.size())));
+		const quint32 rateChunk = static_cast< quint32 >(qBound< quint64 >(MinChunkSize, share / 4, MaxChunkSize));
+		job->effectiveChunkSize = qMin(job->effectiveChunkSize, rateChunk);
+	}
 	job->file			= new QFile(fileInfo.absoluteFilePath());
 	if (!job->file->open(QIODevice::ReadOnly)) {
 		cleanupSend(*job, true);
@@ -1073,8 +1079,8 @@ void FileTransferEngine::refillSendCredit() {
 		int maximumRecipients = 1;
 		for (const auto &job : m_sendJobs)
 			maximumRecipients = qMax(maximumRecipients, static_cast< int >(job->peers.size()));
-		const qint64 aggregateRate =
-			static_cast< qint64 >(m_config.aggregateSendRate / static_cast< quint64 >(maximumRecipients));
+		const qint64 aggregateRate = static_cast< qint64 >(
+			qMax< quint64 >(1, m_config.aggregateSendRate / static_cast< quint64 >(maximumRecipients)));
 		rate                       = rate == 0 ? aggregateRate : qMin(rate, aggregateRate);
 	}
 	if (rate > 0) {
@@ -1307,10 +1313,6 @@ void FileTransferEngine::relayFailed(const QByteArray &transferId, const QString
 }
 
 void FileTransferEngine::transportFailed(unsigned int actor, const QByteArray &transferId, const QString &reason) {
-	if (m_sendJobs.contains(transferId)) {
-		relayFailed(transferId, reason);
-		return;
-	}
 	const auto job = findReceiveByPeer(actor, transferId);
 	if (!job)
 		return;
@@ -1603,6 +1605,29 @@ void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArra
 	}
 }
 
+void FileTransferEngine::abortPeer(unsigned int session) {
+	for (const auto &id : m_sendJobs.keys()) {
+		const auto job = m_sendJobs.value(id);
+		for (const auto &peer : job->peers)
+			if (peer.session == session) {
+				abortTransfer(id);
+				break;
+			}
+	}
+	for (const auto &id : m_receiveJobs.keys()) {
+		const auto job = m_receiveJobs.value(id);
+		if (job && job->peerSession == session)
+			abortTransfer(id);
+	}
+	auto pending = m_pendingHandshakes.find(session);
+	if (pending != m_pendingHandshakes.end()) {
+		const quint64 token = pending->requestToken;
+		stopPendingHandshakeTimer(*pending);
+		m_pendingHandshakes.erase(pending);
+		emit firstContactRetired(session, token);
+	}
+}
+
 void FileTransferEngine::abortAll() {
 	const QList< QByteArray > sendKeys = m_sendJobs.keys();
 	for (const QByteArray &key : sendKeys) {
@@ -1614,6 +1639,7 @@ void FileTransferEngine::abortAll() {
 		abortTransfer(key);
 	}
 	for (PendingHandshake &pending : m_pendingHandshakes) {
+		emit firstContactRetired(pending.peerSession, pending.requestToken);
 		stopPendingHandshakeTimer(pending);
 	}
 	m_pendingHandshakes.clear();

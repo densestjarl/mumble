@@ -106,7 +106,8 @@ void FileTransferManager::setupEngineTransports() {
 					}
 				}
 				if (info.incoming && !info.transferId.isEmpty()) {
-					if (info.state == PQFT::FTTransferInfo::State::Transferring)
+					if (info.state == PQFT::FTTransferInfo::State::Transferring
+						|| info.state == PQFT::FTTransferInfo::State::WaitingPassword)
 						m_activeReceived.insert(info.transferId);
 					if (info.state == PQFT::FTTransferInfo::State::Ready
 						|| info.state == PQFT::FTTransferInfo::State::Saved
@@ -365,9 +366,14 @@ void FileTransferManager::handleDataMessage(const MumbleProto::FileData &msg) {
 		const QString reason = QString::fromStdString(msg.relay_error()).left(256);
 		QMetaObject::invokeMethod(
 			m_engine,
-			[this, actor, transferId, reason, generation = m_connectionGeneration]() {
-				if (generation == m_engineGeneration)
-					m_engine->transportFailed(actor, transferId, reason);
+			[this, actor, transferId, reason, ownSession = Global::get().uiSession,
+			 generation = m_connectionGeneration]() {
+				if (generation == m_engineGeneration) {
+					if (actor == ownSession)
+						m_engine->relayFailed(transferId, reason);
+					else
+						m_engine->transportFailed(actor, transferId, reason);
+				}
 			},
 			Qt::QueuedConnection);
 		return;
@@ -604,6 +610,13 @@ bool FileTransferManager::contactRequestCurrent(unsigned int session, const QByt
 		   && it->fingerprint == fingerprint && it->generation == m_connectionGeneration;
 }
 
+QString FileTransferManager::contactRequestName(quint64 token) const {
+	return m_contactRequests.value(token).username;
+}
+bool FileTransferManager::contactRequestSending(quint64 token) const {
+	return m_contactRequests.value(token).sending;
+}
+
 bool FileTransferManager::resetPeerTrust(const SendRecipient &shown) {
 	if (shown.fingerprint.size() != PQFT::HashSize || !sendRecipientStillCurrent(shown)
 		|| !m_trustStore->removePin(shown.serverDigest, shown.name, shown.fingerprint))
@@ -611,7 +624,16 @@ bool FileTransferManager::resetPeerTrust(const SendRecipient &shown) {
 	// An explicit reset never adopts the observed replacement key. The next handshake
 	// must complete mandatory safety-number verification before any file content.
 	refreshPinCache();
-	QMetaObject::invokeMethod(m_engine, [this]() { m_engine->abortAll(); }, Qt::QueuedConnection);
+	for (auto it = m_contactRequests.begin(); it != m_contactRequests.end();) {
+		if (it->peerSession == shown.session) {
+			emit firstContactCancelled(it->promptToken);
+			it = m_contactRequests.erase(it);
+		} else
+			++it;
+	}
+	m_pendingFirstContact.remove(shown.session);
+	QMetaObject::invokeMethod(
+		m_engine, [this, session = shown.session]() { m_engine->abortPeer(session); }, Qt::QueuedConnection);
 	return true;
 }
 

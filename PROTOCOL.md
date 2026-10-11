@@ -79,7 +79,10 @@ are refused; duplicate targets are delivered once. Unknown fields are discarded.
 Per-sender upload and selected-fanout aggregate meters admit each chunk atomically:
 a retry charges no meter and delivers to no recipient. Size and recipient failures
 are terminal; rate or bounded receiver-queue pressure returns a retry response.
-Transfer accumulators are bounded, memory-only, and enforce `maxfilesize`.
+Transfer accumulators are bounded, memory-only, and enforce `maxfilesize`. File-specific token buckets cap idle credit
+at one second of rate plus one maximum frame (1 MiB + tag/framing); voice meters
+retain their original behavior. A fanout batch larger than that aggregate capacity
+is refused explicitly; clients reduce chunk size for the aggregate share.
 
 A server response uses the sender's actor/id/index, empty data, and either admission,
 a bounded retry delay, or a terminal error. It confirms relay admission only. The
@@ -226,7 +229,7 @@ or replay control messages, or truncate undetected.
   and cancelled by their exact retired request. Replacement M1 frames are ignored
   while a verification is pending; zero/wildcard worker tokens cannot resolve it.
 - The explicit user-menu identity reset deletes only the displayed expected pin,
-  refreshes caches and cancels active transfers. It never adopts a changed key.
+  refreshes caches and cancels transfers and pending prompts with that peer. It never adopts a changed key.
   The next handshake requires out-of-band verification again. Receiving acceptance
   and manual/automatic saving recheck captured trust; a write already authorized
   before revocation may finish and its complete result is reported truthfully.

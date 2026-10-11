@@ -110,3 +110,29 @@ int BandwidthRecord::bandwidth() const {
 	const qint64 bandwidth = (sum * 1000000LL) / elapsed.count();
 	return static_cast< int >(std::min(bandwidth, static_cast< qint64 >(std::numeric_limits< int >::max())));
 }
+
+qint64 FileBandwidthRecord::available(int rate) const {
+	const qint64 initial  = m_rate == rate ? m_creditMicroBytes : static_cast< qint64 >(rate) * 1000000;
+	const qint64 capacity = maximumBurst(rate) * 1000000;
+	const qint64 elapsed  = qBound< qint64 >(0, m_refillClock.elapsed().count(), capacity / rate + 1);
+	return qMin(capacity, initial + elapsed * rate);
+}
+
+bool FileBandwidthRecord::canAddFrame(int size, int rate) const {
+	QMutexLocker lock(&m_mutex);
+	return size > 0 && rate > 0 && static_cast< qint64 >(size) * 1000000 <= available(rate);
+}
+
+bool FileBandwidthRecord::addFrame(int size, int rate) {
+	QMutexLocker lock(&m_mutex);
+	if (size <= 0 || rate <= 0)
+		return false;
+	const qint64 credit = available(rate);
+	const qint64 charge = static_cast< qint64 >(size) * 1000000;
+	if (charge > credit)
+		return false;
+	m_creditMicroBytes = credit - charge;
+	m_rate             = rate;
+	m_refillClock.restart();
+	return true;
+}

@@ -90,6 +90,8 @@ public:
 	quint64 firstContactToken(unsigned int peerSession) const;
 	bool contactRequestCurrent(unsigned int session, const QByteArray &fingerprint, quint64 token) const;
 	bool resetPeerTrust(const SendRecipient &shown);
+	QString contactRequestName(quint64 token) const;
+	bool contactRequestSending(quint64 token) const;
 
 	/// Pin a peer's fingerprint (first use), optionally marking it verified.
 	/// Returns false when the peer cannot be resolved. GUI thread only.

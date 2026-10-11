@@ -126,7 +126,7 @@ def backup(args):
         finally:
             if was_active:
                 deployment.run('systemctl', 'start', 'mumble-server.service')
-                deployment.run('systemctl', 'is-active', 'mumble-server.service')
+                deployment.wait_ready(state['config']['port'], deployment.DATA / 'server.crt', 'mumble-server.service')
             downtime = time.monotonic() - stopped_at if was_active else 0.0
         archive = stage / 'state.tar'
         with tarfile.open(archive, 'w', format=tarfile.PAX_FORMAT) as stream:
@@ -182,7 +182,7 @@ def unpack_verified_archive(archive, stage, expected_manifest):
     return metadata, state
 
 
-def fresh_or_resumable(expected_hash, manifest):
+def fresh_or_resumable(expected_hash, manifest, ssh_port=22):
     release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     if (release.get('ID', '').strip('"') != 'debian' or release.get('VERSION_ID', '').strip('"') != '12'
             or deployment.run('dpkg', '--print-architecture') != 'amd64'
@@ -192,7 +192,7 @@ def fresh_or_resumable(expected_hash, manifest):
     if marker.exists():
         state = json.loads(marker.read_text())
         if (state.get('phase') != 'restoring' or state.get('restore_sha256') != expected_hash
-                or state.get('manifest') != manifest):
+                or state.get('manifest') != manifest or state.get('ssh_port', 22) != ssh_port):
             raise ValueError('Existing deployment found; restore requires a fresh guest')
     else:
         installed = subprocess.run(['dpkg-query', '-W', '-f=${Status}', 'mumble-server'],
@@ -202,7 +202,7 @@ def fresh_or_resumable(expected_hash, manifest):
                                           deployment.DROPIN, deployment.FIREWALL, deployment.FW_UNIT)):
             raise ValueError('Existing server/state found; restore requires a fresh guest')
         deployment.STATE.mkdir(mode=0o700)
-        deployment.save({'phase': 'restoring', 'restore_sha256': expected_hash, 'manifest': manifest})
+        deployment.save({'phase': 'restoring', 'restore_sha256': expected_hash, 'manifest': manifest, 'ssh_port': ssh_port})
 
 
 def restore(args):
@@ -222,7 +222,12 @@ def restore(args):
         stage.mkdir(mode=0o700)
         metadata, state = unpack_verified_archive(archive, stage, manifest)
         # All decryption/inventory/hash/SQLite/package checks precede mutation.
-        fresh_or_resumable(args.sha256, manifest)
+        ssh_port = state['config']['ssh_port']
+        deployment.verify_ssh_port(ssh_port)
+        expected_rule = f"tcp dport {{ {ssh_port}, {state['config']['port']} }} accept"
+        if expected_rule not in [line.strip() for line in (stage / 'firewall.nft').read_text().splitlines()]:
+            raise ValueError('Archived firewall does not preserve its selected SSH port')
+        fresh_or_resumable(args.sha256, manifest, ssh_port)
         if service_active():
             deployment.run('systemctl', 'stop', 'mumble-server.service')
         with tempfile.TemporaryDirectory(prefix='mumble-package-', dir='/var/tmp') as directory:

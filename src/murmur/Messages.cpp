@@ -609,8 +609,8 @@ void Server::msgAuthenticate(ServerUser *uSource, MumbleProto::Authenticate &msg
 	mpsc.set_recording_allowed(allowRecording);
 	mpsc.set_max_file_transfer_size(iMaxFileSize);
 	mpsc.set_file_transfer_relay_version(1);
-	mpsc.set_file_transfer_rate(qMax(0, iMaxFileBandwidth) / 8);
-	mpsc.set_file_transfer_aggregate_rate(qMax(0, iMaxFileBandwidthAggregate) / 8);
+	mpsc.set_file_transfer_rate(iMaxFileBandwidth > 0 ? qMax(1, iMaxFileBandwidth / 8) : 0);
+	mpsc.set_file_transfer_aggregate_rate(iMaxFileBandwidthAggregate > 0 ? qMax(1, iMaxFileBandwidthAggregate / 8) : 0);
 	sendMessage(uSource, mpsc);
 
 	MumbleProto::SuggestConfig mpsug;
@@ -2695,14 +2695,20 @@ void Server::msgFileData(ServerUser *uSource, MumbleProto::FileData &msg) {
 	{
 		QMutexLocker lock(&m_qmFileTransferBytes);
 		// Admission is all-or-nothing: a retry is never charged or delivered to any recipient.
-		if (iMaxFileBandwidth > 0 && !uSource->bwrFile.canAddFrame(packetsize, iMaxFileBandwidth / 8)) {
+		if (iMaxFileBandwidth > 0 && !uSource->bwrFile.canAddFrame(packetsize, qMax(1, iMaxFileBandwidth / 8))) {
 			refuse("Waiting for the server file upload budget", true);
 			return;
 		}
 		const int aggregateCharge =
 			static_cast< int >(qMin< qint64 >(static_cast< qint64 >(packetsize) * recipients.size(), INT_MAX));
 		if (iMaxFileBandwidthAggregate > 0
-			&& !m_bwrFileAggregate.canAddFrame(aggregateCharge, iMaxFileBandwidthAggregate / 8)) {
+			&& aggregateCharge > FileBandwidthRecord::maximumBurst(qMax(1, iMaxFileBandwidthAggregate / 8))) {
+			refuse("Selected fanout exceeds the file budget burst; reduce chunk size or recipients");
+			return;
+		}
+
+		if (iMaxFileBandwidthAggregate > 0
+			&& !m_bwrFileAggregate.canAddFrame(aggregateCharge, qMax(1, iMaxFileBandwidthAggregate / 8))) {
 			refuse("Waiting for the server shared file delivery budget", true);
 			return;
 		}
@@ -2723,14 +2729,15 @@ void Server::msgFileData(ServerUser *uSource, MumbleProto::FileData &msg) {
 		// File admission runs on the server thread under the aggregate lock; no meter
 		// writer can intervene between the non-mutating checks and these commits.
 		if (iMaxFileBandwidth > 0)
-			uSource->bwrFile.addFrame(packetsize, iMaxFileBandwidth / 8);
+			uSource->bwrFile.addFrame(packetsize, qMax(1, iMaxFileBandwidth / 8));
 		if (iMaxFileBandwidthAggregate > 0)
-			m_bwrFileAggregate.addFrame(aggregateCharge, iMaxFileBandwidthAggregate / 8);
+			m_bwrFileAggregate.addFrame(aggregateCharge, qMax(1, iMaxFileBandwidthAggregate / 8));
 		auto &entry         = m_qhFileTransferBytes[key];
 		entry.bytes         = previousBytes + static_cast< quint64 >(msg.data().size());
 		entry.lastSeenMSecs = QDateTime::currentMSecsSinceEpoch();
 	}
 	msg.set_actor(uSource->uiSession);
+	msg.clear_target_session();
 	for (ServerUser *receiver : recipients)
 		sendMessage(receiver, msg);
 	MumbleProto::FileData accepted;

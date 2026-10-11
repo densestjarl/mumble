@@ -144,6 +144,7 @@ public:
 	void resolveSendAuthorization(unsigned int peerSession, const QByteArray &transferId, bool verified);
 	/// Abort every in-flight transfer (disconnect / server change).
 	void abortAll();
+	void abortPeer(unsigned int session);
 
 signals:
 	void transferUpdated(const PQFT::FTTransferInfo &info);

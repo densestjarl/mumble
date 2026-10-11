@@ -21,6 +21,32 @@ class TestBandwidthRecord : public QObject {
 	}
 
 private slots:
+	void fileBudgetCapsIdleBurstsAndChecksWithoutCharging() const {
+		FileBandwidthRecord record;
+		constexpr int rate = 1000000, chunk = 64 * 1024;
+		QVERIFY(record.addFrame(chunk, rate));
+		record.m_refillClock = ElapsedTimer(std::chrono::minutes(40));
+		QVERIFY(record.canAddFrame(chunk, rate));
+		QVERIFY(record.canAddFrame(chunk, rate));
+		int admitted = 0;
+		for (int i = 0; i < 1000 && record.addFrame(chunk, rate); ++i)
+			admitted += chunk;
+		QVERIFY(admitted <= FileBandwidthRecord::maximumBurst(rate));
+		QVERIFY(admitted >= FileBandwidthRecord::maximumBurst(rate) - chunk);
+		QVERIFY(!record.canAddFrame(chunk, rate));
+		QVERIFY(!record.addFrame(std::numeric_limits< int >::max(), rate));
+	}
+
+	void fileBudgetHandlesMaximumRatesWithoutOverflow() const {
+		FileBandwidthRecord record;
+		const int rate = std::numeric_limits< int >::max();
+		QVERIFY(record.addFrame(1024, rate));
+		record.m_refillClock = ElapsedTimer(std::chrono::hours(100000));
+		QVERIFY(record.canAddFrame(rate, rate));
+		QVERIFY(record.addFrame(rate, rate));
+		QVERIFY(!record.addFrame(rate, rate));
+	}
+
 	void fileChunksRetireTheirEntireByteCharge() const {
 		BandwidthRecord record;
 		constexpr int chunk = 1024 * 1024 + 34;

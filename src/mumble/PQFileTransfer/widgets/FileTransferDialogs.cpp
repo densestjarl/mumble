@@ -76,9 +76,9 @@ QString strengthHint(const QString &password) {
 } // namespace
 
 SafetyNumberDialog::SafetyNumberDialog(const QString &peerName, const QString &safetyDigits,
-									   const QByteArray &qrPayload, QWidget *parent)
+									   const QByteArray &qrPayload, QWidget *parent, bool sending)
 	: QDialog(parent), m_verified(false) {
-	setWindowTitle(tr("Verify file-transfer identity"));
+	setWindowTitle(sending ? tr("Verify recipient before sending") : tr("Verify sender before receiving"));
 	setModal(true);
 
 	auto *layout = new QVBoxLayout(this);
