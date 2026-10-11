@@ -497,8 +497,15 @@ void ServerHandler::run() {
 			ConnectionPtr connection(new Connection(this, qtsSock));
 			cConnection = connection;
 			connection->setReadAdmission([this](Mumble::Protocol::TCPMessageType type, qint64 size) {
-				if (type != Mumble::Protocol::TCPMessageType::FileData || size <= 512)
+				if (type != Mumble::Protocol::TCPMessageType::FileData)
 					return Connection::ReadAdmission::Bypass; // Do not renew a stalled file deadline.
+				if (size <= 512) {
+					const QByteArray body = qtsSock->peek(size);
+					MumbleProto::FileData response;
+					if (response.ParseFromArray(body.constData(), static_cast< int >(body.size()))
+						&& (response.has_relay_accepted() || response.has_relay_retry_after_ms()))
+						return Connection::ReadAdmission::Bypass;
+				}
 				const qint64 queued = m_fileInboundBytes->load();
 				std::shared_ptr< std::atomic< qint64 > > worker;
 				{
@@ -809,7 +816,9 @@ void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const Q
 				failure.set_transfer_id(incoming.transfer_id());
 				failure.set_chunk_index(incoming.chunk_index());
 				failure.set_data("");
-				failure.set_relay_error("Incoming file queue did not drain before the receive timeout");
+				failure.set_relay_error(admissionExpired
+											? "Incoming file queue did not drain before the receive timeout"
+											: "Incoming file queue exceeded the receive limit");
 				delivery                   = QByteArray::fromStdString(failure.SerializeAsString());
 				const qint64 errorPrevious = m_fileInboundBytes->fetch_add(delivery.size());
 				if (errorPrevious + delivery.size() > 4 * 1024 * 1024 + 64 * 1024) {

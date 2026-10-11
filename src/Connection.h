@@ -48,6 +48,7 @@ private:
 	std::function< ReadAdmission(Mumble::Protocol::TCPMessageType, qint64) > m_readAdmission;
 	QTimer m_readRetry;
 	QElapsedTimer m_readPauseClock;
+	QElapsedTimer m_lastReadDeferral;
 	int m_readPauseTimeout = 2000;
 
 protected:

@@ -36,6 +36,7 @@ private slots:
 	void pausedReadRetainsFrameAndResumes();
 	void pausedReadTimesOutOnce();
 	void congestedReadsShareDeadlineAndDeliverPing();
+	void congestionDeadlineRecoversAfterIdle();
 	void oversizedReadHeaderClosesBeforeBody_data();
 	void oversizedReadHeaderClosesBeforeBody();
 	void admitsLargestProtocolFrame();
@@ -154,6 +155,42 @@ void TestConnectionOutputQueue::congestedReadsShareDeadlineAndDeliverPing() {
 	QTRY_COMPARE_WITH_TIMEOUT(pings, 8, 700);
 	QTRY_COMPARE_WITH_TIMEOUT(rejected, 8, 100);
 	QVERIFY(!connection.readPaused());
+	QCOMPARE(socket->state(), QAbstractSocket::ConnectedState);
+}
+
+void TestConnectionOutputQueue::congestionDeadlineRecoversAfterIdle() {
+	QTcpServer server;
+	auto *socket = connectedSocket(server);
+	QVERIFY(socket);
+	QVERIFY(server.waitForNewConnection(1000));
+	auto *peer = server.nextPendingConnection();
+	Connection connection(nullptr, socket);
+	bool ready = false;
+	connection.setReadAdmission(
+		[&](Mumble::Protocol::TCPMessageType, qint64) {
+			return ready ? Connection::ReadAdmission::Ready : Connection::ReadAdmission::Defer;
+		},
+		100);
+	int rejected = 0, received = 0;
+	connect(&connection, &Connection::messageRejected, this,
+			[&](Mumble::Protocol::TCPMessageType, const QByteArray &) { ++rejected; });
+	connect(&connection, &Connection::message, this,
+			[&](Mumble::Protocol::TCPMessageType, const QByteArray &) { ++received; });
+	MumbleProto::FileData data;
+	data.set_data("small final chunk");
+	QByteArray wire;
+	QVERIFY(Connection::messageToNetwork(data, Mumble::Protocol::TCPMessageType::FileData, wire));
+	QCOMPARE(peer->write(wire), qint64(wire.size()));
+	peer->flush();
+	QTRY_COMPARE(rejected, 1);
+	QTest::qWait(150);
+	QCOMPARE(peer->write(wire), qint64(wire.size()));
+	peer->flush();
+	QTRY_VERIFY_WITH_TIMEOUT(connection.readPaused(), 100);
+	QCOMPARE(rejected, 1);
+	ready = true;
+	QTRY_COMPARE(received, 1);
+	QCOMPARE(rejected, 1);
 	QCOMPARE(socket->state(), QAbstractSocket::ConnectedState);
 }
 
