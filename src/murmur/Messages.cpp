@@ -609,9 +609,9 @@ void Server::msgAuthenticate(ServerUser *uSource, MumbleProto::Authenticate &msg
 	mpsc.set_recording_allowed(allowRecording);
 	mpsc.set_max_file_transfer_size(iMaxFileSize);
 	mpsc.set_file_transfer_relay_version(1);
-	mpsc.set_file_transfer_rate(static_cast< quint64 >(iMaxFileBandwidth > 0 ? qMax(1, iMaxFileBandwidth / 8) : 0));
+	mpsc.set_file_transfer_rate(static_cast< uint64_t >(iMaxFileBandwidth > 0 ? qMax(1, iMaxFileBandwidth / 8) : 0));
 	mpsc.set_file_transfer_aggregate_rate(
-		static_cast< quint64 >(iMaxFileBandwidthAggregate > 0 ? qMax(1, iMaxFileBandwidthAggregate / 8) : 0));
+		static_cast< uint64_t >(iMaxFileBandwidthAggregate > 0 ? qMax(1, iMaxFileBandwidthAggregate / 8) : 0));
 	sendMessage(uSource, mpsc);
 
 	MumbleProto::SuggestConfig mpsug;
