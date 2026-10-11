@@ -28,4 +28,4 @@ PR #40 contains every component head from PR30–39 and PR41–52. Closed compon
 | [#52](https://github.com/gavmac11/mumble/pull/52) | Recheck received sender identity before saving files | Merged into the integration branch |
 
 
-PR29 is also included and remains open as review context. PR40 requires a valid human approving review after the requested corrections. Consolidation and passing automated checks do not qualify a stable or paid hosting release.
+PR29 is also included and was merged into master on October 11; its review history remains available. PR40 requires a valid human approving review after the requested corrections. Consolidation and passing automated checks do not qualify a stable or paid hosting release.
