@@ -1,6 +1,6 @@
 # October 11 review corrections
 
-Implementation input: `7aa409636c200f4a0cf3eacf9d7a8d35790a3def`. The [requested review](https://github.com/gavmac11/mumble/pull/40#pullrequestreview-5483106744) is addressed by these corrections; acceptance still requires the reviewer to assess them.
+Implementation input: `cb24200f45522249404461a61ae83051755595d5`. The [requested review](https://github.com/gavmac11/mumble/pull/40#pullrequestreview-5483106744) is addressed by these corrections; acceptance still requires the reviewer to assess them.
 
 | Finding | Correction | Regression coverage |
 | --- | --- | --- |
@@ -18,6 +18,6 @@ The bounded read buffer also rejects an oversized/invalid header before waiting 
 
 ## Validation and retention
 
-Complete local Release client/server build, the file-sharing-disabled client build and all five affected suites pass. The 70 hosting checks pass with both native bridges. Full-suite and cross-platform results for this implementation are retained in the [evidence release](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11), in `pr40-review-corrections-7aa40963.json` and its accompanying archive. See [the current PR checks](https://github.com/gavmac11/mumble/pull/40/checks) for hosted client/server, installer and both security configurations. Raw output and inventories are not committed here. Failed intermediate checks are retained in the archive; later passing results identify the exact source input.
+Complete local Release client/server build, the file-sharing-disabled client build and all five affected suites pass. The 70 hosting checks pass with both native bridges. Full-suite and cross-platform results for this implementation are retained in the [evidence release](https://github.com/gavmac11/mumble/releases/tag/pr40-evidence-2026-10-11), in `pr40-review-corrections-cb24200f.json` and its accompanying archive. See [the current PR checks](https://github.com/gavmac11/mumble/pull/40/checks) for hosted client/server, installer and both security configurations. Raw output and inventories are not committed here. Failed intermediate checks are retained in the archive; later passing results identify the exact source input.
 
 The historical [candidate summary](README.md) records prior qualification separately. An Opus 5.5 source review is supporting evidence only. Physical-device, supported-OS, shipping-signature, endurance and final-package recovery work remains in the release qualification gate; it is not marked passed by these corrections.
