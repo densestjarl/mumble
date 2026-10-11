@@ -388,6 +388,10 @@ add_custom_command(
 	ARGS "${CMAKE_SOURCE_DIR}/scripts/generate_flag_qrc.py" --flag-dir "${CMAKE_SOURCE_DIR}/3rdparty/flag-icons/flags/4x3" --output "${CMAKE_BINARY_DIR}/mumble_flags.qrc"
 	COMMENT "Generating mumble_flags.qrc"
 )
+if(NOT file-sharing)
+	list(REMOVE_ITEM MUMBLE_SOURCES "FileTransferConfig.cpp" "FileTransferConfig.h" "FileTransferConfig.ui")
+endif()
+
 list(APPEND MUMBLE_SOURCES "${CMAKE_BINARY_DIR}/mumble_flags.qrc")
 
 add_library(mumble_client_object_lib OBJECT ${MUMBLE_SOURCES})

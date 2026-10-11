@@ -1872,12 +1872,13 @@ void MainWindow::qmUser_aboutToShow() {
 		if (shown && !shown->fingerprint.isEmpty()) {
 			QAction *reset = qmUser->addAction(tr("Reset file identity…"));
 			connect(reset, &QAction::triggered, this, [this, manager, shown]() {
-				const auto answer = QMessageBox::question(
-					this, tr("Reset file identity?"),
-					tr("Forget the saved file identity for %1?\nSaved fingerprint: %2\n\nContact them through a "
-					   "trusted channel and compare safety numbers before your next transfer.")
-						.arg(shown->name, QString::fromLatin1(shown->fingerprint.toHex())),
-					QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+				const auto answer =
+					QMessageBox::question(this, tr("Reset file identity?"),
+										  tr("Forget the saved file identity for %1 and cancel your active file "
+											 "transfers?\nSaved fingerprint: %2\n\nContact them through a "
+											 "trusted channel and compare safety numbers before your next transfer.")
+											  .arg(shown->name, QString::fromLatin1(shown->fingerprint.toHex())),
+										  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 				if (answer == QMessageBox::Yes && !manager->resetPeerTrust(*shown))
 					Global::get().l->log(Log::Warning,
 										 tr("The peer or saved identity changed. The identity was not reset."));
@@ -3746,9 +3747,11 @@ void MainWindow::serverConnected() {
 }
 
 void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString reason) {
+#ifdef USE_FILE_SHARING
 	if (Global::get().fileTransferManager) {
 		Global::get().fileTransferManager->disconnectCleanup();
 	}
+#endif
 
 	// clear ChannelListener
 	Global::get().channelListenerManager->clear();

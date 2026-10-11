@@ -53,30 +53,41 @@ message FileTransferControl {
 	required bytes payload = 3;           // opaque ≤ 64 KiB (§4 framing inside)
 }
 ```
-Murmur handling: authenticated senders only; per-user leaky bucket (`filecontrollimit` /
-`filecontrolburst`, defaults 20/s burst 100); payload cap 64 KiB; routes each
-`target_session` that is authenticated **and in the sender's channel**; sets `actor` from
-the authenticated session. No persistence. Client MUST ignore any client-supplied `actor`
-value on receipt.
+Murmur handling: authenticated capable senders only; per-user leaky bucket
+(`filecontrollimit` / `filecontrolburst`, defaults 20/s burst 100); nonempty payload
+cap 64 KiB; 1–64 targets, deduplicated. Only authenticated capable recipients
+in the sender's channel receive a record. Both peers must advertise delivery receipts.
+The server replaces `actor` and removes unknown fields. No persistence.
 
-### `FileData` (TCP type 28) — channel broadcast
+### `FileData` (TCP type 28) — selected recipients
 ```
 message FileData {
-	optional uint32 actor = 1;            // sender's session; SET BY SERVER
-	required bytes transfer_id = 2;       // 16 random bytes
-	required uint64 chunk_index = 3;
-	optional uint64 chunk_count = 4;      // hint only; the signed manifest is authoritative
-	required bytes data = 5;              // AEAD ciphertext ‖ 16-byte tag, ≤ 1 MiB + 16 B
+    optional uint32 actor = 1;           // SET BY SERVER
+    required bytes transfer_id = 2;      // 16 random bytes
+    required uint64 chunk_index = 3;
+    optional uint64 chunk_count = 4;     // signed manifest is authoritative
+    required bytes data = 5;             // ciphertext + tag, 16 B–1 MiB + 16 B
+    repeated uint32 target_session = 6;  // mandatory, never broadcast
+    optional string relay_error = 7;    // server-only diagnostic
+    optional uint32 relay_retry_after_ms = 8;
+    optional bool relay_accepted = 9;
 }
 ```
-Murmur handling: authenticated senders only; `transfer_id` MUST be 16 bytes and `data`
-≤ 1 MiB + 16 B (a maximum-size chunk plus its GCM tag) or the message is dropped;
-per-user byte meter `filebandwidth` (default
-16 Mbit/s) charging `20 + 8 + 6 + len(data)`; per-(session, transfer_id) in-memory
-accumulator against `maxfilesize` (default 10 GiB) — exceeded ⇒ drop + log, accumulator
-**never persisted**; aggregate meter `filebandwidthaggregate` (default 64 Mbit/s) charging
-`packetsize × receiver_count`; broadcast to every authenticated user in the sender's
-channel except the sender, **skipping users without `UserState.file_transfer_capable`**.
+All selected recipients must be authenticated, capable, receipt-capable, in the
+sender's channel, and distinct from the sender. Empty or more than 64 targets
+are refused; duplicate targets are delivered once. Unknown fields are discarded.
+Per-sender upload and selected-fanout aggregate meters admit each chunk atomically:
+a retry charges no meter and delivers to no recipient. Size and recipient failures
+are terminal; rate or bounded receiver-queue pressure returns a retry response.
+Transfer accumulators are bounded, memory-only, and enforce `maxfilesize`.
+
+A server response uses the sender's actor/id/index, empty data, and either admission,
+a bounded retry delay, or a terminal error. It confirms relay admission only. The
+sender caches the sealed chunk until admission, preserving its index and ciphertext
+across local queue pressure and relay retries. A 60-second progress deadline stops
+stalled uploads. Per-client queued ciphertext is bounded before events are allocated;
+receiver socket pressure produces retry before the server's connection hard limit.
+Encrypted file data is delivered only to the selected peers, using a shared file key.
 Chunk size: 16 KiB–1 MiB, default 256 KiB. Receivers enforce the exact per-chunk
 plaintext length implied by the manifest (full `chunk_size` for every chunk but the
 last, which carries the file's remainder) — the wire cap above only bounds the
@@ -87,13 +98,15 @@ record is written, and the spool is capped at the manifest-implied size
 grow a transfer beyond its signed size.
 
 ### Capability and limits
-- `UserState.file_transfer_capable` (field 25, next free after `screen_sharing`): set by
-  clients that implement this protocol; murmur echoes it in user-state broadcasts so peers
-  and late joiners learn it, and uses it to gate `FileData` fan-out.
-- `ServerConfig.max_file_transfer_size`: server's `maxfilesize` announced to clients.
-- Stock clients never receive either message type; a stock murmur silently drops types
-  27/28 (unknown switch case), so transfers against unmodified servers fail cleanly via
-  handshake timeout.
+- `UserState.file_transfer_capable` (25) and `file_transfer_delivery_receipts` (26)
+  are echoed for current and joining peers; both are required by the new relay/client.
+- `ServerConfig.max_file_transfer_size` (8), `file_transfer_relay_version` (9, value 1),
+  `file_transfer_rate` (10), and `file_transfer_aggregate_rate` (11) announce size and
+  byte-per-second budgets (zero means unlimited). Partial config messages preserve
+  previously announced limits. Clients use 90% headroom and account for fanout.
+- Servers without the relay version are visibly unsupported for sending. A capable
+  unselected peer receives neither control records nor chunks. These extensions are
+  an unreleased compatibility boundary; older file clients lack receipt capability.
 
 ## 4. Control-channel framing (inside `FileTransferControl.payload`)
 
@@ -103,11 +116,21 @@ grow a transfer beyond its signed size.
   (fields, order, transcript stages TH1/TH_hs/TH_fin/TH_full, signatures, Finished MACs).
   Cleartext at this layer (they are, however, inside Mumble's TLS + OCB2 channel crypto —
   the relay still sees them, exactly as PQShield assumes).
-- Types 5–7: `CTL_MANIFEST`, `CTL_COMPLETE`, `CTL_ABORT` — post-handshake control
+- Types 5–9: `CTL_MANIFEST`, `CTL_COMPLETE`, `CTL_ABORT`, `CTL_RECEIPT`, `CTL_PROGRESS` — post-handshake control
   records, framed `{seq(u64), type(u8), ciphertext, tag}` per PQShield §8: AES-256-GCM
   under the direction's control key, nonce = 4-byte direction prefix ‖ uint64be(seq),
   header as AAD, **strict `seq == expected`** (any gap/duplicate/reorder is fatal).
   Handshake records are only sent after both Finished MACs verified (no 0-RTT).
+
+`CTL_RECEIPT` authenticates a canonical CBOR byte string containing the transfer ID
+under the selected peer's pairwise control key. Receivers send it only after size,
+AEAD and Merkle verification reaches Ready. Senders display Delivered only after
+every selected peer's receipt; socket acceptance and `CTL_COMPLETE` are insufficient.
+A missing receipt fails or reports Partially delivered with confirmed/unconfirmed
+recipient lists. All selected handshakes must succeed before any manifest/content.
+`CTL_PROGRESS` with the canonical string `waiting-password` extends receipt waiting
+to five minutes; it does not count as delivery. Ready does not imply the recipient
+saved to their chosen final path. The normal receipt deadline is 60 seconds.
 
 ## 5. Transfer and broadcast key handling
 
@@ -192,10 +215,21 @@ or replay control messages, or truncate undetected.
   min_fp ‖ u16len(max_fp) ‖ max_fp)`, lexicographic order on fingerprint bytes. QR code
   carrying full H is primary; fallback text = first 24 bytes of H as a zero-padded
   big-endian integer in 60 decimal digits, 12 groups of 5.
-- First contact MUST be verified out-of-band (QR/in-person/voice) before accepting a
-  transfer; TOFU pin after verification; any fingerprint change ⇒ hard block with a loud
+- First contact MUST be verified out-of-band (QR/in-person/voice) before sending any
+  file content or accepting a transfer; TOFU pin after verification; any fingerprint change ⇒ hard block with a loud
   warning until explicitly re-verified. Pins are keyed by (server certificate digest,
   username). During the handshake, received identity keys MUST match the pin.
+- Missing/unreadable trust storage fails closed. Sender authorization retains the
+  shown name/key/user/server/channel/connection and separate send/receive request
+  tokens. Incoming events retain their connection ID, and cache/name observations
+  cannot switch while queued. Verification dialogs are serialized, asynchronous,
+  and cancelled by their exact retired request. Replacement M1 frames are ignored
+  while a verification is pending; zero/wildcard worker tokens cannot resolve it.
+- The explicit user-menu identity reset deletes only the displayed expected pin,
+  refreshes caches and cancels active transfers. It never adopts a changed key.
+  The next handshake requires out-of-band verification again. Receiving acceptance
+  and manual/automatic saving recheck captured trust; a write already authorized
+  before revocation may finish and its complete result is reported truthfully.
 
 ## 9. Client responsibilities (implementation requirements)
 

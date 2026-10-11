@@ -1073,7 +1073,8 @@ void FileTransferEngine::refillSendCredit() {
 		int maximumRecipients = 1;
 		for (const auto &job : m_sendJobs)
 			maximumRecipients = qMax(maximumRecipients, static_cast< int >(job->peers.size()));
-		const qint64 aggregateRate = static_cast< qint64 >(m_config.aggregateSendRate / maximumRecipients);
+		const qint64 aggregateRate =
+			static_cast< qint64 >(m_config.aggregateSendRate / static_cast< quint64 >(maximumRecipients));
 		rate                       = rate == 0 ? aggregateRate : qMin(rate, aggregateRate);
 	}
 	if (rate > 0) {

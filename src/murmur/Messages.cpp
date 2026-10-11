@@ -2619,21 +2619,28 @@ void Server::msgFileTransferControl(ServerUser *uSource, MumbleProto::FileTransf
 		return;
 	}
 
-	if (msg.payload().size() > 64 * 1024) {
-		qWarning("Dropping file-transfer control record from \"%s\" (%d) - too large",
-				 qUtf8Printable(uSource->qsName), uSource->uiSession);
+	if (msg.payload().empty() || msg.payload().size() > 64 * 1024 || msg.target_session_size() == 0
+		|| msg.target_session_size() > 64 || !uSource->bFileTransferCapable
+		|| !uSource->bFileTransferDeliveryReceipts) {
 		return;
 	}
+	msg.DiscardUnknownFields();
 
 	// Anti-spoofing: the actor is always the authenticated sender.
 	msg.set_actor(uSource->uiSession);
 
+	QSet< unsigned int > selected;
 	for (int i = 0; i < msg.target_session_size(); ++i) {
-		ServerUser *receiver = qhUsers.value(msg.target_session(i));
+		const unsigned int session = msg.target_session(i);
+		if (selected.contains(session))
+			continue;
+		selected.insert(session);
+		ServerUser *receiver = qhUsers.value(session);
 
 		// Only route within the sender's own channel to authenticated users.
 		if (!receiver || receiver == uSource || receiver->sState != ServerUser::Authenticated
-			|| receiver->cChannel != uSource->cChannel) {
+			|| receiver->cChannel != uSource->cChannel || !receiver->bFileTransferCapable
+			|| !receiver->bFileTransferDeliveryReceipts) {
 			continue;
 		}
 

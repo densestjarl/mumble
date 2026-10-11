@@ -652,8 +652,8 @@ void TestFileTransferE2E::concurrentTargetedLargeDelivery() {
 	QVERIFY(waitFor([&]() { return !readyId(firstUpdates).isEmpty() && !readyId(secondUpdates).isEmpty(); }, 180000));
 	QCOMPARE(other.receivedFileData, quint64(0));
 	QCOMPARE(other.receivedFileControl, quint64(0));
-	QCOMPARE(first.receivedFileData, quint64(384));
-	QCOMPARE(second.receivedFileData, quint64(12));
+	QCOMPARE(first.receivedFileData, quint64(768));
+	QCOMPARE(second.receivedFileData, quint64(24));
 	auto deliveredCount = [&]() {
 		int delivered = 0;
 		for (const auto &event : sent)
@@ -731,7 +731,7 @@ void TestFileTransferE2E::competingSendersRetryAggregateBudget() {
 	};
 	QVERIFY(waitFor([&]() { return delivered(firstUpdates) && delivered(secondUpdates); }, 180000));
 	QVERIFY(first.relayRetries + second.relayRetries > 0);
-	QCOMPARE(recipient.receivedFileData, quint64(384));
+	QCOMPARE(recipient.receivedFileData, quint64(768));
 	QCOMPARE(first.receivedFileControl > 0 && second.receivedFileControl > 0, true);
 	int readyCount = 0;
 	for (const auto &event : received) {
