@@ -17,7 +17,7 @@ add_executable(TestFTIdentity
 
 set_target_properties(TestFTIdentity PROPERTIES AUTOMOC ON)
 
-find_pkg(Qt6 COMPONENTS Sql REQUIRED)
+find_package(Qt6 COMPONENTS Sql REQUIRED)
 
 target_include_directories(TestFTIdentity PRIVATE
 	"${CMAKE_SOURCE_DIR}/src"

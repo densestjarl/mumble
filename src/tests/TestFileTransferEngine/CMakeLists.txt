@@ -27,7 +27,7 @@ target_include_directories(TestFileTransferEngine PRIVATE
 	"${CMAKE_BINARY_DIR}/src"
 )
 
-find_pkg(Qt6 COMPONENTS Sql REQUIRED)
+find_package(Qt6 COMPONENTS Sql REQUIRED)
 
 target_link_libraries(TestFileTransferEngine PRIVATE shared Qt6::Test Qt6::Sql)
 target_link_libraries(TestFileTransferEngine PRIVATE oqs argon2)

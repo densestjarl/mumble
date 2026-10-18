@@ -81,6 +81,55 @@ namespace Protocol {
 } // namespace Protocol
 } // namespace Mumble
 
+// Video is an additive protobuf UDP type; exercise both client and server decoders.
+template< Mumble::Protocol::Role role > void do_test_video() {
+	using namespace Mumble::Protocol;
+	UDPDecoder< role > decoder;
+	decoder.setProtocolVersion(PROTOBUF_INTRODUCTION_VERSION);
+	QCOMPARE(static_cast< int >(UDPMessageType::Audio), 0);
+	QCOMPARE(static_cast< int >(UDPMessageType::Ping), 1);
+	QCOMPARE(static_cast< int >(UDPMessageType::Video), 2);
+
+	MumbleUDP::Video msg;
+	msg.set_sender_session(42);
+	msg.set_codec(MumbleUDP::Video_Codec_H264);
+	msg.set_width(1280);
+	msg.set_height(720);
+	msg.set_frame_number(123);
+	msg.set_fragment_index(1);
+	msg.set_fragment_count(2);
+	msg.set_video_data("fragment");
+	msg.set_is_keyframe(true);
+	const auto encode = [&msg]() {
+		std::vector< byte > packet(msg.ByteSizeLong() + 1);
+		packet[0] = static_cast< byte >(UDPMessageType::Video);
+		msg.SerializeToArray(packet.data() + 1, static_cast< int >(packet.size() - 1));
+		return packet;
+	};
+	QVERIFY(decoder.decode(encode()));
+	QCOMPARE(decoder.getMessageType(), UDPMessageType::Video);
+	const auto data = decoder.getVideoData();
+	QCOMPARE(data.senderSession, 42u);
+	QCOMPARE(data.codec, MumbleUDP::Video_Codec_H264);
+	QCOMPARE(data.width, 1280u);
+	QCOMPARE(data.height, 720u);
+	QCOMPARE(data.frameNumber, 123u);
+	QCOMPARE(data.fragmentIndex, 1u);
+	QCOMPARE(data.fragmentCount, 2u);
+	QVERIFY(data.isKeyFrame);
+	QCOMPARE(std::string(reinterpret_cast< const char * >(data.payload.data()), data.payload.size()), "fragment");
+	QVERIFY(!decoder.decode(encode(), true)); // Unauthenticated UDP probing only permits pings.
+
+	msg.set_fragment_index(2);
+	QVERIFY(!decoder.decode(encode()));
+	msg.set_fragment_index(1);
+	msg.set_width(0);
+	QVERIFY(!decoder.decode(encode()));
+	msg.set_width(1280);
+	msg.clear_video_data();
+	QVERIFY(!decoder.decode(encode()));
+}
+
 template< Mumble::Protocol::Role encoderRole, Mumble::Protocol::Role decoderRole > void do_test_ping() {
 	Mumble::Protocol::UDPPingEncoder< encoderRole > encoder;
 	Mumble::Protocol::UDPDecoder< decoderRole > decoder;
@@ -244,6 +293,9 @@ template< Mumble::Protocol::Role encoderRole, Mumble::Protocol::Role decoderRole
 class TestMumbleProtocol : public QObject {
 	Q_OBJECT
 private slots:
+	void test_video_client_to_server() { do_test_video< Mumble::Protocol::Role::Server >(); }
+	void test_video_server_to_client() { do_test_video< Mumble::Protocol::Role::Client >(); }
+
 	void test_ping_client_to_server() {
 		do_test_ping< Mumble::Protocol::Role::Client, Mumble::Protocol::Role::Server >();
 	}

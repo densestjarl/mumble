@@ -107,7 +107,7 @@ void initLog(QTextBrowser *textBox = nullptr) {
 	// Set up file log
 	using FileSink = spdlog::sinks::rotating_file_sink_st;
 	// 5MB
-	static constexpr std::size_t maxSize  = 5 * 1024 * 2024;
+	static constexpr std::size_t maxSize  = 5 * 1024 * 1024;
 	static constexpr std::size_t maxFiles = 3;
 
 #ifndef Q_OS_MACOS
@@ -367,9 +367,9 @@ CLIOptions parseCLI(int argc, char **argv) {
 		app.exit(e, info_stream, error_stream);
 
 		if (e.get_exit_code() != static_cast< int >(CLI::ExitCodes::Success)) {
-			qWarning("%s", error_stream.str().c_str());
+			std::cerr << error_stream.str() << std::endl;
 		} else {
-			qInfo("%s", info_stream.str().c_str());
+			std::cout << info_stream.str() << std::endl;
 		}
 		options.quit     = true;
 		options.exitCode = e.get_exit_code();

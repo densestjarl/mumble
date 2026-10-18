@@ -27,6 +27,7 @@
 #include <QtNetwork/QSslCipher>
 #include <QtNetwork/QSslKey>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 
@@ -41,6 +42,9 @@ public:
 	QList< QHostAddress > qlBind;
 	unsigned short usPort;
 	int iTimeout;
+	/// Maximum time a connection may remain without having authenticated before
+	/// it is dropped. A value <= 0 disables this timeout.
+	std::chrono::seconds handshakeTimeout;
 	int iMaxBandwidth;
 	/// Per-user ceiling for screen share / webcam video traffic (bits/s), enforced separately
 	/// from voice so that video can never starve the voice quota.
@@ -107,6 +111,7 @@ public:
 	bool bAllowPing;
 
 	QString qsLogfile;
+	QString logSys;
 	QString qsPid;
 	QString qsIceEndpoint;
 	QString qsIceSecretRead, qsIceSecretWrite;
@@ -118,8 +123,8 @@ public:
 	QUrl qurlRegWeb;
 	bool bBonjour;
 
-	QRegularExpression qrUserName;
-	QRegularExpression qrChannelName;
+	QString userNamePattern;
+	QString channelNamePattern;
 
 	unsigned int iMessageLimit;
 	unsigned int iMessageBurst;

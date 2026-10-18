@@ -278,6 +278,19 @@ be implemented for authentication in any case. Making sure that the voice
 transmission works before implementing the UDP protocol simplifies debugging
 greatly.
 
+## Fork video extension
+
+For clients using the protobuf UDP format (Mumble 1.5 or later), this fork adds
+message type `2` containing a `MumbleUDP.Video` fragment. Audio and ping retain
+their existing protobuf types `0` and `1`. Video uses the same encrypted UDP
+transport or TCP tunnel as audio.
+
+The server accepts video only from authenticated users with screen sharing
+enabled and relays it only to authenticated users in the same channel whose
+protocol version supports protobuf UDP. Legacy clients must not receive these
+packets because they interpret the type byte as a legacy audio header.
+`UserState.screen_sharing` is an optional protobuf field numbered `24`.
+
 ## Encryption
 
 All the packets are encrypted once during transfer. The actual encryption

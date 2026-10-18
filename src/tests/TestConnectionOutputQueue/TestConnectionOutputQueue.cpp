@@ -5,6 +5,7 @@
 
 #include "Connection.h"
 #include "Mumble.pb.h"
+#include <QtCore/QScopeGuard>
 #include <QtCore/QtEndian>
 
 #include <QtNetwork/QTcpServer>
@@ -12,6 +13,10 @@
 #include <QtTest/QTest>
 
 #include <limits>
+#include <memory>
+#include <sstream>
+
+#include <spdlog/sinks/ostream_sink.h>
 
 // A real connected socket with controllable plaintext backlog. Avoid timing
 // assumptions about kernel send buffers in the boundary/lifetime checks.
@@ -213,6 +218,13 @@ void TestConnectionOutputQueue::oversizedReadHeaderClosesBeforeBody_data() {
 }
 
 void TestConnectionOutputQueue::oversizedReadHeaderClosesBeforeBody() {
+	std::ostringstream output;
+	auto sink   = std::make_shared< spdlog::sinks::ostream_sink_mt >(output);
+	auto logger = std::make_shared< spdlog::logger >("ConnectionTest", sink);
+	logger->set_pattern("%v");
+	const auto previousLogger = spdlog::default_logger();
+	spdlog::set_default_logger(logger);
+	const auto restoreLogger = qScopeGuard([previousLogger]() { spdlog::set_default_logger(previousLogger); });
 	QTcpServer server;
 	auto *socket = connectedSocket(server);
 	QVERIFY(socket);
@@ -226,10 +238,11 @@ void TestConnectionOutputQueue::oversizedReadHeaderClosesBeforeBody() {
 	qToBigEndian< quint16 >(static_cast< quint16 >(Mumble::Protocol::TCPMessageType::FileData), header.data());
 	QFETCH(quint32, length);
 	qToBigEndian< quint32 >(length, header.data() + 2);
-	QTest::ignoreMessage(QtWarningMsg, "Host tried to send huge or invalid packet");
 	QCOMPARE(peer->write(header), qint64(6));
 	peer->flush();
 	QTRY_COMPARE_WITH_TIMEOUT(socket->state(), QAbstractSocket::UnconnectedState, 5000);
+	QVERIFY(output.str().find("127.0.0.1:") != std::string::npos);
+	QVERIFY(output.str().find("Host tried to send huge or invalid packet") != std::string::npos);
 }
 
 void TestConnectionOutputQueue::admitsExactBoundary() {

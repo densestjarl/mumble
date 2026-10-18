@@ -18,7 +18,13 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  CMAKE_OPTIONS: -Dsymbols=ON -Ddisplay-install-paths=ON -Dtest-lto=OFF -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+  CMAKE_OPTIONS: >
+    -Dtests=ON
+    -Dsymbols=ON
+    -Ddisplay-install-paths=ON
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache
+  CCACHE_COMPRESSLEVEL: 10
 
 
 jobs:
@@ -54,18 +60,22 @@ jobs:
                 type: shared
                 arch: x86_64
                 tests: 'ON'
-              - os: windows-2025-vs2026
+                compiler: gcc
+              - os: windows-2025
                 type: static
                 arch: x86_64
                 tests: 'ON'
+                compiler: cl
               - os: macos-15
                 type: static
                 arch: arm64
                 tests: 'ON'
+                compiler: clang
               - os: macos-15-intel
                 type: static
                 arch: x86_64
                 tests: 'ON'
+                compiler: clang
             
     runs-on: ${{ matrix.os }}
 
@@ -82,7 +92,7 @@ jobs:
       run: brew install bash
 
     - name: Set environment variables
-      run: $GITHUB_WORKSPACE/.github/workflows/set_environment_variables.sh "${{ matrix.os }}" "${{ matrix.type }}" "${{ matrix.arch }}" "${{ github.workspace }}"
+      run: $GITHUB_WORKSPACE/.github/workflows/set_environment_variables.sh "${{ matrix.os }}" "${{ matrix.type }}" "${{ matrix.arch }}" "${{ matrix.compiler }}" "${{ github.workspace }}"
       shell: bash
 
     - uses: actions/cache/restore@v5
@@ -90,11 +100,10 @@ jobs:
           path: '${{ env.MUMBLE_ENVIRONMENT_DIR }}'
           key: ${{ env.MUMBLE_ENVIRONMENT_VERSION }}
 
-    - uses: hendrikmuhs/ccache-action@v1.2
+    - uses: hendrikmuhs/ccache-action@v1.2.24
       with:
-        key: ${{ github.base_ref || github.ref_name }}.${{ matrix.os }}.${{ matrix.type }}
+        key: ${{ github.base_ref || github.ref_name }}_${{ matrix.os }}_${{ matrix.type }}.${{ matrix.compiler }}.${{ matrix.arch }}
         save: ${{ github.event_name != 'pull_request' }}
-        append-timestamp: false
 
     - uses: ./.github/actions/install-dependencies
       with:
@@ -130,7 +139,7 @@ jobs:
       shell: pwsh
       run: .github/workflows/verify_windows_ffmpeg_installer.ps1 -Workspace "${{ github.workspace }}"
 
-    - if: ${{ inputs.SIGN_WINDOWS_INSTALLER && startsWith(matrix.os, 'windows') }}
+    - if: ${{ inputs.SIGN_WINDOWS_INSTALLER && startsWith(matrix.os, 'windows') && matrix.compiler == 'cl' }}
       uses: ./.github/actions/sign-binaries
       with:
           signpath-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -143,7 +152,7 @@ jobs:
       name: Publish
       uses: actions/upload-artifact@v7
       with:
-        name: 'Mumble-${{ matrix.os }}'
+        name: 'Mumble_${{ matrix.os }}.${{ matrix.compiler }}.${{ matrix.arch }}'
         compression-level: 9
         path: |
           build/mumble
