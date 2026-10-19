@@ -1252,6 +1252,12 @@ void Server::processVideoMsg(ServerUser *u, const Mumble::Protocol::VideoData &v
 			   && receiver->m_version >= Mumble::Protocol::PROTOBUF_INTRODUCTION_VERSION;
 	};
 
+	const auto receivers = static_cast< std::size_t >(
+		std::count_if(u->cChannel->qlUsers.begin(), u->cChannel->qlUsers.end(), canReceiveVideo));
+	if (receivers == 0) {
+		return;
+	}
+
 	// Rate-limit video independently of voice (BandwidthRecord semantics as in processMsg:
 	// packetsize covers IP + UDP + crypt header + payload; maxpersec is bytes/s).
 	{
@@ -1262,11 +1268,8 @@ void Server::processVideoMsg(ServerUser *u, const Mumble::Protocol::VideoData &v
 
 		// Aggregate guard: each receiver gets its own copy, so charge the relayed egress.
 		if (iMaxVideoBandwidthAggregate > 0) {
-			const auto receivers = static_cast< std::size_t >(
-				std::count_if(u->cChannel->qlUsers.begin(), u->cChannel->qlUsers.end(), canReceiveVideo));
-			if (receivers > 0
-				&& !m_bwrVideoAggregate.addFrame(static_cast< int >(packetsize * receivers),
-												 iMaxVideoBandwidthAggregate / 8)) {
+			if (!m_bwrVideoAggregate.addFrame(static_cast< int >(packetsize * receivers),
+											  iMaxVideoBandwidthAggregate / 8)) {
 				return;
 			}
 		}
