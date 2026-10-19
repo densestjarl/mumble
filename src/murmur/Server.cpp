@@ -532,19 +532,20 @@ void Server::readParams() {
 
 void Server::setLiveConf(const QString &key, const QString &value) {
 	QString v = value.trimmed().isEmpty() ? QString() : value;
-	int i     = v.toInt();
+	bool validInteger = false;
+	int i             = v.toInt(&validInteger);
 	if ((key == "password") || (key == "serverpassword"))
 		qsPassword = !v.isNull() ? v : Meta::mp->qsPassword;
 	else if (key == "timeout")
 		iTimeout = i ? i : Meta::mp->iTimeout;
 	else if (key == "videobandwidth")
-		iMaxVideoBandwidth = i ? i : Meta::mp->iMaxVideoBandwidth;
+		iMaxVideoBandwidth = validInteger ? i : Meta::mp->iMaxVideoBandwidth;
 	else if (key == "videobandwidthaggregate")
-		iMaxVideoBandwidthAggregate = i ? i : Meta::mp->iMaxVideoBandwidthAggregate;
+		iMaxVideoBandwidthAggregate = validInteger ? i : Meta::mp->iMaxVideoBandwidthAggregate;
 	else if (key == "filebandwidth")
-		iMaxFileBandwidth = i ? i : Meta::mp->iMaxFileBandwidth;
+		iMaxFileBandwidth = validInteger ? i : Meta::mp->iMaxFileBandwidth;
 	else if (key == "filebandwidthaggregate")
-		iMaxFileBandwidthAggregate = i ? i : Meta::mp->iMaxFileBandwidthAggregate;
+		iMaxFileBandwidthAggregate = validInteger ? i : Meta::mp->iMaxFileBandwidthAggregate;
 	else if (key == "maxfilesize") {
 		quint64 size = v.toULongLong();
 		iMaxFileSize = size ? size : Meta::mp->iMaxFileSize;
