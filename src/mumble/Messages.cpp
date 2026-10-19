@@ -136,7 +136,8 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 	Global::get().mw->bootstrapFileTransferIdentity();
 #endif
 
-	Global::get().sh->sendPing(); // Send initial ping to establish UDP connection
+	// Send an initial ping and establish the UDP connection unless TCP mode is forced
+	Global::get().sh->sendPing();
 
 	Global::get().pPermissions = ChanACL::Permissions(static_cast< unsigned int >(msg.permissions()));
 	Global::get().l->clearIgnore();
@@ -1141,30 +1142,8 @@ void MainWindow::msgQueryUsers(const MumbleProto::QueryUsers &msg) {
 void MainWindow::msgPing(const MumbleProto::Ping &) {
 }
 
-void MainWindow::msgCryptSetup(const MumbleProto::CryptSetup &msg) {
-	ConnectionPtr c = Global::get().sh->cConnection;
-	if (!c)
-		return;
-	if (msg.has_key() && msg.has_client_nonce() && msg.has_server_nonce()) {
-		const std::string &key          = msg.key();
-		const std::string &client_nonce = msg.client_nonce();
-		const std::string &server_nonce = msg.server_nonce();
-		if (!c->csCrypt->setKey(key, client_nonce, server_nonce)) {
-			qWarning("Messages: Cipher resync failed: Invalid key/nonce from the server!");
-		}
-	} else if (msg.has_server_nonce()) {
-		const std::string &server_nonce = msg.server_nonce();
-		if (server_nonce.size() == AES_BLOCK_SIZE) {
-			c->csCrypt->m_statsLocal.resync++;
-			if (!c->csCrypt->setDecryptIV(server_nonce)) {
-				qWarning("Messages: Cipher resync failed: Invalid nonce from the server!");
-			}
-		}
-	} else {
-		MumbleProto::CryptSetup mpcs;
-		mpcs.set_client_nonce(c->csCrypt->getEncryptIV());
-		Global::get().sh->sendMessage(mpcs);
-	}
+// CryptSetup is consumed on the network thread before GUI message dispatch.
+void MainWindow::msgCryptSetup(const MumbleProto::CryptSetup &) {
 }
 
 /// This messages is only sent by the client if it wants to instantiate a context action. Thus this implementation

@@ -147,6 +147,7 @@ The objects are:
 - `ServerUser->bSelfMute`
 - `ServerUser->bDeaf`
 - `ServerUser->bSelfDeaf`
+- `ServerUser->bScreenSharing`
 - `ServerUser->ssContext`
 - `ServerUser->cChannel`
 - `ServerUser->qmTargets`
@@ -192,6 +193,6 @@ an internal mutex that is automatically taken when the object's
 methods are called. It can also be an external mutex that must
 be held before accessing the object itself.
 
-- `ServerUser->csCrypt` (Locked via `User->qmCrypt` mutex.)
-- `ServerUser->bwr` (Internal locking inside `BandwidthRecord`. All methods can be called without extra synchronization.)
+- `ServerUser->csCrypt` (Locked via `ServerUser->qmCrypt` mutex.)
+- `ServerUser->bwr`, `ServerUser->bwrVideo`, `Server->m_bwrVideoAggregate` (Internal locking inside `BandwidthRecord`. All methods can be called without extra synchronization.)
 - `Server->acCache` (Locked via `Server->qmCache` mutex.)

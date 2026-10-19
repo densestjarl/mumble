@@ -25,7 +25,8 @@
 	PROCESS(misc, IMAGE_DIRECTORY_KEY, qsImagePath)                                 \
 	PROCESS(misc, AUDIO_WIZARD_SHOWN_KEY, audioWizardShown)                         \
 	PROCESS(misc, SERVER_PING_CONSENT_MESSAGE_VIEWED_KEY, bPingServersDialogViewed) \
-	PROCESS(misc, CRASH_EMAIL_ADDRESS_KEY, crashReportEmail)
+	PROCESS(misc, CRASH_EMAIL_ADDRESS_KEY, crashReportEmail)                        \
+	FILE_TRANSFER_SETTINGS
 
 #define AUDIO_SETTINGS                                                                      \
 	PROCESS(audio, UNMUTE_ON_UNDEAF_KEY, unmuteOnUndeaf)                                    \
@@ -181,6 +182,7 @@
 	PROCESS(ui, DISPLAY_VOLUME_ADJUSTMENTS_KEY, bShowVolumeAdjustments)          \
 	PROCESS(ui, DISPLAY_NICKNAMES_ONLY_KEY, bShowNicknamesOnly)                  \
 	PROCESS(ui, SELECTED_ITEM_AS_CHATBAR_TARGET_KEY, bChatBarUseSelection)       \
+	PROCESS(ui, CTRL_SCROLL_LOCAL_VOLUME_ADJUSTMENT_KEY, ctrlScrollLocalVolAdj)  \
 	PROCESS(ui, FILTER_HIDES_EMPTY_CHANNEL_KEY, bFilterHidesEmptyChannels)       \
 	PROCESS(ui, FILTER_ACTIVE_KEY, bFilterActive)                                \
 	PROCESS(ui, CONTEXT_MENU_ENTRIES_IN_MENU_BAR_KEY, bShowContextMenuInMenuBar) \
@@ -332,7 +334,6 @@
 
 #define PROCESS_ALL_SETTINGS   \
 	MISC_SETTINGS              \
-	FILE_TRANSFER_SETTINGS     \
 	AUDIO_SETTINGS             \
 	IDLE_SETTINGS              \
 	POSITIONAL_AUDIO_SETTINGS  \
@@ -360,8 +361,6 @@
 
 #define PROCESS_ALL_SETTINGS_WITH_INTERMEDIATE_OPERATION \
 	MISC_SETTINGS                                        \
-	INTERMEDIATE_OPERATION                               \
-	FILE_TRANSFER_SETTINGS                               \
 	INTERMEDIATE_OPERATION                               \
 	AUDIO_SETTINGS                                       \
 	INTERMEDIATE_OPERATION                               \

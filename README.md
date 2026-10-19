@@ -42,6 +42,10 @@ The documentation of the project can be found on [the website](https://www.mumbl
 We always welcome contributions to the project. If you have some code that you would like to contribute, please go ahead and create a PR. While doing so,
 please try to make sure that you follow our [commit guidelines](COMMIT_GUIDELINES.md).
 
+This fork welcomes AI-assisted development and autonomous coding agents, including scheduled maintenance and upstream-sync PRs.
+See [AGENTS.md](AGENTS.md) for practical guidance on working autonomously, building, and verifying changes.
+AI-specific labels and disclosures are optional; describe what changed and how it was checked.
+
 If you are new to the Mumble project, you may want to check out the general [introduction to the Mumble source code](docs/dev/TheMumbleSourceCode.md).
 
 ### Translating

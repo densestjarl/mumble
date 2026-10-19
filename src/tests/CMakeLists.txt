@@ -5,18 +5,15 @@
 
 include(project-utils)
 
-find_pkg(Qt6 COMPONENTS Test REQUIRED)
+find_package("Qt6" COMPONENTS Test REQUIRED)
 
 option(online-tests "Whether or not tests that need a working internet connection should be included" OFF)
-option(test-lto "Whether to use LTO when building test cases" ${lto})
-
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${test-lto})
 
 # Set output directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
 if (static)
-	find_pkg(Qt6 VERSION 6 COMPONENTS Widgets REQUIRED)
+	find_package("Qt6" COMPONENTS Widgets REQUIRED)
 	if (NOT TARGET Qt6::QOffscreenIntegrationPlugin)
 		message(FATAL_ERROR "Unable to locate offscreen plugin (needed for tests)")
 	endif()
@@ -34,7 +31,7 @@ function(mumble_client_test_runtime test_name)
 		# Client-object tests live outside the application/DLL directory.
 		set_property(TEST ${test_name} APPEND PROPERTY ENVIRONMENT_MODIFICATION
 			"PATH=path_list_prepend:$<TARGET_FILE_DIR:mumble>")
-		get_target_property(ffmpeg_runtime_dir mumble_client_object_lib MUMBLE_FFMPEG_RUNTIME_DIRECTORY)
+		get_target_property(ffmpeg_runtime_dir mumble_client_lib MUMBLE_FFMPEG_RUNTIME_DIRECTORY)
 		if(ffmpeg_runtime_dir)
 			set_property(TEST ${test_name} APPEND PROPERTY ENVIRONMENT_MODIFICATION
 				"PATH=path_list_prepend:${ffmpeg_runtime_dir}")
@@ -43,6 +40,7 @@ function(mumble_client_test_runtime test_name)
 endfunction()
 
 if(client)
+	add_subdirectory("TestServerHandlerCrypt")
 	add_subdirectory("TestAudioWizard")
 	add_subdirectory("TestDatabasePath")
 	add_subdirectory("TestReleaseUpdate")
@@ -94,6 +92,7 @@ add_subdirectory("TestPasswordGenerator")
 add_subdirectory("TestMumbleProtocol")
 add_subdirectory("TestSelfSignedCertificate")
 add_subdirectory("TestServerAddress")
+add_subdirectory("TestSSLCiphers")
 add_subdirectory("TestSSLLocks")
 add_subdirectory("TestStdAbs")
 add_subdirectory("TestTimer")

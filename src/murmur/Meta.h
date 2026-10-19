@@ -27,6 +27,7 @@
 #include <QtNetwork/QSslCipher>
 #include <QtNetwork/QSslKey>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 
@@ -41,17 +42,20 @@ public:
 	QList< QHostAddress > qlBind;
 	unsigned short usPort;
 	int iTimeout;
+	/// Maximum time a connection may remain without having authenticated before
+	/// it is dropped. A value <= 0 disables this timeout.
+	std::chrono::seconds handshakeTimeout;
 	int iMaxBandwidth;
 	/// Per-user ceiling for screen share / webcam video traffic (bits/s), enforced separately
-	/// from voice so that video can never starve the voice quota.
+	/// from voice so that video can never starve the voice quota. 0 means unlimited.
 	int iMaxVideoBandwidth;
 	/// Server-wide ceiling for relayed video egress (bits/s) — bounds the O(senders × receivers)
-	/// amplification of the blind relay. 0 disables video relaying.
+	/// amplification of the blind relay. 0 means unlimited.
 	int iMaxVideoBandwidthAggregate;
 	/// Per-user ceiling for chat file-transfer traffic (bits/s), metered separately from voice
-	/// and video.
+	/// and video. 0 means unlimited.
 	int iMaxFileBandwidth;
-	/// Server-wide ceiling for relayed file egress (bits/s). 0 disables file relaying.
+	/// Server-wide ceiling for relayed file egress (bits/s). 0 means unlimited.
 	int iMaxFileBandwidthAggregate;
 	/// Per-transfer byte ceiling a sender may push through the relay (murmur never stores files).
 	quint64 iMaxFileSize;
@@ -107,6 +111,7 @@ public:
 	bool bAllowPing;
 
 	QString qsLogfile;
+	QString logSys;
 	QString qsPid;
 	QString qsIceEndpoint;
 	QString qsIceSecretRead, qsIceSecretWrite;
@@ -118,8 +123,8 @@ public:
 	QUrl qurlRegWeb;
 	bool bBonjour;
 
-	QRegularExpression qrUserName;
-	QRegularExpression qrChannelName;
+	QString userNamePattern;
+	QString channelNamePattern;
 
 	unsigned int iMessageLimit;
 	unsigned int iMessageBurst;

@@ -670,6 +670,14 @@ This value allows you to set the maximum number of users allowed in the channel.
         <translation>О Mumble</translation>
     </message>
     <message>
+        <source>Third-party Dependencies</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depending on the build configuration, your version of Mumble might not depend on all of the listed entries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>&amp;About Mumble</source>
         <translation>&amp;О Mumble</translation>
     </message>
@@ -696,10 +704,6 @@ This value allows you to set the maximum number of users allowed in the channel.
     <message>
         <source>Authors</source>
         <translation>Авторы</translation>
-    </message>
-    <message>
-        <source>Third-party license agreements</source>
-        <translation>Сторонние лицензии</translation>
     </message>
     <message>
         <source>For a list of authors, please see &lt;a href=&quot;https://github.com/mumble-voip/mumble/graphs/contributors&quot;&gt;https://github.com/mumble-voip/mumble/graphs/contributors&lt;/a&gt;</source>
@@ -1260,7 +1264,7 @@ This value allows you to set the maximum number of users allowed in the channel.
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Доступ к микрофону запрещен. Пожалуйста, разрешите Mumble использовать микрофон в «Системнае настройки» -&gt; «Конфиденциальность и безопасность» -&gt; «Микрофон».</translation>
     </message>
     <message>
         <source>%1 ms</source>
@@ -3696,6 +3700,18 @@ Label of the server. This is what the server will be named like in your server l
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
+    <message>
+        <source>Save password on this device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>GlobalShortcut</name>
@@ -5161,7 +5177,7 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>Dark Theme</source>
-        <translation type="unfinished"></translation>
+        <translation>Темная тема</translation>
     </message>
     <message>
         <source>Sets the theme automatically based on the system theme.</source>
@@ -5169,11 +5185,11 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>Automatic theme based on system theme</source>
-        <translation type="unfinished"></translation>
+        <translation>Автоматическая тема в соответствии с системной</translation>
     </message>
     <message>
         <source>Auto</source>
-        <translation type="unfinished"></translation>
+        <translation>Авто</translation>
     </message>
     <message>
         <source>Sets the theme to the configured dark theme setting</source>
@@ -5181,7 +5197,7 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>Dark</source>
-        <translation type="unfinished"></translation>
+        <translation>Темная</translation>
     </message>
     <message>
         <source>Sets the theme to the configured light theme setting</source>
@@ -5189,19 +5205,19 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>Light Theme</source>
-        <translation type="unfinished"></translation>
+        <translation>Светлая тема</translation>
     </message>
     <message>
         <source>Light</source>
-        <translation type="unfinished"></translation>
+        <translation>Светлая</translation>
     </message>
     <message>
         <source>Open the themes directory in the systems file manager</source>
-        <translation type="unfinished"></translation>
+        <translation>Открыть папку с темами в системном файловом менеджере</translation>
     </message>
     <message>
         <source>Open Themes Directory</source>
-        <translation type="unfinished"></translation>
+        <translation>Открыть папку с темами</translation>
     </message>
     <message>
         <source>This controls whether Mumble will try to restore the window geometry and state from previous sessions on startup.</source>
@@ -5209,6 +5225,14 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>Restore window geometry on startup</source>
+        <translation>Восстановить размер и положения окна при запуске</translation>
+    </message>
+    <message>
+        <source>Whether to change the local volume adjustment for the selected user when scrolling the mouse wheel up (increase) or down (decrease) while Control is pressed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CTRL + Scroll to change selected user&apos;s volume</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -6252,11 +6276,11 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>According to the server&apos;s configuration, your username is considered invalid.</source>
-        <translation type="unfinished"></translation>
+        <translation>Согласно настройкам сервера, ваше имя пользователя считается некорректным.</translation>
     </message>
     <message>
         <source>Denied: According to the server&apos;s configuration, the channel name is considered invalid.</source>
-        <translation type="unfinished"></translation>
+        <translation>Отказано: Согласно настройкам сервера, название канала некорректно.</translation>
     </message>
     <message>
         <source>According to the server&apos;s configuration, the username %1 is considered invalid.</source>
@@ -6762,12 +6786,12 @@ the channel&apos;s context menu.</source>
     </message>
     <message>
         <source>Channel &amp;Filter</source>
-        <translation>Канал &amp;Фильтр</translation>
+        <translation>Канал и фильтр</translation>
     </message>
     <message>
         <source>Connect to a server</source>
         <comment>Global Shortcut</comment>
-        <translation type="unfinished"></translation>
+        <translation>Подключиться к серверу</translation>
     </message>
     <message>
         <source>This will open the server connection dialog</source>
@@ -6909,7 +6933,7 @@ the channel&apos;s context menu.</source>
     <message>
         <source>Start certificate wizard</source>
         <comment>Global Shortcut</comment>
-        <translation type="unfinished"></translation>
+        <translation>Запустить мастер сертификатов</translation>
     </message>
     <message>
         <source>This will open the certificate wizard dialog</source>
@@ -6945,7 +6969,7 @@ the channel&apos;s context menu.</source>
     <message>
         <source>Check for update</source>
         <comment>Global Shortcut</comment>
-        <translation type="unfinished"></translation>
+        <translation>Проверить наличие обновлений</translation>
     </message>
     <message>
         <source>This will check if mumble is up to date</source>
@@ -6965,7 +6989,7 @@ the channel&apos;s context menu.</source>
     </message>
     <message>
         <source>Enter chat message</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите сообщение в чат</translation>
     </message>
     <message>
         <source>&amp;Ban List</source>
@@ -7458,14 +7482,6 @@ the channel&apos;s context menu.</source>
         <translation>Не передавать данные сертификата и не сохранять пароли. (Настройка не сохраняется).</translation>
     </message>
     <message>
-        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined, and will not cache passwords for connections. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
-        <translation>&lt;b&gt;Выключит отправку идентификационной информации на сервер.&lt;/b&gt;&lt;p&gt;Клиент не будет идентифицировать себя с помощью сертификата, даже если он имеется, и не будет кэшировать пароли для соединений. Это тестовая опция и она не сохраняется.&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Suppress certificate and password storage</source>
-        <translation>Скрывать сертификат и хранилище паролей</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;Type of proxy to connect through.&lt;/b&gt;&lt;br /&gt;This makes Mumble connect through a proxy for all outgoing connections. Note: Proxy tunneling forces Mumble into TCP compatibility mode, causing all voice data to be sent via the control channel.</source>
         <translation>&lt;b&gt;Тип прокси для подключения.&lt;/b&gt;&lt;br /&gt;Mumble будет использовать прокси для всех исходящих соединений. Внимание: туннелирование через прокси заставит Mumble использовать режим совместимости TCP, что приведёт к передаче голосовых данных по каналу контроля.</translation>
     </message>
@@ -7605,6 +7621,14 @@ Prevents the client from sending potentially identifying information about the o
     </message>
     <message>
         <source>Proxy password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Suppress certificate information</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -8390,6 +8414,10 @@ To upgrade these files to their latest versions, click the button below.</source
         <translation>Обновление для плагина &quot;%1&quot; не удалось из-за слишком большого количества переадресаций</translation>
     </message>
     <message>
+        <source>Update for plugin &quot;%1&quot; failed because it redirected to a non-HTTPS URL (%2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Unable to download plugin update for &quot;%1&quot; from &quot;%2&quot; (HTTP status code %3)</source>
         <translation>Не удалось загрузить обновление плагина для &quot;%1&quot; из &quot;%2&quot; (код статуса HTTP %3)</translation>
     </message>
@@ -8582,7 +8610,7 @@ To upgrade these files to their latest versions, click the button below.</source
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Доступ к микрофону запрещен. Пожалуйста, разрешите Mumble использовать микрофон в «Системнае настройки» -&gt; «Конфиденциальность и безопасность» -&gt; «Микрофон».</translation>
     </message>
     <message>
         <source>If enabled this tries to cancel out echo from the audio stream.</source>
@@ -8726,7 +8754,7 @@ You can register them again.</source>
     </message>
     <message>
         <source>text messages ignored</source>
-        <translation type="unfinished"></translation>
+        <translation>текстовые сообщения игнорируются</translation>
     </message>
     <message>
         <source>registered</source>
@@ -9322,7 +9350,7 @@ An access token is a text string, which can be used as a password for very simpl
     </message>
     <message>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Скрыть</translation>
     </message>
 </context>
 <context>

@@ -31,6 +31,7 @@
 
 #define SERVERSEND_EVENT 3501
 
+#include "HostAddress.h"
 #include "Mumble.pb.h"
 #include "MumbleProtocol.h"
 #include "ServerAddress.h"
@@ -40,6 +41,8 @@
 #include <memory>
 
 class Connection;
+class CryptState;
+struct PacketStats;
 class Database;
 class PacketDataStream;
 class QUdpSocket;
@@ -118,10 +121,14 @@ protected:
 	DWORD dwFlowUDP;
 #endif
 
-	QHostAddress qhaRemote;
-	QHostAddress qhaLocal;
+	HostAddress qhaRemote;
+	HostAddress qhaLocal;
 	QUdpSocket *qusUdp;
 	QMutex qmUdp;
+	// Protects crypto state and its lifetime. Acquire qmUdp first if both locks are needed.
+	QMutex qmCrypt;
+	std::unique_ptr< CryptState > csCrypt;
+	void processCryptSetup(const MumbleProto::CryptSetup &msg);
 
 	void handleVoicePacket(const Mumble::Protocol::AudioData &audioData);
 	void handleVideoPacket(const Mumble::Protocol::VideoData &videoData);
@@ -162,6 +169,7 @@ public:
 	void setConnectionInfo(const QString &host, unsigned short port, const QString &username, const QString &pw);
 	void getConnectionInfo(QString &host, unsigned short &port, QString &username, QString &pw) const;
 	bool isStrong() const;
+	bool getCryptStats(PacketStats &local, PacketStats &remote);
 	void customEvent(QEvent *evt) Q_DECL_OVERRIDE;
 	int getConnectionID() const;
 
