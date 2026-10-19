@@ -2663,7 +2663,7 @@ void Server::msgFileTransferControl(ServerUser *uSource, MumbleProto::FileTransf
 	// targeted sessions, never inspect, never store (PROTOCOL.md §3).
 
 	if (uSource->m_fileControlBucket.ratelimit(1)) {
-		qWarning("Dropping file-transfer control record from \"%s\" (%d) - rate limited",
+		qWarning("Dropping file-transfer control record from \"%s\" (%u) - rate limited",
 				 qUtf8Printable(uSource->qsName), uSource->uiSession);
 		return;
 	}
