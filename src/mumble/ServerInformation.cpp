@@ -158,6 +158,10 @@ void ServerInformation::updateConnectionDetails() {
 }
 
 void ServerInformation::populateUDPStatistics() {
+	PacketStats local, remote;
+	if (!Global::get().sh->getCryptStats(local, remote)) {
+		return;
+	}
 	// statistics
 	constexpr int TO_SERVER_COL   = 0;
 	constexpr int FROM_SERVER_COL = 1;
@@ -166,19 +170,14 @@ void ServerInformation::populateUDPStatistics() {
 	constexpr int LOST_ROW        = 2;
 	constexpr int RESYNC_ROW      = 3;
 
-	QTableWidgetItem *toGoodItem = new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsRemote.good));
-	QTableWidgetItem *fromGoodItem =
-		new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsLocal.good));
-	QTableWidgetItem *toLateItem = new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsRemote.late));
-	QTableWidgetItem *fromLateItem =
-		new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsLocal.late));
-	QTableWidgetItem *toLostItem = new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsRemote.lost));
-	QTableWidgetItem *fromLostItem =
-		new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsLocal.lost));
-	QTableWidgetItem *toResyncItem =
-		new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsRemote.resync));
-	QTableWidgetItem *fromResyncItem =
-		new QTableWidgetItem(QString::number(Global::get().sh->csCrypt->m_statsLocal.resync));
+	QTableWidgetItem *toGoodItem     = new QTableWidgetItem(QString::number(remote.good));
+	QTableWidgetItem *fromGoodItem   = new QTableWidgetItem(QString::number(local.good));
+	QTableWidgetItem *toLateItem     = new QTableWidgetItem(QString::number(remote.late));
+	QTableWidgetItem *fromLateItem   = new QTableWidgetItem(QString::number(local.late));
+	QTableWidgetItem *toLostItem     = new QTableWidgetItem(QString::number(remote.lost));
+	QTableWidgetItem *fromLostItem   = new QTableWidgetItem(QString::number(local.lost));
+	QTableWidgetItem *toResyncItem   = new QTableWidgetItem(QString::number(remote.resync));
+	QTableWidgetItem *fromResyncItem = new QTableWidgetItem(QString::number(local.resync));
 
 	connection_udp_statisticsTable->setItem(GOOD_ROW, TO_SERVER_COL, toGoodItem);
 	connection_udp_statisticsTable->setItem(GOOD_ROW, FROM_SERVER_COL, fromGoodItem);

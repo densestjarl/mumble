@@ -265,7 +265,8 @@ void ServerHandler::udpReady() {
 		if (!connection)
 			continue;
 
-		if (!csCrypt->isValid())
+		QMutexLocker cryptLock(&qmCrypt);
+		if (!csCrypt || !csCrypt->isValid())
 			continue;
 
 		if (buflen < 5)
@@ -281,12 +282,14 @@ void ServerHandler::udpReady() {
 				if (csCrypt->tLastRequest.elapsed() > std::chrono::seconds(5)) {
 					csCrypt->tLastRequest.restart();
 					MumbleProto::CryptSetup mpcs;
+					cryptLock.unlock();
 					sendMessage(mpcs);
 				}
 			}
 			continue;
 		}
 
+		cryptLock.unlock();
 		if (m_udpDecoder.decode(buffer.subspan(0, buflen - 4))) {
 			switch (m_udpDecoder.getMessageType()) {
 				case Mumble::Protocol::UDPMessageType::Ping: {
@@ -355,7 +358,8 @@ void ServerHandler::sendMessage(const unsigned char *data, int len, bool force) 
 	crypto.resize(static_cast< std::size_t >(len + 4));
 
 	ConnectionPtr connection(cConnection);
-	if (!connection || !csCrypt->isValid())
+	QMutexLocker cryptLock(&qmCrypt);
+	if (!connection || !csCrypt || !csCrypt->isValid())
 		return;
 
 	if (!force && (NetworkConfig::TcpModeEnabled() || !bUdp)) {
@@ -580,7 +584,10 @@ void ServerHandler::run() {
 		if (qusUdp) {
 			QMutexLocker qml(&qmUdp);
 
-			csCrypt.reset();
+			{
+				QMutexLocker cryptLock(&qmCrypt);
+				csCrypt.reset();
+			}
 #ifdef Q_OS_WIN
 			if (hQoS) {
 				if (!QOSRemoveSocketFromFlow(hQoS, 0, dwFlowUDP, 0)) {
@@ -708,11 +715,15 @@ void ServerHandler::sendPingInternal() {
 
 	MumbleProto::Ping mpp;
 
+	PacketStats local, remote;
+	if (!getCryptStats(local, remote)) {
+		return;
+	}
 	mpp.set_timestamp(t);
-	mpp.set_good(csCrypt->m_statsLocal.good);
-	mpp.set_late(csCrypt->m_statsLocal.late);
-	mpp.set_lost(csCrypt->m_statsLocal.lost);
-	mpp.set_resync(csCrypt->m_statsLocal.resync);
+	mpp.set_good(local.good);
+	mpp.set_late(local.late);
+	mpp.set_lost(local.lost);
+	mpp.set_resync(local.resync);
 
 
 	if (boost::accumulators::count(accUDP)) {
@@ -741,6 +752,45 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 	handleMessage(type, data, false);
 }
 
+void ServerHandler::processCryptSetup(const MumbleProto::CryptSetup &msg) {
+	QMutexLocker lock(&qmCrypt);
+	if (!csCrypt) {
+		return;
+	}
+
+	if (msg.has_key() && msg.has_client_nonce() && msg.has_server_nonce()) {
+		const std::string &key          = msg.key();
+		const std::string &client_nonce = msg.client_nonce();
+		const std::string &server_nonce = msg.server_nonce();
+		if (!csCrypt->setKey(key, client_nonce, server_nonce)) {
+			qWarning("Messages: Cipher resync failed: Invalid key/nonce from the server!");
+		}
+	} else if (msg.has_server_nonce()) {
+		const std::string &server_nonce = msg.server_nonce();
+		if (server_nonce.size() == AES_BLOCK_SIZE) {
+			csCrypt->m_statsLocal.resync++;
+			if (!csCrypt->setDecryptIV(server_nonce)) {
+				qWarning("Messages: Cipher resync failed: Invalid nonce from the server!");
+			}
+		}
+	} else {
+		MumbleProto::CryptSetup mpcs;
+		mpcs.set_client_nonce(csCrypt->getEncryptIV());
+		lock.unlock();
+		sendMessage(mpcs);
+	}
+}
+
+bool ServerHandler::getCryptStats(PacketStats &local, PacketStats &remote) {
+	QMutexLocker lock(&qmCrypt);
+	if (!csCrypt) {
+		return false;
+	}
+	local  = csCrypt->m_statsLocal;
+	remote = csCrypt->m_statsRemote;
+	return true;
+}
+
 void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const QByteArray &qbaMsg,
 								  bool admissionExpired) {
 	const char *ptr = qbaMsg.constData();
@@ -755,6 +805,11 @@ void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const Q
 			&& m_tcpTunnelDecoder.getMessageType() == Mumble::Protocol::UDPMessageType::Audio) {
 			handleVoicePacket(m_tcpTunnelDecoder.getAudioData());
 		}
+	} else if (type == Mumble::Protocol::TCPMessageType::CryptSetup) {
+		MumbleProto::CryptSetup msg;
+		if (msg.ParseFromArray(qbaMsg.constData(), static_cast< int >(qbaMsg.size()))) {
+			processCryptSetup(msg);
+		}
 	} else if (type == Mumble::Protocol::TCPMessageType::Ping) {
 		MumbleProto::Ping msg;
 		if (msg.ParseFromArray(qbaMsg.constData(), static_cast< int >(qbaMsg.size()))) {
@@ -767,21 +822,28 @@ void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const Q
 			// connection is still OK.
 			iInFlightTCPPings = 0;
 
+			QMutexLocker cryptLock(&qmCrypt);
+			if (!csCrypt) {
+				return;
+			}
 			csCrypt->m_statsRemote.good   = msg.good();
 			csCrypt->m_statsRemote.late   = msg.late();
 			csCrypt->m_statsRemote.lost   = msg.lost();
 			csCrypt->m_statsRemote.resync = msg.resync();
+			const PacketStats local       = csCrypt->m_statsLocal;
+			const PacketStats remote      = csCrypt->m_statsRemote;
+			cryptLock.unlock();
 			accTCP(static_cast< double >(static_cast< std::uint64_t >(tTimestamp.elapsed().count()) - msg.timestamp())
 				   / 1000.0);
 
-			if (((csCrypt->m_statsRemote.good == 0) || (csCrypt->m_statsLocal.good == 0)) && bUdp
+			if (((remote.good == 0) || (local.good == 0)) && bUdp
 				&& (tTimestamp.elapsed() > std::chrono::seconds(20))) {
 				bUdp = false;
 				if (!NetworkConfig::TcpModeEnabled()) {
-					if ((csCrypt->m_statsRemote.good == 0) && (csCrypt->m_statsLocal.good == 0))
+					if ((remote.good == 0) && (local.good == 0))
 						Global::get().mw->msgBox(
 							tr("UDP packets cannot be sent to or received from the server. Switching to TCP mode."));
-					else if (csCrypt->m_statsRemote.good == 0)
+					else if (remote.good == 0)
 						Global::get().mw->msgBox(
 							tr("UDP packets cannot be sent to the server. Switching to TCP mode."));
 					else
@@ -790,7 +852,7 @@ void ServerHandler::handleMessage(Mumble::Protocol::TCPMessageType type, const Q
 
 					database->setUdp(qbaDigest, false);
 				}
-			} else if (!bUdp && (csCrypt->m_statsRemote.good > 3) && (csCrypt->m_statsLocal.good > 3)) {
+			} else if (!bUdp && (remote.good > 3) && (local.good > 3)) {
 				bUdp = true;
 				if (!NetworkConfig::TcpModeEnabled()) {
 					Global::get().mw->msgBox(
@@ -1139,6 +1201,7 @@ void ServerHandler::serverConnectionConnected() {
 			}
 #endif
 		}
+		QMutexLocker cryptLock(&qmCrypt);
 		csCrypt = std::make_unique< CryptStateOCB2 >();
 	}
 

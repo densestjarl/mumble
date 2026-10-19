@@ -42,6 +42,7 @@
 
 class Connection;
 class CryptState;
+struct PacketStats;
 class Database;
 class PacketDataStream;
 class QUdpSocket;
@@ -124,6 +125,10 @@ protected:
 	HostAddress qhaLocal;
 	QUdpSocket *qusUdp;
 	QMutex qmUdp;
+	// Protects crypto state and its lifetime. Acquire qmUdp first if both locks are needed.
+	QMutex qmCrypt;
+	std::unique_ptr< CryptState > csCrypt;
+	void processCryptSetup(const MumbleProto::CryptSetup &msg);
 
 	void handleVoicePacket(const Mumble::Protocol::AudioData &audioData);
 	void handleVideoPacket(const Mumble::Protocol::VideoData &videoData);
@@ -135,7 +140,6 @@ public:
 	QList< QSslError > qlErrors;
 	QList< QSslCertificate > qscCert;
 	QSslCipher qscCipher;
-	std::unique_ptr< CryptState > csCrypt;
 	ConnectionPtr cConnection;
 	QByteArray qbaDigest;
 	std::shared_ptr< VoiceRecorder > recorder;
@@ -165,6 +169,7 @@ public:
 	void setConnectionInfo(const QString &host, unsigned short port, const QString &username, const QString &pw);
 	void getConnectionInfo(QString &host, unsigned short &port, QString &username, QString &pw) const;
 	bool isStrong() const;
+	bool getCryptStats(PacketStats &local, PacketStats &remote);
 	void customEvent(QEvent *evt) Q_DECL_OVERRIDE;
 	int getConnectionID() const;
 
