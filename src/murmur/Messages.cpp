@@ -1141,17 +1141,6 @@ void Server::msgUserState(ServerUser *uSource, MumbleProto::UserState &msg) {
 			pDstServerUser->bScreenSharing = msg.screen_sharing();
 		}
 
-		MumbleProto::TextMessage mptm;
-		mptm.add_tree_id(0);
-		if (pDstServerUser->bScreenSharing) {
-			mptm.set_message(
-				u8(QString(QLatin1String("User '%1' started screen sharing")).arg(pDstServerUser->qsName)));
-		} else {
-			mptm.set_message(
-				u8(QString(QLatin1String("User '%1' stopped screen sharing")).arg(pDstServerUser->qsName)));
-		}
-		sendAll(mptm, Version::fromComponents(1, 2, 3), Version::CompareMode::LessThan);
-
 		bBroadcast = true;
 	}
 

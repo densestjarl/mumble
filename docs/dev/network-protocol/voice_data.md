@@ -290,6 +290,8 @@ enabled and relays it only to authenticated users in the same channel whose
 protocol version supports protobuf UDP. Legacy clients must not receive these
 packets because they interpret the type byte as a legacy audio header.
 `UserState.screen_sharing` is an optional protobuf field numbered `24`.
+Fork clients generate start/stop notifications from this state update; the server
+does not send a separate text notification.
 
 ## Encryption
 
