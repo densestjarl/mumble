@@ -195,7 +195,7 @@ jobs:
       - name: Verify full binary payload from every client runtime
         run: >-
           python scripts/hosting/verify_safety_qr.py --fixtures qr-fixtures
-          --artifact tests-ubuntu-24.04-x86_64 --artifact tests-windows-2025-vs2026-x86_64
+          --artifact tests-ubuntu-24.04-x86_64 --artifact tests-windows-2025-x86_64
           --artifact tests-macos-15-arm64 --artifact tests-macos-15-intel-x86_64
           --revision "${{ github.sha }}" --report safety-qr-roundtrip.json
       - uses: actions/upload-artifact@v7
