@@ -59,7 +59,7 @@ jobs:
 
       - name: Set build environment
         shell: bash
-        run: .github/workflows/set_environment_variables.sh "windows-2025-vs2026" "static" "x86_64" "${{ github.workspace }}"
+        run: .github/workflows/set_environment_variables.sh "windows-2025-vs2026" "static" "x86_64" "cl" "${{ github.workspace }}"
 
       - name: Restore dependency cache
         id: dependency-cache
@@ -151,7 +151,7 @@ jobs:
 
       - name: Set build environment
         shell: bash
-        run: .github/workflows/set_environment_variables.sh "macos-15" "static" "arm64" "${{ github.workspace }}"
+        run: .github/workflows/set_environment_variables.sh "macos-15" "static" "arm64" "clang" "${{ github.workspace }}"
 
       - name: Restore dependency cache
         id: dependency-cache
@@ -400,7 +400,7 @@ jobs:
 
       - name: Set build environment
         shell: bash
-        run: .github/workflows/set_environment_variables.sh "ubuntu-24.04" "static" "x86_64" "${GITHUB_WORKSPACE}"
+        run: .github/workflows/set_environment_variables.sh "ubuntu-24.04" "static" "x86_64" "gcc" "${GITHUB_WORKSPACE}"
 
       - name: Restore dependency cache
         id: dependency-cache
@@ -592,7 +592,7 @@ jobs:
 
       - name: Set build environment
         shell: bash
-        run: .github/workflows/set_environment_variables.sh "debian-12" "shared" "x86_64" "${GITHUB_WORKSPACE}"
+        run: .github/workflows/set_environment_variables.sh "debian-12" "shared" "x86_64" "gcc" "${GITHUB_WORKSPACE}"
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
