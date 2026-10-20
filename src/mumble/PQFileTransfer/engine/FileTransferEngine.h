@@ -95,9 +95,11 @@ public:
 		quint32 chunkSize  = 256 * 1024;
 		// Shared ciphertext-byte budget across all sends; 0 = unlimited.
 		quint32 sendRateBytesPerSecond = 4 * 1024 * 1024;
-		quint64 maxReceiveSize = 10ull * 1024 * 1024 * 1024;
-		int handshakeTimeoutMSecs	  = 10000;
-		int receiveIdleTimeoutMSecs   = 60000;
+		quint64 maxReceiveSize         = 10ull * 1024 * 1024 * 1024;
+		int handshakeTimeoutMSecs      = 10000;
+		// Human safety-number approval has its own bounded deadline.
+		int identityVerificationTimeoutMSecs = 60000;
+		int receiveIdleTimeoutMSecs          = 60000;
 	};
 
 	static quint32 sendChunkSize(const Config &config, qsizetype recipientCount);
