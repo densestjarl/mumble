@@ -64,7 +64,6 @@ private slots:
 	void missingReceiptReportsPartialDelivery();
 	void peerResetKeepsUnrelatedReadyFileAndRetiresPrompt();
 	void initTestCase();
-	void cleanupTestCase();
 
 	void privateReceiveStorage_data();
 	void privateReceiveStorage();
@@ -124,9 +123,6 @@ void TestFileTransferEngine::initTestCase() {
 	m_bob	= makeIdentity();
 	m_aliceFp = PQFT::identityFingerprint(m_alice.publicKey);
 	m_bobFp   = PQFT::identityFingerprint(m_bob.publicKey);
-}
-
-void TestFileTransferEngine::cleanupTestCase() {
 }
 
 void TestFileTransferEngine::cancelledPromptTimerCannotRemoveReplacementHandshake_data() {
