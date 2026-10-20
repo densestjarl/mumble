@@ -5,7 +5,6 @@
 
 #include "PQFileTransfer/engine/FileTransferManager.h"
 #include "PQFileTransfer/engine/FTMessages.h"
-#include "PQFileTransfer/engine/FileTransferTransport.h"
 
 #include "Channel.h"
 #include "ClientUser.h"
@@ -291,13 +290,16 @@ void FileTransferManager::updateConnectionTransport() {
 		[engine, connection, connectionId]() {
 			engine->setTransport(
 				[connection, connectionId](unsigned int targetSession, const QByteArray &payload) {
-					PQFT::Transport::queueControl(connection, targetSession, payload, connectionId);
+					if (const auto handler = connection.lock()) {
+						handler->queueFileTransferControl(targetSession, payload, connectionId);
+					}
 				},
 				{});
 			engine->setTargetedChunkTransport(
 				[connection, connectionId](const QList< unsigned int > &targets, const QByteArray &id, quint64 index,
 										   quint64 total, const QByteArray &data) {
-					return PQFT::Transport::queueChunk(connection, targets, id, index, total, data, connectionId);
+					const auto handler = connection.lock();
+					return handler && handler->queueFileData(targets, id, index, total, data, connectionId);
 				},
 				true);
 		},
