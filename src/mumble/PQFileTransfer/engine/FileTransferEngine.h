@@ -98,6 +98,7 @@ public:
 		quint64 maxReceiveSize         = 10ull * 1024 * 1024 * 1024;
 		int handshakeTimeoutMSecs      = 10000;
 		// Human safety-number approval has its own bounded deadline.
+		// Non-positive values are normalized to 1 ms when applied.
 		int identityVerificationTimeoutMSecs = 60000;
 		int receiveIdleTimeoutMSecs          = 60000;
 	};

@@ -156,7 +156,11 @@ void FileTransferEngine::setIdentity(QByteArray identityPublicKey, IdentitySign 
 void FileTransferEngine::setConfig(const Config &config) {
 	const bool rateChanged = m_config.sendRateBytesPerSecond != config.sendRateBytesPerSecond
 							 || m_config.aggregateSendRate != config.aggregateSendRate;
-	m_config = config;
+	m_config               = config;
+	// Zero/negative verification budgets must expire promptly, not disable
+	// pending-prompt timers on Qt versions that reject negative intervals.
+	// Normalize once so standalone and composed deadlines use the same budget.
+	m_config.identityVerificationTimeoutMSecs = qMax(1, config.identityVerificationTimeoutMSecs);
 	// Pin-cache refreshes and new sends also apply configuration. Preserve
 	// earned credit unless the rate itself changes, so these cannot starve sends.
 	if (rateChanged) {

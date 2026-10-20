@@ -29,6 +29,7 @@
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
+#include <limits>
 #ifndef Q_OS_WIN
 #	include <sys/stat.h>
 #endif
@@ -83,6 +84,8 @@ private slots:
 	void firstContactPinFlags();
 	void delayedIdentityVerificationStillDelivers();
 	void unansweredHandshakeStillExpires();
+	void verificationTimeoutIsNormalized_data();
+	void verificationTimeoutIsNormalized();
 	void quickRecipientDoesNotShortenOtherVerification();
 	void incomingAbortCleansUpSafely();
 	void passwordSpoolIsBounded();
@@ -1771,6 +1774,68 @@ void TestFileTransferEngine::quickRecipientDoesNotShortenOtherVerification() {
 	QVERIFY(!sawState(earlyReceived, {}, PQFT::FTTransferInfo::State::Failed));
 	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::Saved), 3000);
 	QVERIFY(!sawState(sent, {}, PQFT::FTTransferInfo::State::Failed));
+}
+
+void TestFileTransferEngine::verificationTimeoutIsNormalized_data() {
+	QTest::addColumn< int >("configured");
+	QTest::newRow("zero") << 0;
+	QTest::newRow("negative") << -1;
+	QTest::newRow("minimum-int") << std::numeric_limits< int >::min();
+	QTest::newRow("positive") << 25;
+	QTest::newRow("maximum-int") << std::numeric_limits< int >::max();
+}
+
+void TestFileTransferEngine::verificationTimeoutIsNormalized() {
+	QFETCH(int, configured);
+	const int normalized = qMax(1, configured);
+	PQFT::FileTransferEngine::Config config;
+	config.handshakeTimeoutMSecs            = 20;
+	config.identityVerificationTimeoutMSecs = configured;
+	PQFT::FileTransferEngine receiver;
+	receiver.setConfig(config);
+	receiver.setIdentity(m_bob.publicKey, {});
+	QSignalSpy prompts(&receiver, &PQFT::FileTransferEngine::firstContact);
+	QSignalSpy retired(&receiver, &PQFT::FileTransferEngine::firstContactRetired);
+	PQFT::FileTransferSession initiator(PQFT::FileTransferSession::Role::Initiator, { m_alice.publicKey, {} }, {});
+	const QByteArray m1 = initiator.buildM1();
+	receiver.onControlMessage(AliceSession, m1);
+	QCOMPARE(prompts.size(), 1);
+	int activeTimers = 0;
+	for (QTimer *timer : receiver.findChildren< QTimer * >()) {
+		if (timer->isActive()) {
+			++activeTimers;
+			QCOMPARE(timer->interval(), normalized);
+		}
+	}
+	QCOMPARE(activeTimers, 1);
+	if (configured != std::numeric_limits< int >::max()) {
+		QTRY_COMPARE_WITH_TIMEOUT(retired.size(), 1, 1000);
+		QCOMPARE(retired.first().at(1).toULongLong(), prompts.first().at(5).toULongLong());
+		// Expiry must free the pending slot for a later attempt from this peer.
+		receiver.onControlMessage(AliceSession, m1);
+		QCOMPARE(prompts.size(), 2);
+	}
+	receiver.abortAll();
+
+	PQFT::FileTransferEngine sender;
+	sender.setConfig(config);
+	sender.setIdentity(m_alice.publicKey, {});
+	sender.setTransport([](unsigned int, const QByteArray &) {}, {});
+	QSignalSpy sent(&sender, &PQFT::FileTransferEngine::transferUpdated);
+	QVERIFY(sender.startSend(writeTestFile(4096), "application/octet-stream", false, {}, { { BobSession, m_bobFp } })
+			> 0);
+	const qint64 expected = qMin(qint64(std::numeric_limits< int >::max()), qint64(20) + normalized);
+	activeTimers          = 0;
+	for (QTimer *timer : sender.findChildren< QTimer * >()) {
+		if (timer->isActive()) {
+			++activeTimers;
+			QCOMPARE(qint64(timer->interval()), expected);
+		}
+	}
+	QCOMPARE(activeTimers, 1);
+	if (configured != std::numeric_limits< int >::max())
+		QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::Failed), 1000);
+	sender.abortAll();
 }
 
 void TestFileTransferEngine::unansweredHandshakeStillExpires() {
