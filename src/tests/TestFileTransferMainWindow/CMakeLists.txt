@@ -6,7 +6,9 @@ set_target_properties(TestFileTransferMainWindow PROPERTIES AUTOMOC ON AUTORCC O
 target_include_directories(TestFileTransferMainWindow PRIVATE "${CMAKE_SOURCE_DIR}/src/mumble")
 target_link_libraries(TestFileTransferMainWindow PRIVATE mumble_client_lib Qt6::Test)
 add_test(NAME TestFileTransferMainWindow COMMAND $<TARGET_FILE:TestFileTransferMainWindow> -platform offscreen)
-set_tests_properties(TestFileTransferMainWindow PROPERTIES TIMEOUT 240 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+# Four TLS rows allow 193s each for bounded startup, transfer and cleanup,
+# plus the 30s document row and fixture preparation/scheduling headroom.
+set_tests_properties(TestFileTransferMainWindow PROPERTIES TIMEOUT 900 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 if(TARGET mumble-server)
 	target_compile_definitions(TestFileTransferMainWindow PRIVATE
 		MUMBLE_TEST_MURMUR_BINARY="$<TARGET_FILE:mumble-server>")

@@ -567,7 +567,7 @@ private:
 			server.terminate();
 			if (!server.waitForFinished(3000)) {
 				server.kill();
-				server.waitForFinished();
+				server.waitForFinished(5000);
 			}
 		});
 		const auto serverFailure = [&](const QString &reason) {
@@ -576,21 +576,23 @@ private:
 			(void) writeFixtureFile(QDir(logs).filePath("server" + suffix), output);
 			return output;
 		};
-		if (!server.waitForStarted()) {
+		if (!server.waitForStarted(5000)) {
 			const QByteArray output = serverFailure(QStringLiteral("Owned server did not start"));
 			QFAIL(output.constData());
 		}
+		QTcpSocket startupProbe;
 		bool listening             = false;
 		const bool startupFinished = waitFor(
 			[&]() {
 				if (server.state() == QProcess::NotRunning)
 					return true;
-				QTcpSocket socket;
-				socket.connectToHost(QHostAddress::LocalHost, port);
-				listening = socket.waitForConnected(100);
+				startupProbe.abort();
+				startupProbe.connectToHost(QHostAddress::LocalHost, port);
+				listening = startupProbe.waitForConnected(100);
 				return listening;
 			},
 			60000);
+		startupProbe.abort();
 		if (!startupFinished || !listening) {
 			const QByteArray output =
 				serverFailure(QStringLiteral("Owned server exited or never listened; exit %1").arg(server.exitCode()));
@@ -615,7 +617,7 @@ private:
 			for (auto *child : { &sender, &receiver }) {
 				if (child->state() != QProcess::NotRunning) {
 					child->kill();
-					child->waitForFinished();
+					child->waitForFinished(5000);
 				}
 			}
 		});
@@ -628,7 +630,7 @@ private:
 						   QString::fromLatin1(serverDigest),
 						   webm ? (oversized ? QStringLiteral("webm-oversized") : QStringLiteral("webm-small"))
 								: (firstContact ? QStringLiteral("first-contact") : QStringLiteral("preverified")) });
-			QVERIFY(child->waitForStarted());
+			QVERIFY(child->waitForStarted(5000));
 		}
 		const bool finished = waitFor(
 			[&]() { return sender.state() == QProcess::NotRunning && receiver.state() == QProcess::NotRunning; },
@@ -636,8 +638,8 @@ private:
 		if (!finished) {
 			sender.kill();
 			receiver.kill();
-			sender.waitForFinished();
-			receiver.waitForFinished();
+			sender.waitForFinished(5000);
+			receiver.waitForFinished(5000);
 		}
 		const QByteArray senderOutput   = sender.readAllStandardOutput(),
 						 receiverOutput = receiver.readAllStandardOutput(),
@@ -670,11 +672,11 @@ private slots:
 		child.start(
 			QCoreApplication::applicationFilePath(),
 			{ QStringLiteral("-platform"), QGuiApplication::platformName(), QStringLiteral("--main-window-child") });
-		QVERIFY(child.waitForStarted());
+		QVERIFY(child.waitForStarted(5000));
 		const bool finished = child.waitForFinished(20000);
 		if (!finished) {
 			child.kill();
-			child.waitForFinished();
+			child.waitForFinished(5000);
 		}
 		const QByteArray diagnostics = child.readAllStandardOutput();
 		QVERIFY2(finished,

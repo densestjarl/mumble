@@ -34,6 +34,13 @@ cmake --build <build> --target TestFileTransferMainWindow
 ctest --test-dir <build> -R ^TestFileTransferMainWindow$ --output-on-failure
 ```
 
+CTest allows 900 seconds for all rows. Each of the four TLS rows has bounded
+process startup (up to 15 seconds total), server readiness (60 seconds), TLS probe
+(15 seconds), client execution (75 seconds), and cleanup (up to 28 seconds including
+a repeated kill wait on failure). The
+document row allows another 30 seconds; the remaining budget covers fixture
+preparation and scheduling. Server readiness reuses one TCP socket across probes.
+
 CTest uses the offscreen Qt platform. For the native Windows Qt platform, run
 from the build directory with the same runtime DLL search path used by CTest:
 
