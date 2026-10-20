@@ -449,7 +449,7 @@ bool ChatbarTextEdit::sendImagesFromMimeData(const QMimeData *source) {
 					if (image.isNull() && rawImage.isEmpty()) {
 #ifdef USE_FILE_SHARING
 						// Not an image: offer it as a file transfer instead
-						if (QFileInfo(path).isFile()) {
+						if (Global::get().s.bFTEnabled && QFileInfo(path).isFile()) {
 							plainFiles << path;
 						}
 #endif

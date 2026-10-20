@@ -710,6 +710,8 @@ bool Log::isWebM(const QByteArray &rawVideoData) {
 QString Log::videoToImg(QIODevice &videoData, int maxSize, bool *tooLarge) {
 	if (tooLarge)
 		*tooLarge = false;
+	if (maxSize < 0)
+		return {};
 	QByteArray payload;
 	if (maxSize == 0) {
 		payload = videoData.readAll();
@@ -718,7 +720,7 @@ QString Log::videoToImg(QIODevice &videoData, int maxSize, bool *tooLarge) {
 		// This conservative bound ignores markup/escaping; the existing encoder
 		// below still checks the exact final HTML, including those extra bytes.
 		const qint64 rawLimit = qMax(qint64(0), qint64(maxSize) * 3 / 4);
-		if (maxSize < 0 || (!videoData.isSequential() && videoData.size() - videoData.pos() > rawLimit)) {
+		if (!videoData.isSequential() && videoData.size() - videoData.pos() > rawLimit) {
 			if (tooLarge)
 				*tooLarge = true;
 			return {};
