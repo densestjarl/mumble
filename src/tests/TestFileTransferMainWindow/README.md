@@ -16,8 +16,16 @@ no observed gap above two seconds.
 All databases, TLS pins, identities, source files and saved files are disposable.
 The fixture does not load personal settings, discover personal themes, initialize
 hardware plugins, start audio, install native shortcut hooks or activate overlay
-helpers. It supplies the selected file path directly to MainWindow::startFileSend;
-the native file picker itself is not covered.
+helpers. The plain file-transfer rows supply the selected file path directly to
+MainWindow::startFileSend; the native file picker itself is not covered.
+
+The `inlineWebMDrop` rows deliver synthetic Qt drag-enter/drop events containing a
+local file URL to the real chat viewport. A generated silent VP9 WebM fixture
+must reach both chat documents unchanged, decode its poster and advance playback
+frames when playback is compiled in. The oversized row negotiates an image limit
+below the fixture size, then exercises the normal file-send and first-contact
+dialogs and verifies the saved WebM hash. These tests cover the Qt drop handler,
+not an Explorer/OLE drag performed with physical input.
 
 Build and run through CTest:
 

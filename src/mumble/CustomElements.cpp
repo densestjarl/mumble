@@ -29,6 +29,7 @@
 #include <QtGui/QTextImageFormat>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QToolTip>
+#include <limits>
 
 namespace {
 constexpr int ORIGINAL_IMAGE_SIZE_PROPERTY = QTextFormat::UserProperty + 1;
@@ -405,20 +406,34 @@ bool ChatbarTextEdit::sendImagesFromMimeData(const QMimeData *source) {
 				for (int i = 0; i < urlList.size(); ++i) {
 					QString path = urlList[i].toLocalFile();
 					if (path.endsWith(QLatin1String(".webm"), Qt::CaseInsensitive)) {
-						// WebM videos are embedded as-is (they cannot be re-encoded
-						// losslessly). There is no static fallback if they are too
-						// large, so sending is refused entirely in that case.
+						// Inline WebM must fit the negotiated HTML budget. Larger
+						// containers can use the ordinary file-transfer flow.
 						QFile file(path);
-						if (file.open(QIODevice::ReadOnly)) {
-							const QString html =
-								Log::videoToImg(file.readAll(), static_cast< int >(Global::get().uiImageLength));
+						if (file.open(QIODevice::ReadOnly | QIODevice::Unbuffered) && Log::isWebM(file.peek(4))) {
+							const QString prefix   = QLatin1String("<br />");
+							const int messageLimit = static_cast< int >(
+								qMin(Global::get().uiImageLength,
+									 static_cast< unsigned int >(std::numeric_limits< int >::max())));
+							const int videoLimit =
+								messageLimit == 0 ? 0 : messageLimit - static_cast< int >(prefix.size());
+							bool tooLarge      = messageLimit != 0 && messageLimit <= prefix.size();
+							const QString html = tooLarge ? QString() : Log::videoToImg(file, videoLimit, &tooLarge);
 							if (!html.isEmpty()) {
-								emit pastedImage(QLatin1String("<br />") + html);
+								emit pastedImage(prefix + html);
 								++count;
 								continue;
 							}
+#ifdef USE_FILE_SHARING
+							if (tooLarge && Global::get().s.bFTEnabled && QFileInfo(path).isFile()) {
+								plainFiles << path;
+								continue;
+							}
+#endif
 						}
-						Log::logOrDefer(Log::Information, tr("Unable to send video %1: too large.").arg(path));
+						Log::logOrDefer(
+							Log::Information,
+							tr("Unable to embed video %1: unreadable, invalid, or larger than this server allows.")
+								.arg(path));
 						continue;
 					}
 

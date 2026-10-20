@@ -14,6 +14,12 @@
 #include "SSL.h"
 #include "ServerHandler.h"
 #include "UserModel.h"
+#ifdef USE_CHAT_WEBM
+#	include "ChatVideoPlayer.h"
+#endif
+#ifdef MUMBLE_TEST_MURMUR_BINARY
+#	include "InlineWebMFixture.h"
+#endif
 #ifdef USE_OVERLAY
 #	include "Overlay.h"
 #endif
@@ -24,20 +30,27 @@
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDialogButtonBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
+#include <QMimeData>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSaveFile>
 #include <QScopeGuard>
+#include <QSignalSpy>
 #include <QSslKey>
 #include <QSslSocket>
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTextBlock>
 #include <QTextBrowser>
 #include <QTextDocument>
+#include <QTextFragment>
+#include <QTextImageFormat>
 #include <QTimer>
 #include <QUrl>
 
@@ -197,6 +210,98 @@ static QByteArray readFixtureFile(const QString &path) {
 	return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
 }
 
+static QUrl embeddedWebM(QTextDocument &document) {
+	for (auto block = document.begin(); block.isValid(); block = block.next()) {
+		for (auto fragment = block.begin(); !fragment.atEnd(); ++fragment) {
+			const auto text = fragment.fragment();
+			if (text.isValid() && text.charFormat().isImageFormat()) {
+				const QUrl url(text.charFormat().toImageFormat().name());
+				if (url.toString().startsWith(QStringLiteral("data:video/webm;")))
+					return url;
+			}
+		}
+	}
+	return {};
+}
+
+static void dropLocalWebM(MainWindow &window, const QString &path) {
+	QMimeData mime;
+	mime.setUrls({ QUrl::fromLocalFile(path) });
+	QDragEnterEvent enter(QPoint(8, 8), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QDropEvent drop(QPointF(8, 8), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	checkpoint("dispatching synthetic Qt WebM drag-enter and drop to chat viewport");
+	QApplication::sendEvent(window.qteChat->viewport(), &enter);
+	QApplication::sendEvent(window.qteChat->viewport(), &drop);
+	checkpoint("WebM drop returned");
+}
+
+static int inlineWebMDrop(Global &global, MainWindow &window, const QDir &shared, bool sending, int &heartbeats) {
+	const QString role = sending ? QStringLiteral("sender") : QStringLiteral("receiver");
+	const QString peer = sending ? QStringLiteral("receiver") : QStringLiteral("sender");
+	auto *document     = qobject_cast< LogDocument * >(window.qteLog->document());
+	if (!document || !waitFor([&]() { return global.uiImageLength == 131072u; }))
+		return 30;
+	QSignalSpy sent(window.qteChat, &ChatbarTextEdit::pastedImage);
+	QSignalSpy fileTransfer(window.qteChat, &ChatbarTextEdit::fileDropRequested);
+	QElapsedTimer gap;
+	gap.start();
+	qint64 maximumGap = 0;
+	QTimer heartbeat;
+	heartbeat.setInterval(10);
+	QObject::connect(&heartbeat, &QTimer::timeout, [&]() { maximumGap = qMax(maximumGap, gap.restart()); });
+	heartbeat.start();
+	const int initialHeartbeats = heartbeats;
+	if (!writeFixtureFile(shared.filePath(role + ".ready"), "ready"))
+		return 31;
+	if (sending) {
+		if (!waitFor([&]() { return QFile::exists(shared.filePath(peer + ".ready")); }))
+			return 32;
+		dropLocalWebM(window, shared.filePath(QStringLiteral("source.webm")));
+		QTest::qWait(200);
+		if (sent.size() != 1 || fileTransfer.size() != 0)
+			return 33;
+	}
+	{
+		if (!waitFor([&]() { return !embeddedWebM(*document).isEmpty(); }))
+			return 35;
+		const QUrl url = embeddedWebM(*document);
+		QByteArray format;
+		if (Log::imageDataFromDataUrl(url, format) != inlineWebMFixture() || format != QByteArray("webm"))
+			return 36;
+		checkpoint("inline WebM bytes reached real chat document; requesting resource/layout");
+		const QVariant resource = document->resource(QTextDocument::ImageResource, url);
+		const QImage poster     = resource.value< QImage >();
+		std::fprintf(stderr, "%s WebM resource type=%s imageNull=%d\n", qPrintable(role),
+					 resource.typeName() ? resource.typeName() : "invalid", poster.isNull());
+		std::fflush(stderr);
+		(void) document->documentLayout()->documentSize();
+#	ifdef USE_CHAT_WEBM
+		if (poster.isNull() || !document->isChatVideo(url))
+			return 37;
+		QSignalSpy frames(document, &LogDocument::animationFrameChanged);
+		document->toggleChatVideo(url);
+		if (!waitFor([&]() { return frames.size() >= 2; }, 5000))
+			return 38;
+		document->toggleChatVideo(url);
+		checkpoint("real inline WebM playback advanced frames");
+#	else
+		Q_UNUSED(poster);
+		checkpoint("USE_CHAT_WEBM absent: this Windows build relays inline media but has no playback decoder");
+#	endif
+	}
+	maximumGap = qMax(maximumGap, gap.elapsed());
+	std::fprintf(stderr, "%s WebM GUI maximum heartbeat gap %lld ms\n", qPrintable(role),
+				 static_cast< long long >(maximumGap));
+	std::fflush(stderr);
+	if (maximumGap > 2000 || heartbeats <= initialHeartbeats)
+		return 41;
+	if (!writeFixtureFile(shared.filePath(role + ".done"), "done")
+		|| !waitFor([&]() { return QFile::exists(shared.filePath(peer + ".done")); }))
+		return 42;
+	checkpoint("inline WebM drop scenario complete");
+	return 0;
+}
+
 // Each real client needs its own process: Global, ClientUser and the SQL
 // connections are singletons. Only disposable generated identities are accepted
 // by the test driver; all production dialog handlers and transports stay wired.
@@ -208,7 +313,10 @@ static int tlsChild(const QStringList &arguments) {
 	const quint16 port                 = arguments[index + 3].toUShort();
 	const QByteArray certificateDigest = arguments[index + 4].toLatin1();
 	const QByteArray serverDigest      = QByteArray::fromHex(arguments[index + 5].toLatin1());
-	const bool firstContact            = arguments[index + 6] == QStringLiteral("first-contact");
+	const bool firstContact            = arguments[index + 6] == QStringLiteral("first-contact")
+										 || arguments[index + 6] == QStringLiteral("webm-oversized");
+	const bool inlineWebM              = arguments[index + 6].startsWith(QStringLiteral("webm-"));
+	const bool oversizedWebM           = arguments[index + 6] == QStringLiteral("webm-oversized");
 	const bool sending                 = role == QStringLiteral("sender");
 	const QString peer                 = sending ? QStringLiteral("receiver") : QStringLiteral("sender");
 	const QDir shared(sharedPath);
@@ -310,6 +418,10 @@ static int tlsChild(const QStringList &arguments) {
 			return 17;
 		manager->refreshPinCache();
 		checkpoint("peer capability observed");
+		if (oversizedWebM && !waitFor([&]() { return global.uiImageLength == 1024u; }))
+			return 30;
+		if (inlineWebM && !oversizedWebM)
+			return inlineWebMDrop(global, window, shared, sending, heartbeats);
 		bool complete = false, failed = false;
 		int previousState = -1;
 		QByteArray transferId;
@@ -347,7 +459,15 @@ static int tlsChild(const QStringList &arguments) {
 			if (!recipient)
 				return 20;
 			checkpoint("opening real MainWindow send flow");
-			window.startFileSend(shared.filePath(QStringLiteral("source.bin")));
+			if (oversizedWebM) {
+				QSignalSpy sentInline(window.qteChat, &ChatbarTextEdit::pastedImage);
+				QSignalSpy files(window.qteChat, &ChatbarTextEdit::fileDropRequested);
+				dropLocalWebM(window, shared.filePath(QStringLiteral("source.webm")));
+				if (sentInline.size() != 0 || files.size() != 1)
+					return 43;
+			} else {
+				window.startFileSend(shared.filePath(QStringLiteral("source.bin")));
+			}
 			if (sendDialogs != 1)
 				return 21;
 		}
@@ -388,9 +508,25 @@ private slots:
 
 	void realClientTransfer() {
 		QFETCH(bool, firstContact);
+		runClients(firstContact, false, false);
+	}
+	void inlineWebMDrop_data() {
+		QTest::addColumn< bool >("oversized");
+		QTest::newRow("accepted-inline-video") << false;
+		QTest::newRow("oversized-video-file-transfer-fallback") << true;
+	}
+	void inlineWebMDrop() {
+		QFETCH(bool, oversized);
+		runClients(false, true, oversized);
+	}
+
+private:
+	void runClients(bool firstContact, bool webm, bool oversized) {
 		const QString logs = QDir::current().filePath(QStringLiteral("test-results/file-transfer-main-window"));
 		QVERIFY(QDir().mkpath(logs));
-		const QString suffix = firstContact ? QStringLiteral("-first-contact.log") : QStringLiteral("-preverified.log");
+		const QString suffix =
+			webm ? (oversized ? QStringLiteral("-webm-oversized.log") : QStringLiteral("-webm-small.log"))
+				 : (firstContact ? QStringLiteral("-first-contact.log") : QStringLiteral("-preverified.log"));
 		// A failed server launch must not leave an earlier run's client logs
 		// looking like evidence from this attempt.
 		for (const QString &role : { QStringLiteral("sender"), QStringLiteral("receiver"), QStringLiteral("server") })
@@ -403,14 +539,21 @@ private slots:
 		reservation.close();
 		const QString iniPath = directory.filePath(QStringLiteral("server.ini"));
 		QVERIFY(writeFixtureFile(
-			iniPath, QStringLiteral("host=127.0.0.1\nport=%1\ndatabase=%2\nbonjour=false\nautobanAttempts=0\n")
-						 .arg(port)
-						 .arg(directory.filePath(QStringLiteral("server.sqlite")))
-						 .toUtf8()));
+			iniPath,
+			QStringLiteral(
+				"host=127.0.0.1\nport=%1\ndatabase=%2\nbonjour=false\nautobanAttempts=0\nimagemessagelength=%3\n")
+				.arg(port)
+				.arg(directory.filePath(QStringLiteral("server.sqlite")))
+				.arg(webm && oversized ? 1024 : 131072)
+				.toUtf8()));
 		QByteArray source(600123, Qt::Uninitialized);
 		for (qsizetype index = 0; index < source.size(); ++index)
 			source[index] = static_cast< char >((index * 31 + 7) & 255);
+		if (webm)
+			source = inlineWebMFixture();
 		QVERIFY(writeFixtureFile(directory.filePath(QStringLiteral("source.bin")), source));
+		if (webm)
+			QVERIFY(writeFixtureFile(directory.filePath(QStringLiteral("source.webm")), inlineWebMFixture()));
 		QProcess server;
 		server.setProcessChannelMode(QProcess::MergedChannels);
 		auto environment = QProcessEnvironment::systemEnvironment();
@@ -483,7 +626,8 @@ private slots:
 						   child == &sender ? QStringLiteral("sender") : QStringLiteral("receiver"), directory.path(),
 						   QString::number(port), QString::fromLatin1(certificateDigest),
 						   QString::fromLatin1(serverDigest),
-						   firstContact ? QStringLiteral("first-contact") : QStringLiteral("preverified") });
+						   webm ? (oversized ? QStringLiteral("webm-oversized") : QStringLiteral("webm-small"))
+								: (firstContact ? QStringLiteral("first-contact") : QStringLiteral("preverified")) });
 			QVERIFY(child->waitForStarted());
 		}
 		const bool finished = waitFor(
@@ -513,11 +657,13 @@ private slots:
 		QVERIFY2(finished, diagnostics.constData());
 		QVERIFY2(sender.exitStatus() == QProcess::NormalExit && sender.exitCode() == 0, diagnostics.constData());
 		QVERIFY2(receiver.exitStatus() == QProcess::NormalExit && receiver.exitCode() == 0, diagnostics.constData());
-		QCOMPARE(QCryptographicHash::hash(readFixtureFile(directory.filePath(QStringLiteral("received.bin"))),
-										  QCryptographicHash::Sha256),
-				 QCryptographicHash::hash(source, QCryptographicHash::Sha256));
+		if (!webm || oversized)
+			QCOMPARE(QCryptographicHash::hash(readFixtureFile(directory.filePath(QStringLiteral("received.bin"))),
+											  QCryptographicHash::Sha256),
+					 QCryptographicHash::hash(source, QCryptographicHash::Sha256));
 	}
 #endif
+private slots:
 	void transferUpdatesKeepGuiResponsive() {
 		QProcess child;
 		child.setProcessChannelMode(QProcess::MergedChannels);
