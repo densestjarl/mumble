@@ -172,10 +172,6 @@ ScreenShareViewer::ScreenShareViewer(QWidget *parent) : QDialog(parent, Qt::Wind
 	resize(960, 640);
 }
 
-bool ScreenShareViewer::isDismissed() const {
-	return m_dismissed;
-}
-
 void ScreenShareViewer::addStream(quint32 senderSession, const QString &senderName, const QImage &frame) {
 	ScreenShareTile *tile = ensureTile(senderSession, senderName);
 	if (!frame.isNull())

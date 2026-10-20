@@ -4489,7 +4489,7 @@ void MainWindow::onRemoteFrameDecoded(quint32 senderSession, QImage frame) {
 	if (m_activeVideoDisplayMode == VideoDisplayMode::SeparateWindows) {
 		ScreenShareWindow *window = m_screenShareWindows.value(senderSession);
 		if (!window) {
-			window = new ScreenShareWindow(senderSession, name, this);
+			window = new ScreenShareWindow(name, this);
 			m_screenShareWindows.insert(senderSession, window);
 		}
 		window->updateFrame(frame);
@@ -4506,7 +4506,7 @@ void MainWindow::on_qaUserViewScreenShare_triggered() {
 	if (m_activeVideoDisplayMode == VideoDisplayMode::SeparateWindows) {
 		ScreenShareWindow *window = m_screenShareWindows.value(p->uiSession);
 		if (!window) {
-			window = new ScreenShareWindow(p->uiSession, p->qsName, this);
+			window = new ScreenShareWindow(p->qsName, this);
 			m_screenShareWindows.insert(p->uiSession, window);
 		}
 		window->showAndRefresh();
@@ -4597,7 +4597,7 @@ void MainWindow::applyVideoDisplayMode() {
 		const QList< ScreenShareViewer::StreamInfo > streams = m_screenShareViewer->streams();
 		const bool galleryVisible = m_screenShareViewer->isVisible();
 		for (const ScreenShareViewer::StreamInfo &stream : streams) {
-			ScreenShareWindow *window = new ScreenShareWindow(stream.session, stream.name, this);
+			ScreenShareWindow *window = new ScreenShareWindow(stream.name, this);
 			// A null frame leaves the window on its placeholder, exactly like a tile
 			// that has not seen its first frame yet.
 			window->updateFrame(stream.frame);

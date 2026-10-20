@@ -447,10 +447,6 @@ FileTransferIdentity *FileTransferManager::identity() const {
 	return m_identity.get();
 }
 
-PeerTrustStore *FileTransferManager::trustStore() const {
-	return m_trustStore.get();
-}
-
 bool FileTransferManager::hasUsableIdentity() const {
 	return m_identity && m_identity->hasIdentity() && m_identity->isUnlocked();
 }
@@ -727,21 +723,6 @@ bool FileTransferManager::pinPeer(unsigned int peerSession, const QByteArray &sh
 	return true;
 }
 
-PQFT::TrustState FileTransferManager::trustStateFor(unsigned int peerSession, QByteArray &pinnedFingerprint) {
-	pinnedFingerprint.clear();
-	const ClientUser *user = ClientUser::get(peerSession);
-	if (!user || !m_trustStore || serverDigest().isEmpty()) {
-		return PQFT::TrustState::NewPeer;
-	}
-	PQFT::PinnedPeer peer;
-	bool querySucceeded = false;
-	if (!m_trustStore->lookup(peer, serverDigest(), user->qsName, &querySucceeded)) {
-		return querySucceeded ? PQFT::TrustState::NewPeer : PQFT::TrustState::StorageError;
-	}
-	pinnedFingerprint = peer.fingerprint;
-	return peer.verified ? PQFT::TrustState::Verified : PQFT::TrustState::Pinned;
-}
-
 PQFT::TrustState FileTransferManager::trustStateForTransfer(const PQFT::FTTransferInfo &info,
 															QByteArray &pinnedFingerprint) {
 	pinnedFingerprint.clear();
@@ -757,18 +738,6 @@ PQFT::TrustState FileTransferManager::trustStateForTransfer(const PQFT::FTTransf
 	if (peer.fingerprint != info.peerFingerprint)
 		return PQFT::TrustState::Changed;
 	return peer.verified ? PQFT::TrustState::Verified : PQFT::TrustState::Pinned;
-}
-
-QString FileTransferManager::safetyNumberFor(unsigned int peerSession) {
-	const ClientUser *user = ClientUser::get(peerSession);
-	if (!user || !m_trustStore || !m_identity || !m_identity->isUnlocked()) {
-		return QString();
-	}
-	PQFT::PinnedPeer peer;
-	if (!m_trustStore->lookup(peer, serverDigest(), user->qsName)) {
-		return QString();
-	}
-	return PQFT::safetyNumber(m_identity->fingerprint(), peer.fingerprint);
 }
 
 void FileTransferManager::disconnectCleanup() {

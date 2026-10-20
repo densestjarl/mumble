@@ -37,9 +37,6 @@ public:
 
 	explicit ScreenShareViewer(QWidget *parent = nullptr);
 
-	/// Returns true once the user has explicitly closed the window.
-	/// While dismissed, new frames update the tiles but do not reopen the window.
-	bool isDismissed() const;
 	/// Show the gallery, adding a waiting tile for the requested sender when necessary.
 	void showAndRefresh(quint32 senderSession, const QString &senderName);
 	/// Remove a sender's tile after their stream ends.
