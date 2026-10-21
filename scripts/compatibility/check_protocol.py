@@ -13,11 +13,17 @@ from pathlib import Path
 from google.protobuf import descriptor_pb2
 
 
+PROTO_FILES = ("Mumble.proto", "MumbleUDP.proto")
+
+
 def descriptors(root, scratch):
+    # Skip missing files so that a removed file is reported as a failure instead of a protoc error.
+    present = [name for name in PROTO_FILES if (root / "src" / name).is_file()]
+    if not present:
+        return {}
     output = scratch / "protocol.pb"
     subprocess.run([
-        "protoc", f"--proto_path={root / 'src'}", f"--descriptor_set_out={output}",
-        "Mumble.proto", "MumbleUDP.proto",
+        "protoc", f"--proto_path={root / 'src'}", f"--descriptor_set_out={output}", *present,
     ], check=True)
     result = descriptor_pb2.FileDescriptorSet()
     result.ParseFromString(output.read_bytes())
@@ -83,7 +89,10 @@ def main():
         scratch = Path(directory)
         official, fork = descriptors(args.official, scratch), descriptors(args.fork, scratch)
         for name, original in official.items():
-            candidate = fork[name]
+            candidate = fork.get(name)
+            if candidate is None:
+                failures.append(f"Removed proto file {name}")
+                continue
             if (original.package, original.syntax) != (candidate.package, candidate.syntax):
                 failures.append(f"Changed package/syntax: {name}")
             check_messages(original.message_type, candidate.message_type, original.package, failures, additions)

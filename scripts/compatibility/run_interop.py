@@ -9,27 +9,14 @@ import argparse
 import importlib
 import json
 import os
-import queue
-import socket
-import ssl
-import struct
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 
 from PIL import ImageGrab
 
-
-def wait(predicate, seconds=20):
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        result = predicate()
-        if result:
-            return result
-        time.sleep(.15)
-    raise AssertionError("Timed out waiting for " + repr(predicate))
+from fixture import Peer, free_port, server_command, start_server, stop_process, wait, wait_for_server
 
 
 def walk(node, depth=0):
@@ -67,91 +54,6 @@ def click(node, twice=False):
                     "2" if twice else "1", "--delay", "100", "1"], check=True)
 
 
-class Peer:
-    def __init__(self, port, proto, log):
-        self.proto, self.log = proto, log
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.check_hostname = False
-        # Private loopback fixture with an ephemeral, self-signed certificate.
-        context.verify_mode = ssl.CERT_NONE
-        self.sock = context.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname="localhost")
-        self.sock.settimeout(.1)
-        self.outgoing = queue.Queue()
-        self.stop = False
-        self.session = None
-        self.users, self.channels, self.texts, self.errors = {}, {}, [], []
-        self.received = 0
-        self.thread = threading.Thread(target=self.collect)
-        self.thread.start()
-        self.send(0, proto.Version(version_v1=0x10700, version_v2=(1 << 48) | (7 << 32), release="interop-observer"))
-        self.send(2, proto.Authenticate(username="SuperUser", password="loopback-fixture", opus=True))
-        def synchronized():
-            assert not self.errors, self.errors
-            return self.session
-        try:
-            wait(synchronized)
-        except Exception:
-            self.close()
-            raise
-
-    def send(self, kind, msg):
-        payload = msg.SerializeToString()
-        self.outgoing.put(struct.pack(">HI", kind, len(payload)) + payload)
-
-    def collect(self):
-        buffer = b""
-        last_ping = 0
-        try:
-            while not self.stop:
-                if self.session and time.monotonic() - last_ping > 3:
-                    self.send(3, self.proto.Ping(timestamp=time.monotonic_ns()))
-                    last_ping = time.monotonic()
-                while not self.outgoing.empty():
-                    self.sock.sendall(self.outgoing.get_nowait())
-                try:
-                    data = self.sock.recv(65536)
-                    if not data:
-                        if not self.stop:
-                            self.errors.append("Observer disconnected")
-                        return
-                    buffer += data
-                except socket.timeout:
-                    continue
-                while len(buffer) >= 6:
-                    kind, size = struct.unpack(">HI", buffer[:6])
-                    if len(buffer) < 6 + size:
-                        break
-                    payload, buffer = buffer[6:6 + size], buffer[6 + size:]
-                    self.received += 1
-                    if kind == 5:
-                        self.session = self.proto.ServerSync.FromString(payload).session
-                    elif kind == 7:
-                        msg = self.proto.ChannelState.FromString(payload)
-                        old = self.channels.get(msg.channel_id, self.proto.ChannelState())
-                        old.MergeFrom(msg)
-                        self.channels[msg.channel_id] = old
-                    elif kind == 9:
-                        msg = self.proto.UserState.FromString(payload)
-                        old = self.users.get(msg.session, self.proto.UserState())
-                        old.MergeFrom(msg)
-                        self.users[msg.session] = old
-                    elif kind == 11:
-                        self.texts.append(self.proto.TextMessage.FromString(payload))
-                    elif kind in (4, 8):
-                        self.errors.append(f"Unexpected reject/remove: {kind}")
-                    self.log.write(json.dumps({"time": time.monotonic(), "type": kind, "bytes": size}) + "\n")
-                    self.log.flush()
-        except Exception as error:
-            if not self.stop:
-                self.errors.append(str(error))
-
-    def close(self):
-        self.stop = True
-        self.thread.join(3)
-        self.sock.close()
-
-
 def main():
     global dbus, pyatspi, GLib
     parser = argparse.ArgumentParser(description=__doc__)
@@ -181,46 +83,29 @@ def main():
     subprocess.run(["protoc", f"--proto_path={source / 'src'}", f"--python_out={generated}", "Mumble.proto"], check=True)
     sys.path.insert(0, str(generated))
     proto = importlib.import_module("Mumble_pb2")
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+    port = free_port()
     ini = root / "server.ini"
     ini.write_text(f"host=127.0.0.1\nport={port}\ndatabase={root / 'server.sqlite'}\nbonjour=false\n"
                    "autobanAttempts=0\nwelcometext=Compatibility loopback fixture\n")
-    server_ini = ["-ini" if args.legacy_server else "--ini", str(ini)]
     # Boot once so the virtual server and its SuperUser row exist before setting a password.
     with (root / "server-initialize.log").open("w") as initialize_log:
-        initialize = subprocess.Popen([str(args.server), "-fg" if args.legacy_server else "--foreground", *server_ini],
-                                      stdout=initialize_log, stderr=initialize_log)
-        def initialized():
-            assert initialize.poll() is None, "Server failed to initialize"
-            try:
-                with socket.create_connection(("127.0.0.1", port), .2):
-                    return True
-            except OSError:
-                return False
+        initialize = start_server(args.server, ini, args.legacy_server, initialize_log)
         try:
-            wait(initialized)
+            wait_for_server(initialize, port)
         finally:
-            initialize.terminate()
-            initialize.wait(10)
-    subprocess.run([str(args.server), *server_ini, "-supw" if args.legacy_server else "--set-su-pw", "loopback-fixture"],
-                   stdout=(root / "server-setup.log").open("w"), stderr=subprocess.STDOUT, check=True)
+            stop_process(initialize)
+    with (root / "server-setup.log").open("w") as setup_log:
+        subprocess.run(server_command(args.server, ini, args.legacy_server,
+                                      "-supw" if args.legacy_server else "--set-su-pw", "loopback-fixture"),
+                       stdout=setup_log, stderr=subprocess.STDOUT, check=True)
     server_log = (root / "server.log").open("w")
     client_log = (root / "client.log").open("w")
     observer_log = (root / "observer.jsonl").open("w")
-    server = subprocess.Popen([str(args.server), "-fg" if args.legacy_server else "--foreground", *server_ini], stdout=server_log, stderr=server_log)
+    server = start_server(args.server, ini, args.legacy_server, server_log)
     client = peer = None
     result = {"pass": False, "client": str(args.client), "server": str(args.server)}
     try:
-        def server_ready():
-            try:
-                with socket.create_connection(("127.0.0.1", port), .2):
-                    return True
-            except OSError:
-                assert server.poll() is None, "Server exited at startup"
-                return False
-        wait(server_ready)
+        wait_for_server(server, port)
         peer = Peer(port, proto, observer_log)
         peer.send(7, proto.ChannelState(parent=0, name="Interop"))
         channel = wait(lambda: next((c for c in list(peer.channels.values()) if c.name == "Interop"), None))
@@ -228,7 +113,7 @@ def main():
         config = root / "settings.json"
         config.write_text(json.dumps({"settings_version": 1, "misc": {
             "audio_wizard_has_been_shown": True, "viewed_server_ping_consent_message": True,
-            "database_location": str(root / "client.sqlite"), "file_transfer_enabled": args.fork_client and not args.fork_server},
+            "database_location": str(root / "client.sqlite"), "file_transfer_enabled": args.fork_client},
             "ui": {"send_usage_statistics": False},
             "update": {"check_for_updates": False, "check_for_plugin_updates": False},
             "audio": {"mute": True, "deaf": True}}))
@@ -259,10 +144,18 @@ def main():
         user = wait(connected, 45)
         started = time.monotonic()
         time.sleep(1)
-        identity_prompt = find(lambda n: n.getRoleName() == "dialog" and n.name == "File-transfer identity")
+        # File sharing is on for every fork client. Only a relay-capable (fork) server may
+        # trigger the one-time identity setup; official servers must not.
+        prompt_expected = args.fork_client and args.fork_server
+        def identity_dialog():
+            return find(lambda n: n.getRoleName() == "dialog" and n.name == "File-transfer identity")
+        try:
+            identity_prompt = wait(identity_dialog, 10) if prompt_expected else identity_dialog()
+        except AssertionError:
+            identity_prompt = None
         result["identity_prompt_shown"] = bool(identity_prompt)
+        assert bool(identity_prompt) == prompt_expected, ("identity prompt", bool(identity_prompt), prompt_expected)
         if identity_prompt:
-            assert not args.fork_client, "Unrequested identity prompt despite disabled/unsupported file sharing"
             cancel = next(n for n in walk(identity_prompt) if n.getRoleName() == "push button" and n.name == "Cancel")
             click(cancel)
         wait(lambda: find(lambda n: n.getRoleName() == "table cell" and "GuiInterop" in n.name))
@@ -332,20 +225,14 @@ def main():
             # Liveness was checked through the final text exchange. SIGTERM is
             # fixture cleanup after that measurement, not a spontaneous crash.
             result["intentional_shutdown"] = True
-            client.terminate()
-            client.wait(10)
-            result["client_exit"] = client.returncode
+            # A hung client (see docs/dev/upstream-sync/2026-10-21/shutdown-hang.bt) is killed
+            # and recorded, so the remaining cleanup and result.json still happen.
+            result["client_exit"] = stop_process(client, result, "client_shutdown_timeout")
         if peer:
             peer.close()
         # Let the server finish processing the fixture disconnects before signaling shutdown.
         time.sleep(.3)
-        server.terminate()
-        try:
-            server.wait(10)
-        except subprocess.TimeoutExpired:
-            result["server_shutdown_timeout"] = True
-            server.kill()
-            server.wait(10)
+        stop_process(server, result, "server_shutdown_timeout")
         server_log.close()
         client_log.close()
         observer_log.close()

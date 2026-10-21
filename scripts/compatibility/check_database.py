@@ -7,14 +7,12 @@ SuperUser password and Interop channel, and never touches the original database.
 import argparse
 import importlib
 import json
-import socket
 import sqlite3
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-from run_interop import Peer, wait
+from fixture import Peer, free_port, start_server, stop_process, wait, wait_for_server
 
 
 def main():
@@ -29,9 +27,7 @@ def main():
     with sqlite3.connect(args.fixture / "server.sqlite") as original:
         with sqlite3.connect(root / "server.sqlite") as copied:
             original.backup(copied)
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+    port = free_port()
     ini = (args.fixture / "server.ini").read_text()
     ini = "\n".join(f"database={root / 'server.sqlite'}" if line.startswith("database=") else
                     f"port={port}" if line.startswith("port=") else line for line in ini.splitlines()) + "\n"
@@ -39,20 +35,11 @@ def main():
     sys.path.insert(0, str(args.fixture / "generated"))
     proto = importlib.import_module("Mumble_pb2")
     log = (root / "server.log").open("w")
-    process = subprocess.Popen([str(args.server), "-fg" if args.legacy_server else "--foreground",
-                                "-ini" if args.legacy_server else "--ini", str(root / "server.ini")],
-                               stdout=log, stderr=log)
+    process = start_server(args.server, root / "server.ini", args.legacy_server, log)
     peer = None
     result = {"pass": False, "fixture": str(args.fixture), "server": str(args.server)}
     try:
-        def ready():
-            assert process.poll() is None, f"Server exited with {process.returncode}"
-            try:
-                with socket.create_connection(("127.0.0.1", port), .2):
-                    return True
-            except OSError:
-                return False
-        wait(ready)
+        wait_for_server(process, port)
         with (root / "observer.jsonl").open("w") as observer_log:
             peer = Peer(port, proto, observer_log)
             wait(lambda: any(c.name == "Interop" for c in list(peer.channels.values())))
@@ -69,9 +56,7 @@ def main():
     finally:
         if peer:
             peer.close()
-        if process.poll() is None:
-            process.terminate()
-        process.wait(10)
+        stop_process(process, result, "server_shutdown_timeout")
         log.close()
         (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result, indent=2))

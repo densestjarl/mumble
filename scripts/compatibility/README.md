@@ -41,10 +41,15 @@ Results, client/server logs, observer frame metadata and screenshots go into the
 output directory. A passing mixed connection lasts at least the requested time
 and receives another text message at the end. Fork clients must keep video/file
 sending disabled against official servers; a fork-to-fork fixture checks the
-positive capability path. Automatic file setup must not prompt when file sharing
-is disabled or unsupported. SIGTERM after the final measurement is intentional
-fixture cleanup, recorded separately from client liveness. A server shutdown
-requiring SIGKILL is recorded as `server_shutdown_timeout` for investigation.
+positive capability path. File sharing is enabled in every fork client's
+settings: the automatic identity setup must prompt only on a fork server, and is
+cancelled there. SIGTERM after the final measurement is intentional
+fixture cleanup, recorded separately from client liveness. A client or server
+shutdown requiring SIGKILL is recorded as `client_shutdown_timeout` or
+`server_shutdown_timeout` for investigation; the run still writes `result.json`.
+
+`fixture.py` holds the shared server boot, readiness, shutdown and TLS observer
+code used by both `run_interop.py` and `check_database.py`.
 
 To test database/config loading in another server, copy a completed fixture with
 SQLite's backup API and verify its stored SuperUser authentication and channel:
