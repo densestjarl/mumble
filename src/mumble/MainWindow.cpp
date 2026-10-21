@@ -2488,7 +2488,7 @@ void MainWindow::on_qaConfigPopOutChat_triggered(bool checked) {
 	qdwChat->hide();
 	qdwLog->toggleViewAction()->setEnabled(false);
 	qdwChat->toggleViewAction()->setEnabled(false);
-	connect(m_chatWindow, &QDialog::finished, this, [this]() { restoreChatWidgets(); });
+	connect(m_chatWindow, &QDialog::finished, this, &MainWindow::restoreChatWidgets);
 	if (!m_chatWindowGeometry.isEmpty()) {
 		m_chatWindow->restoreGeometry(m_chatWindowGeometry);
 	}
