@@ -298,7 +298,8 @@ private slots:
 		for (const google::protobuf::Descriptor *message :
 			 { MumbleProto::FileTransferControl::descriptor(), MumbleProto::FileData::descriptor() }) {
 			for (int i = 0; i < message->field_count(); ++i) {
-				QVERIFY2(!message->field(i)->is_required(), message->field(i)->full_name().c_str());
+				const std::string fieldName(message->field(i)->full_name());
+				QVERIFY2(!message->field(i)->is_required(), fieldName.c_str());
 			}
 		}
 		MumbleProto::FileData data;
