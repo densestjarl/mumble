@@ -4511,7 +4511,6 @@ void MainWindow::on_qaUserViewScreenShare_triggered() {
 		}
 		window->showAndRefresh();
 	} else {
-		// Clears the dismissed flag and opens one gallery containing every active shared video.
 		m_screenShareViewer->showAndRefresh(p->uiSession, p->qsName);
 	}
 }

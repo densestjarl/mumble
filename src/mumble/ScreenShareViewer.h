@@ -56,7 +56,6 @@ public slots:
 protected:
 	void resizeEvent(QResizeEvent *event) override;
 	bool eventFilter(QObject *watched, QEvent *event) override;
-	void closeEvent(QCloseEvent *event) override;
 
 private:
 	ScreenShareTile *ensureTile(quint32 senderSession, const QString &senderName);
@@ -71,7 +70,6 @@ private:
 	QPushButton *m_focusButton;
 	bool m_focused = false;
 	QMap< quint32, ScreenShareTile * > m_tiles;
-	bool m_dismissed  = false;
 	int m_columnCount = 0;
 };
 
