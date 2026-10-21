@@ -184,6 +184,47 @@ private slots:
 		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
 	}
 
+	void availabilityFollowsRelayAndSettingsToggle() {
+		FileTransferManager manager;
+		QSignalSpy changes(&manager, &FileTransferManager::availabilityChanged);
+		QVERIFY(!manager.sendingAvailable());
+		QVERIFY(manager.sendAvailabilityError().contains("does not support"));
+
+		MumbleProto::ServerConfig relay;
+		relay.set_file_transfer_relay_version(1);
+		manager.configureRelay(relay);
+		QVERIFY(manager.sendingAvailable());
+		QCOMPARE(changes.count(), 1);
+		QCOMPARE(changes.takeFirst().at(0).toBool(), true);
+
+		// A repeated capability announcement is not a change.
+		manager.configureRelay(relay);
+		QCOMPARE(changes.count(), 0);
+
+		// Turning the feature off keeps the negotiated relay capability.
+		m_global->s.bFTEnabled = false;
+		manager.applyEngineConfig();
+		QVERIFY(!manager.sendingAvailable());
+		QVERIFY(manager.relaySupported());
+		QVERIFY(manager.sendAvailabilityError().contains("disabled"));
+		QCOMPARE(changes.count(), 1);
+		QCOMPARE(changes.takeFirst().at(0).toBool(), false);
+
+		// Re-enabling mid-session restores availability without a new ServerConfig.
+		m_global->s.bFTEnabled = true;
+		manager.applyEngineConfig();
+		QVERIFY(manager.sendingAvailable());
+		QCOMPARE(changes.count(), 1);
+		QCOMPARE(changes.takeFirst().at(0).toBool(), true);
+
+		manager.disconnectCleanup();
+		QVERIFY(!manager.sendingAvailable());
+		QVERIFY(!manager.relaySupported());
+		QCOMPARE(changes.count(), 1);
+		QCOMPARE(changes.takeFirst().at(0).toBool(), false);
+		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
+	}
+
 	void repeatedFirstContactsKeepOnePrompt() {
 		FileTransferManager manager;
 		QVERIFY(setupTrustFixture(manager));

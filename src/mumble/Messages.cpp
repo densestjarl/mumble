@@ -132,8 +132,9 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 	Global::get().uiSession = msg.session();
 
 #ifdef USE_FILE_SHARING
-	// A capability config can precede sync; otherwise defer setup until it arrives.
-	if (qtbSendFile->isEnabled()) {
+	// A capability config can precede sync; otherwise onFileTransferAvailabilityChanged()
+	// runs the setup once it arrives.
+	if (Global::get().fileTransferManager && Global::get().fileTransferManager->sendingAvailable()) {
 		bootstrapFileTransferIdentity();
 	}
 #endif
@@ -210,17 +211,14 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 /// @param msg The message object
 void MainWindow::msgServerConfig(const MumbleProto::ServerConfig &msg) {
 	if (msg.has_video_relay_version()) {
-		qaScreenShare->setEnabled(msg.video_relay_version() >= 1);
+		m_videoRelaySupported = msg.video_relay_version() >= 1;
+		updateScreenShareAvailability();
 	}
 #ifdef USE_FILE_SHARING
-	if (msg.has_file_transfer_relay_version()) {
-		qtbSendFile->setEnabled(msg.file_transfer_relay_version() >= 1);
-	}
+	// The manager owns the negotiated capability and emits availabilityChanged(), which
+	// updates the send button and runs the identity setup and capability announcement.
 	if (Global::get().fileTransferManager)
 		Global::get().fileTransferManager->configureRelay(msg);
-	if (msg.has_file_transfer_relay_version() && qtbSendFile->isEnabled() && Global::get().uiSession != 0) {
-		bootstrapFileTransferIdentity();
-	}
 #endif
 	if (msg.has_welcome_text()) {
 		QString str = u8(msg.welcome_text());
