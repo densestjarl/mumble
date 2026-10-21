@@ -29,6 +29,7 @@
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
+#include <limits>
 #ifndef Q_OS_WIN
 #	include <sys/stat.h>
 #endif
@@ -80,6 +81,11 @@ private slots:
 	void secondTransferWhileFirstReady();
 	void readyTransferDoesNotExpire();
 	void firstContactPinFlags();
+	void delayedIdentityVerificationStillDelivers();
+	void unansweredHandshakeStillExpires();
+	void verificationTimeoutIsNormalized_data();
+	void verificationTimeoutIsNormalized();
+	void quickRecipientDoesNotShortenOtherVerification();
 	void incomingAbortCleansUpSafely();
 	void passwordSpoolIsBounded();
 	void cancelledPromptTimerCannotRemoveReplacementHandshake_data();
@@ -315,7 +321,8 @@ void TestFileTransferEngine::synchronousRelayAdmissionCompletes() {
 void TestFileTransferEngine::incompleteRecipientHandshakeSendsNoContent() {
 	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
 	PQFT::FileTransferEngine::Config config;
-	config.handshakeTimeoutMSecs = 100;
+	config.handshakeTimeoutMSecs            = 100;
+	config.identityVerificationTimeoutMSecs = 100;
 	pair.alice.setConfig(config);
 	int chunks = 0;
 	pair.alice.setTransport(
@@ -1100,7 +1107,9 @@ void TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive() {
 	engine.setPinLookup([&](unsigned int) { return m_aliceFp; });
 	engine.setTransport([](unsigned int, const QByteArray &) {}, {});
 	PQFT::FileTransferEngine::Config config;
-	config.receiveIdleTimeoutMSecs = 100;
+	config.receiveIdleTimeoutMSecs          = 100;
+	config.handshakeTimeoutMSecs            = 100;
+	config.identityVerificationTimeoutMSecs = 100;
 	engine.setConfig(config);
 	QSignalSpy updates(&engine, &PQFT::FileTransferEngine::transferUpdated);
 	PQFT::FileTransferSession sender(PQFT::FileTransferSession::Role::Initiator, { m_alice.publicKey, {} }, m_bobFp);
@@ -1656,20 +1665,206 @@ void TestFileTransferEngine::readyTransferDoesNotExpire() {
 	QCOMPARE(original.readAll(), received.readAll());
 }
 
-// Review regression: only the SENDER side (post-M4, key authenticated by the
-// handshake) may pin on first observation; a receiver-side plain M1 is an
-// unauthenticated claim and declining it must leave nothing behind.
+// Both users can take longer than a network timeout to verify safety numbers.
+void TestFileTransferEngine::delayedIdentityVerificationStillDelivers() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config config;
+	config.handshakeTimeoutMSecs            = 100;
+	config.identityVerificationTimeoutMSecs = 1000;
+	config.receiveIdleTimeoutMSecs          = 100;
+	config.sendRateBytesPerSecond           = 0;
+	config.authorizeSendPeers               = true;
+	pair.alice.setConfig(config);
+	pair.bob.setConfig(config);
+	// A sender's existing pin does not mean the receiver has pinned the sender.
+	pair.bob.setPinLookup([](unsigned int) { return QByteArray(); });
+	QSignalSpy receiverPrompts(&pair.bob, &PQFT::FileTransferEngine::firstContact);
+	QSignalSpy senderPrompts(&pair.alice, &PQFT::FileTransferEngine::firstContact);
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy received(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	int chunks            = 0;
+	pair.onChunkDelivered = [&](const QByteArray &, quint64, quint64, const QByteArray &) { ++chunks; };
+	const QString source  = writeTestFile(4096);
+	QCOMPARE(pair.alice.startSend(source, "application/octet-stream", false, {}, { { BobSession, m_bobFp } }), 4096ull);
+	QCOMPARE(receiverPrompts.size(), 1);
+	QTest::qWait(250); // Human verification can exceed the network handshake deadline.
+	QVERIFY(!sawState(sent, {}, PQFT::FTTransferInfo::State::Failed));
+	QCOMPARE(chunks, 0);
+	pair.bob.resolveFirstContact(AliceSession, true, receiverPrompts.first().at(5).toULongLong());
+	QCOMPARE(senderPrompts.size(), 1);
+	QTest::qWait(250); // The receiver must also wait for the sender's verification.
+	QVERIFY(!sawState(received, {}, PQFT::FTTransferInfo::State::Failed));
+	QCOMPARE(chunks, 0);
+	const QByteArray transferId = senderPrompts.first().at(3).toByteArray();
+	pair.alice.resolveSendAuthorization(BobSession, transferId, true);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(received, transferId, PQFT::FTTransferInfo::State::Ready), 5000);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, transferId, PQFT::FTTransferInfo::State::Saved), 5000);
+	QVERIFY(chunks > 0);
+	const QString saved = m_tempDir.filePath(QStringLiteral("delayed-verification.bin"));
+	pair.bob.saveTransferAs(transferId, saved);
+	QVERIFY(sawState(received, transferId, PQFT::FTTransferInfo::State::Saved));
+	QFile original(source), copy(saved);
+	QVERIFY(original.open(QIODevice::ReadOnly));
+	QVERIFY(copy.open(QIODevice::ReadOnly));
+	QCOMPARE(copy.readAll(), original.readAll());
+}
+
+void TestFileTransferEngine::quickRecipientDoesNotShortenOtherVerification() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine third;
+	third.setIdentity(m_bob.publicKey,
+					  [&](QByteArray &signature, const QByteArray &message, const QByteArray &context) {
+						  PQFT::SigMLDSA65 signer;
+						  return signer.sign(signature, m_bob.secretKey, message, context);
+					  });
+	third.setPinLookup([](unsigned int) { return QByteArray(); });
+	PQFT::FileTransferEngine::Config config;
+	config.handshakeTimeoutMSecs            = 300;
+	config.identityVerificationTimeoutMSecs = 500;
+	config.receiveIdleTimeoutMSecs          = 100;
+	config.authorizeSendPeers               = true;
+	config.sendRateBytesPerSecond           = 0;
+	pair.alice.setConfig(config);
+	pair.bob.setConfig(config);
+	third.setConfig(config);
+	pair.alice.setTransport(
+		[&](unsigned int target, const QByteArray &frame) {
+			(target == BobSession ? pair.bob : third).onControlMessage(AliceSession, frame);
+		},
+		[&](const QByteArray &id, quint64 index, quint64 total, const QByteArray &data) {
+			pair.bob.onDataMessage(AliceSession, id, index, total, data);
+			third.onDataMessage(AliceSession, id, index, total, data);
+		});
+	third.setTransport(
+		[&](unsigned int, const QByteArray &frame) {
+			quint8 type = 0;
+			PQFT::FTFrame::decodeHeader(frame, type);
+			if (type == PQFT::FTFrame::TypeM2) {
+				QTimer::singleShot(200, &pair.alice, [&, frame]() { pair.alice.onControlMessage(3, frame); });
+			} else {
+				pair.alice.onControlMessage(3, frame);
+			}
+		},
+		{});
+	connect(&pair.alice, &PQFT::FileTransferEngine::firstContact, &pair.alice,
+			[&](unsigned int peer, const QByteArray &, const QString &, const QByteArray &id, bool sending) {
+				if (sending)
+					QTimer::singleShot(peer == BobSession ? 0 : 350, &pair.alice,
+									   [&, peer, id]() { pair.alice.resolveSendAuthorization(peer, id, true); });
+			});
+	QSignalSpy prompts(&third, &PQFT::FileTransferEngine::firstContact);
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy earlyReceived(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy received(&third, &PQFT::FileTransferEngine::transferUpdated);
+	QVERIFY(pair.alice.startSend(writeTestFile(4096), "application/octet-stream", false, {},
+								 { { BobSession, m_bobFp }, { 3, m_bobFp } })
+			> 0);
+	QCOMPARE(prompts.size(), 1);
+	QTest::qWait(350);
+	third.resolveFirstContact(AliceSession, true, prompts.first().at(5).toULongLong());
+	// Remote approval (350ms), network delivery (200ms), and sender approval
+	// (350ms) each fit their own budget. The earliest receiver must survive
+	// their combined 900ms, beyond its original 800ms pre-manifest deadline.
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(received, {}, PQFT::FTTransferInfo::State::Ready), 3000);
+	QVERIFY(sawState(earlyReceived, {}, PQFT::FTTransferInfo::State::Ready));
+	QVERIFY(!sawState(earlyReceived, {}, PQFT::FTTransferInfo::State::Failed));
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::Saved), 3000);
+	QVERIFY(!sawState(sent, {}, PQFT::FTTransferInfo::State::Failed));
+}
+
+void TestFileTransferEngine::verificationTimeoutIsNormalized_data() {
+	QTest::addColumn< int >("configured");
+	QTest::newRow("zero") << 0;
+	QTest::newRow("negative") << -1;
+	QTest::newRow("minimum-int") << std::numeric_limits< int >::min();
+	QTest::newRow("positive") << 25;
+	QTest::newRow("maximum-int") << std::numeric_limits< int >::max();
+}
+
+void TestFileTransferEngine::verificationTimeoutIsNormalized() {
+	QFETCH(int, configured);
+	const int normalized = qMax(1, configured);
+	PQFT::FileTransferEngine::Config config;
+	config.handshakeTimeoutMSecs            = 20;
+	config.identityVerificationTimeoutMSecs = configured;
+	PQFT::FileTransferEngine receiver;
+	receiver.setConfig(config);
+	receiver.setIdentity(m_bob.publicKey, {});
+	QSignalSpy prompts(&receiver, &PQFT::FileTransferEngine::firstContact);
+	QSignalSpy retired(&receiver, &PQFT::FileTransferEngine::firstContactRetired);
+	PQFT::FileTransferSession initiator(PQFT::FileTransferSession::Role::Initiator, { m_alice.publicKey, {} }, {});
+	const QByteArray m1 = initiator.buildM1();
+	receiver.onControlMessage(AliceSession, m1);
+	QCOMPARE(prompts.size(), 1);
+	int activeTimers = 0;
+	for (QTimer *timer : receiver.findChildren< QTimer * >()) {
+		if (timer->isActive()) {
+			++activeTimers;
+			QCOMPARE(timer->interval(), normalized);
+		}
+	}
+	QCOMPARE(activeTimers, 1);
+	if (configured != std::numeric_limits< int >::max()) {
+		QTRY_COMPARE_WITH_TIMEOUT(retired.size(), 1, 1000);
+		QCOMPARE(retired.first().at(1).toULongLong(), prompts.first().at(5).toULongLong());
+		// Expiry must free the pending slot for a later attempt from this peer.
+		receiver.onControlMessage(AliceSession, m1);
+		QCOMPARE(prompts.size(), 2);
+	}
+	receiver.abortAll();
+
+	PQFT::FileTransferEngine sender;
+	sender.setConfig(config);
+	sender.setIdentity(m_alice.publicKey, {});
+	sender.setTransport([](unsigned int, const QByteArray &) {}, {});
+	QSignalSpy sent(&sender, &PQFT::FileTransferEngine::transferUpdated);
+	QVERIFY(sender.startSend(writeTestFile(4096), "application/octet-stream", false, {}, { { BobSession, m_bobFp } })
+			> 0);
+	const qint64 expected = qMin(qint64(std::numeric_limits< int >::max()), qint64(20) + normalized);
+	activeTimers          = 0;
+	for (QTimer *timer : sender.findChildren< QTimer * >()) {
+		if (timer->isActive()) {
+			++activeTimers;
+			QCOMPARE(qint64(timer->interval()), expected);
+		}
+	}
+	QCOMPARE(activeTimers, 1);
+	if (configured != std::numeric_limits< int >::max())
+		QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::Failed), 1000);
+	sender.abortAll();
+}
+
+void TestFileTransferEngine::unansweredHandshakeStillExpires() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config config;
+	config.handshakeTimeoutMSecs            = 100;
+	config.identityVerificationTimeoutMSecs = 200;
+	pair.alice.setConfig(config);
+	pair.alice.setTransport([](unsigned int, const QByteArray &) {}, {});
+	QSignalSpy sent(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
+	QElapsedTimer elapsed;
+	elapsed.start();
+	QVERIFY(
+		pair.alice.startSend(writeTestFile(4096), "application/octet-stream", false, {}, { { BobSession, m_bobFp } })
+		> 0);
+	QTRY_VERIFY_WITH_TIMEOUT(sawState(sent, {}, PQFT::FTTransferInfo::State::Failed), 2000);
+	QVERIFY(elapsed.elapsed() >= 200);
+}
+
+// Only authenticated sender-side handshakes may pin on first observation;
+// declining the receiver's unauthenticated M1 must leave nothing behind.
 void TestFileTransferEngine::firstContactPinFlags() {
 	{
 		// Receiver side: unknown peer parks the handshake and reports
 		// pinOnObservation = false; declining drops it without an answer.
 		EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
 		PQFT::FileTransferEngine::Config config;
-		config.sendRateBytesPerSecond = 0;
-		config.handshakeTimeoutMSecs = 500;
+		config.sendRateBytesPerSecond           = 0;
+		config.handshakeTimeoutMSecs            = 500;
+		config.identityVerificationTimeoutMSecs = 100;
 		pair.alice.setConfig(config);
 		pair.bob.setConfig(config);
-		pair.bob.setPinLookup([](unsigned int) { return QByteArray(); });   // first contact
+		pair.bob.setPinLookup([](unsigned int) { return QByteArray(); }); // first contact
 
 		QSignalSpy bobFirstContact(&pair.bob, &PQFT::FileTransferEngine::firstContact);
 		QSignalSpy aliceUpdates(&pair.alice, &PQFT::FileTransferEngine::transferUpdated);
