@@ -71,6 +71,7 @@ class Peer:
     def __init__(self, port, proto, log):
         self.proto, self.log = proto, log
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.check_hostname = False
         # Private loopback fixture with an ephemeral, self-signed certificate.
         context.verify_mode = ssl.CERT_NONE
