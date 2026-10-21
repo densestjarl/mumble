@@ -1,5 +1,6 @@
 // Copyright The Mumble Developers. All rights reserved.
 // BSD-style license: see LICENSE at the source root.
+#include "CustomElements.h"
 #include "JSONSerialization.h"
 #include "Log.h"
 #include "PQFileTransfer/engine/FTCardRender.h"
@@ -8,15 +9,71 @@
 #include "PQFileTransfer/widgets/FileTransferDialogs.h"
 #include "Settings.h"
 
+#include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QDir>
 #include <QFile>
 #include <QLabel>
+#include <QProcess>
 #include <QSignalSpy>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextBrowser>
+#include <QTextCursor>
+#include <QTextDocumentFragment>
+
+// Exercise the real document/resource/layout path in a separate process: a
+// blocked GUI must fail the test within a bounded time instead of hanging CI.
+static int fileCardLayoutChild() {
+	const QByteArray id(16, 'x');
+	const QUrl url(QStringLiteral("data:application/mumble-file;base64,%1").arg(QString::fromLatin1(id.toBase64())));
+	PQFT::FTTransferInfo info;
+	info.transferId = id;
+	info.fileName   = QStringLiteral("Windows transfer fixture.txt");
+	info.fileSize   = 4096;
+	LogDocument live(nullptr, true);
+	LogTextBrowser browser;
+	live.setFileCardLookup([&info, &id](const QByteArray &requested, QImage &image) {
+		if (requested != id)
+			return false;
+		image = PQFT::renderFileCard(info, 420, 1.0);
+		return !image.isNull();
+	});
+	browser.setDocument(&live);
+	browser.resize(640, 480);
+	browser.show();
+	for (bool incoming : { false, true }) {
+		info.incoming = incoming;
+		for (auto state : { PQFT::FTTransferInfo::State::Handshaking, PQFT::FTTransferInfo::State::Transferring,
+							PQFT::FTTransferInfo::State::Ready }) {
+			info.state = state;
+			// MainWindow caches the rendered card before Log::validHtml parses
+			// the message in a temporary document without a live card lookup.
+			live.addResource(QTextDocument::ImageResource, url, PQFT::renderFileCard(info, 420, 1.0));
+			LogDocument validation;
+			validation.setTextWidth(640);
+			(void) validation.documentLayout();
+			validation.setHtml(Log::fileCardToHtml(id));
+			validation.adjustSize();
+			if (!validation.size().isValid())
+				return 2;
+			QTextCursor source(&validation);
+			source.select(QTextCursor::Document);
+			QTextCursor destination(&live);
+			destination.movePosition(QTextCursor::End);
+			destination.insertFragment(source.selection());
+			live.markContentsDirty(0, live.characterCount());
+			browser.resizeImagesToFit();
+			(void) live.documentLayout()->documentSize();
+			QApplication::processEvents();
+			const QImage displayed = live.resource(QTextDocument::ImageResource, url).value< QImage >();
+			if (displayed.size() != QSize(420, 84))
+				return 3;
+		}
+	}
+	return 0;
+}
 
 class TestLogSchemes : public Log {
 public:
@@ -26,6 +83,24 @@ public:
 class TestFileTransferUi : public QObject {
 	Q_OBJECT
 private slots:
+	void fileCardDocumentLayoutCompletes() {
+		QProcess child;
+		child.start(QCoreApplication::applicationFilePath(), { QStringLiteral("-platform"), QStringLiteral("offscreen"),
+															   QStringLiteral("--file-card-layout-child") });
+		QVERIFY(child.waitForStarted());
+		const bool finished = child.waitForFinished(10000);
+		if (!finished) {
+			child.kill();
+			child.waitForFinished();
+		}
+		const QByteArray output         = child.readAllStandardOutput() + child.readAllStandardError();
+		const QByteArray timeoutMessage = QByteArray("File-card layout blocked for more than ten seconds\n") + output;
+		QVERIFY2(finished, timeoutMessage.constData());
+		QCOMPARE(child.exitStatus(), QProcess::NormalExit);
+		const QByteArray exitMessage =
+			QByteArray("File-card child exit code ") + QByteArray::number(child.exitCode()) + QByteArray("\n") + output;
+		QVERIFY2(child.exitCode() == 0, exitMessage.constData());
+	}
 	void automaticNames_data() {
 		QTest::addColumn< QString >("name");
 		QTest::addColumn< bool >("allowed");
@@ -297,5 +372,11 @@ private slots:
 		QVERIFY(!ok);
 	}
 };
-QTEST_MAIN(TestFileTransferUi)
+int main(int argc, char **argv) {
+	QApplication app(argc, argv);
+	if (app.arguments().contains(QStringLiteral("--file-card-layout-child")))
+		return fileCardLayoutChild();
+	TestFileTransferUi test;
+	return QTest::qExec(&test, argc, argv);
+}
 #include "TestFileTransferUi.moc"

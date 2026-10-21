@@ -228,6 +228,15 @@ or replay control messages, or truncate undetected.
   cannot switch while queued. Verification dialogs are serialized, asynchronous,
   and cancelled by their exact retired request. Replacement M1 frames are ignored
   while a verification is pending; zero/wildcard worker tokens cannot resolve it.
+- Remote safety-number approval has a bounded 60-second window. Sender
+  authorizations share a deadline that preserves remaining handshake grace and
+  allows 60 seconds after an authenticated M4 arrives.
+  Initial sender handshakes allow remote approval plus the 10-second network
+  budget. An early responder waits for both approval windows plus network time
+  (130 seconds) before the manifest, including when another recipient responds
+  later. A quick recipient cannot shorten another selected recipient's remaining
+  verification window. Stray chunks do not refresh it; normal receive idle
+  limits apply once the manifest arrives.
 - The explicit user-menu identity reset deletes only the displayed expected pin,
   refreshes caches and cancels transfers and pending prompts with that peer. It never adopts a changed key.
   The next handshake requires out-of-band verification again. Receiving acceptance
