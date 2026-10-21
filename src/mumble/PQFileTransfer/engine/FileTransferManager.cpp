@@ -449,6 +449,10 @@ FileTransferIdentity *FileTransferManager::identity() const {
 	return m_identity.get();
 }
 
+PeerTrustStore *FileTransferManager::trustStore() const {
+	return m_trustStore.get();
+}
+
 bool FileTransferManager::hasUsableIdentity() const {
 	return m_identity && m_identity->hasIdentity() && m_identity->isUnlocked();
 }

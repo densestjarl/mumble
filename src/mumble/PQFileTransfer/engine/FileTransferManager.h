@@ -51,6 +51,7 @@ public:
 	// ---- GUI-thread API ------------------------------------------------
 
 	FileTransferIdentity *identity() const;
+	PeerTrustStore *trustStore() const;
 
 	/// True when the local identity exists and is unlocked (usable).
 	bool hasUsableIdentity() const;
