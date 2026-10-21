@@ -14,6 +14,7 @@
 #include "BanEditor.h"
 #include "Cert.h"
 #include "Channel.h"
+#include "ChatWindow.h"
 #include "ConnectDialog.h"
 #include "Connection.h"
 #include "Database.h"
@@ -2473,7 +2474,7 @@ void MainWindow::on_qaConfigPopOutChat_triggered(bool checked) {
 
 	m_chatLogWasVisible = Global::get().s.bMinimalView || !qdwLog->isHidden();
 	m_chatBarWasVisible = Global::get().s.bMinimalView || !qdwChat->isHidden();
-	m_chatWindow        = new QDialog(this, Qt::Window);
+	m_chatWindow        = new ChatWindow(this);
 	m_chatWindow->setWindowTitle(tr("Mumble Chat"));
 	m_chatWindow->setAttribute(Qt::WA_DeleteOnClose);
 	m_chatWindow->resize(600, 450);
@@ -4078,7 +4079,7 @@ void MainWindow::showRaiseWindow() {
 }
 
 void MainWindow::highlightWindow() {
-	QApplication::alert(this);
+	QApplication::alert(qteLog->window());
 }
 
 void MainWindow::on_qaTalkingUIToggle_triggered() {
