@@ -14,10 +14,13 @@
 #	include <QtMultimedia/QAudioSink>
 #endif
 
+#include <cstring>
 #include <limits>
 #include <memory>
 
+#include <QtCore/QIODevice>
 #include <QtCore/QMimeData>
+#include <QtCore/QScopeGuard>
 #include <QtCore/QTemporaryDir>
 #include <QtGui/QTextBlock>
 #include <QtGui/QTextCursor>
@@ -627,6 +630,35 @@ int chatVideoPlayerCount(const QObject &document) {
 #endif
 } // namespace
 
+class CountingVideoDevice : public QIODevice {
+public:
+	CountingVideoDevice(QByteArray payload, qint64 reportedSize)
+		: m_payload(std::move(payload)), m_reportedSize(reportedSize) {
+		open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+	}
+	qint64 size() const override { return m_reportedSize; }
+	bool atEnd() const override { return m_offset >= m_payload.size(); }
+	int readCalls    = 0;
+	qint64 bytesRead = 0;
+
+protected:
+	qint64 readData(char *data, qint64 maximum) override {
+		++readCalls;
+		const qint64 count = qMin(maximum, qint64(m_payload.size()) - m_offset);
+		if (count > 0)
+			std::memcpy(data, m_payload.constData() + m_offset, static_cast< size_t >(count));
+		m_offset += count;
+		bytesRead += count;
+		return count;
+	}
+	qint64 writeData(const char *, qint64) override { return -1; }
+
+private:
+	QByteArray m_payload;
+	qint64 m_reportedSize;
+	qint64 m_offset = 0;
+};
+
 class TestChatWebM : public QObject {
 	Q_OBJECT
 
@@ -635,9 +667,18 @@ private slots:
 	void cleanupTestCase();
 
 	void acceptsWebmFileDrop();
-	void refusesOversizedWebm();
+	void routesOversizedWebm();
 	void videoToImgRejectsGarbage();
 	void videoToImgBudgetTooLarge();
+	void oversizedDeviceIsNotRead();
+	void growingDeviceReadIsBounded();
+	void deviceEncodingPreservesBudgetBoundary();
+	void deviceRejectsNegativeBudgetWithoutReading();
+	void deviceZeroBudgetRemainsUnlimited();
+	void mixedDropRespectsFileTransferSetting_data();
+	void mixedDropRespectsFileTransferSetting();
+	void invalidWebmDoesNotBecomeFileTransfer();
+	void droppedVideoRespectsCompleteMessageBudget();
 
 #ifdef USE_CHAT_WEBM
 	void placeholderForUndecodableWebm();
@@ -672,6 +713,7 @@ void TestChatWebM::initTestCase() {
 	m_configDir             = std::make_unique< QTemporaryDir >();
 	m_global                = std::make_unique< Global >(m_configDir->path());
 	Global::g_global_struct = m_global.get();
+	m_global->s.settingsLocation = m_configDir->filePath(QStringLiteral("settings.json"));
 }
 
 void TestChatWebM::cleanupTestCase() {
@@ -699,7 +741,7 @@ void TestChatWebM::acceptsWebmFileDrop() {
 	QVERIFY(pastedImageSpy.first().first().toString().contains(QLatin1String("data:video/webm;")));
 }
 
-void TestChatWebM::refusesOversizedWebm() {
+void TestChatWebM::routesOversizedWebm() {
 	QTemporaryDir dir;
 	QFile file(dir.path() + "/test.webm");
 	QVERIFY(file.open(QIODevice::WriteOnly));
@@ -715,8 +757,22 @@ void TestChatWebM::refusesOversizedWebm() {
 
 	TestChatbarTextEdit chatbar;
 	QSignalSpy pastedImageSpy(&chatbar, &ChatbarTextEdit::pastedImage);
+#ifdef USE_FILE_SHARING
+	QSignalSpy files(&chatbar, &ChatbarTextEdit::fileDropRequested);
+#endif
 	chatbar.insertFromMimeData(&mimeData);
 	QCOMPARE(pastedImageSpy.size(), 0);
+#ifdef USE_FILE_SHARING
+	QCOMPARE(files.size(), 1);
+	QCOMPARE(files.first().first().toStringList(), QStringList{ file.fileName() });
+	const bool previousEnabled = Global::get().s.bFTEnabled;
+	Global::get().s.bFTEnabled = false;
+	const auto restoreEnabled  = qScopeGuard([previousEnabled]() { Global::get().s.bFTEnabled = previousEnabled; });
+	files.clear();
+	chatbar.insertFromMimeData(&mimeData);
+	QCOMPARE(files.size(), 0);
+	QCOMPARE(pastedImageSpy.size(), 0);
+#endif
 
 	Global::get().uiImageLength = previousImageLength;
 }
@@ -730,6 +786,165 @@ void TestChatWebM::videoToImgBudgetTooLarge() {
 	QVERIFY(Log::isWebM(UNDECODABLE_WEBM));
 	QVERIFY(!Log::videoToImg(UNDECODABLE_WEBM, 1000000).isEmpty());
 	QVERIFY(Log::videoToImg(UNDECODABLE_WEBM, 10).isEmpty());
+}
+
+void TestChatWebM::oversizedDeviceIsNotRead() {
+	CountingVideoDevice device(UNDECODABLE_WEBM, std::numeric_limits< qint64 >::max());
+	bool tooLarge = false;
+	QVERIFY(Log::videoToImg(device, 131072, &tooLarge).isEmpty());
+	QVERIFY(tooLarge);
+	QCOMPARE(device.readCalls, 0);
+}
+
+void TestChatWebM::deviceRejectsNegativeBudgetWithoutReading() {
+	for (int limit : { -1, std::numeric_limits< int >::min() }) {
+		CountingVideoDevice device(UNDECODABLE_WEBM, std::numeric_limits< qint64 >::max());
+		bool tooLarge = true;
+		QVERIFY(Log::videoToImg(device, limit, &tooLarge).isEmpty());
+		QVERIFY(!tooLarge);
+		QCOMPARE(device.readCalls, 0);
+		QCOMPARE(device.bytesRead, qint64(0));
+	}
+}
+
+void TestChatWebM::deviceZeroBudgetRemainsUnlimited() {
+	const QByteArray payload = UNDECODABLE_WEBM + QByteArray(10000, 'x');
+	CountingVideoDevice device(payload, payload.size());
+	bool tooLarge          = true;
+	const QString expected = Log::videoToImg(payload, 0);
+	QVERIFY(!expected.isEmpty());
+	QCOMPARE(Log::videoToImg(device, 0, &tooLarge), expected);
+	QVERIFY(!tooLarge);
+	QVERIFY(device.readCalls > 0);
+	QCOMPARE(device.bytesRead, qint64(payload.size()));
+}
+
+void TestChatWebM::mixedDropRespectsFileTransferSetting_data() {
+	QTest::addColumn< bool >("enabled");
+	QTest::newRow("file-sharing-disabled") << false;
+	QTest::newRow("file-sharing-enabled") << true;
+}
+
+void TestChatWebM::mixedDropRespectsFileTransferSetting() {
+	QFETCH(bool, enabled);
+	QTemporaryDir directory;
+	QVERIFY(directory.isValid());
+	const auto writeFile = [&](const QString &name, const QByteArray &payload) {
+		QFile file(directory.filePath(name));
+		return file.open(QIODevice::WriteOnly) && file.write(payload) == payload.size();
+	};
+	QVERIFY(writeFile(QStringLiteral("ordinary.txt"), "ordinary file"));
+	QVERIFY(writeFile(QStringLiteral("oversized.webm"), UNDECODABLE_WEBM + QByteArray(200000, 'x')));
+	QVERIFY(writeFile(QStringLiteral("inline.webm"), TINY_WEBM_SILENT));
+	const bool previousEnabled  = Global::get().s.bFTEnabled;
+	const bool previousHtml     = Global::get().bAllowHTML;
+	const auto previousLimit    = Global::get().uiImageLength;
+	const auto restore          = qScopeGuard([=]() {
+		Global::get().s.bFTEnabled  = previousEnabled;
+		Global::get().bAllowHTML    = previousHtml;
+		Global::get().uiImageLength = previousLimit;
+	});
+	Global::get().s.bFTEnabled  = enabled;
+	Global::get().bAllowHTML    = true;
+	Global::get().uiImageLength = 131072;
+	QVERIFY(!Log::videoToImg(TINY_WEBM_SILENT, 131066).isEmpty());
+	const QString ordinary  = directory.filePath(QStringLiteral("ordinary.txt"));
+	const QString oversized = directory.filePath(QStringLiteral("oversized.webm"));
+	QMimeData mime;
+	mime.setUrls({ QUrl::fromLocalFile(ordinary), QUrl::fromLocalFile(oversized),
+				   QUrl::fromLocalFile(directory.filePath(QStringLiteral("inline.webm"))) });
+	TestChatbarTextEdit chatbar;
+	QSignalSpy images(&chatbar, &ChatbarTextEdit::pastedImage);
+#ifdef USE_FILE_SHARING
+	QSignalSpy files(&chatbar, &ChatbarTextEdit::fileDropRequested);
+#endif
+	chatbar.insertFromMimeData(&mime);
+	QCOMPARE(images.size(), 1);
+	QVERIFY(images.first().first().toString().contains(QStringLiteral("data:video/webm;")));
+#ifdef USE_FILE_SHARING
+	QCOMPARE(files.size(), enabled ? 1 : 0);
+	if (enabled)
+		QCOMPARE(files.first().first().toStringList(), (QStringList{ ordinary, oversized }));
+#endif
+}
+
+void TestChatWebM::growingDeviceReadIsBounded() {
+	const QByteArray payload = UNDECODABLE_WEBM + QByteArray(10000, 'x');
+	CountingVideoDevice device(payload, 4); // File grew after metadata was read.
+	bool tooLarge = false;
+	QVERIFY(Log::videoToImg(device, 1000, &tooLarge).isEmpty());
+	QVERIFY(tooLarge);
+	QVERIFY(device.readCalls > 0);
+	QVERIFY(device.bytesRead <= 751); // Conservative raw limit plus one sentinel byte.
+}
+
+void TestChatWebM::deviceEncodingPreservesBudgetBoundary() {
+	const QString expected = Log::videoToImg(UNDECODABLE_WEBM, 0);
+	QVERIFY(!expected.isEmpty());
+	for (int limit : { 0, static_cast< int >(expected.size()), static_cast< int >(expected.size()) + 1 }) {
+		CountingVideoDevice device(UNDECODABLE_WEBM, UNDECODABLE_WEBM.size());
+		bool tooLarge      = false;
+		const QString html = Log::videoToImg(device, limit, &tooLarge);
+		if (limit == expected.size()) {
+			QVERIFY(html.isEmpty());
+			QVERIFY(tooLarge);
+		} else {
+			QCOMPARE(html, expected);
+			QVERIFY(!tooLarge);
+		}
+	}
+}
+
+void TestChatWebM::invalidWebmDoesNotBecomeFileTransfer() {
+	QTemporaryDir dir;
+	QFile file(dir.filePath(QStringLiteral("invalid.webm")));
+	QVERIFY(file.open(QIODevice::WriteOnly));
+	QCOMPARE(file.write(QByteArray(10000, 'x')), qint64(10000));
+	file.close();
+	QMimeData mimeData;
+	mimeData.setUrls({ QUrl::fromLocalFile(file.fileName()) });
+	const unsigned int previous = Global::get().uiImageLength;
+	Global::get().uiImageLength = 500;
+	const auto restore          = qScopeGuard([previous]() { Global::get().uiImageLength = previous; });
+	TestChatbarTextEdit chatbar;
+	QSignalSpy images(&chatbar, &ChatbarTextEdit::pastedImage);
+#ifdef USE_FILE_SHARING
+	QSignalSpy files(&chatbar, &ChatbarTextEdit::fileDropRequested);
+#endif
+	chatbar.insertFromMimeData(&mimeData);
+	QCOMPARE(images.size(), 0);
+#ifdef USE_FILE_SHARING
+	QCOMPARE(files.size(), 0);
+#endif
+}
+
+void TestChatWebM::droppedVideoRespectsCompleteMessageBudget() {
+	QTemporaryDir dir;
+	QFile file(dir.filePath(QStringLiteral("budget.webm")));
+	QVERIFY(file.open(QIODevice::WriteOnly));
+	QCOMPARE(file.write(UNDECODABLE_WEBM), qint64(UNDECODABLE_WEBM.size()));
+	file.close();
+	QMimeData mimeData;
+	mimeData.setUrls({ QUrl::fromLocalFile(file.fileName()) });
+	const QString expected      = QStringLiteral("<br />") + Log::videoToImg(UNDECODABLE_WEBM, 0);
+	const unsigned int previous = Global::get().uiImageLength;
+	const auto restore          = qScopeGuard([previous]() { Global::get().uiImageLength = previous; });
+	for (int budget : { 0, 5, 6, static_cast< int >(expected.size()), static_cast< int >(expected.size()) + 1 }) {
+		Global::get().uiImageLength = static_cast< unsigned int >(budget);
+		TestChatbarTextEdit chatbar;
+		QSignalSpy images(&chatbar, &ChatbarTextEdit::pastedImage);
+#ifdef USE_FILE_SHARING
+		QSignalSpy files(&chatbar, &ChatbarTextEdit::fileDropRequested);
+#endif
+		chatbar.insertFromMimeData(&mimeData);
+		const bool fits = budget == 0 || budget > expected.size();
+		QCOMPARE(images.size(), fits ? 1 : 0);
+		if (fits)
+			QCOMPARE(images.first().first().toString(), expected);
+#ifdef USE_FILE_SHARING
+		QCOMPARE(files.size(), fits ? 0 : 1);
+#endif
+	}
 }
 
 #ifdef USE_CHAT_WEBM

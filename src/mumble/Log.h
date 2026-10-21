@@ -28,6 +28,7 @@ class TextToSpeech;
 class ChatVideoPlayer;
 class QMovie;
 class QTimer;
+class QIODevice;
 
 class LogConfig : public ConfigWidget, public Ui::LogConfig {
 private:
@@ -171,6 +172,10 @@ public:
 	/// @param maxSize The maximum length of the generated HTML string
 	/// @return The video HTML or an empty string, if the data is not WebM or too large
 	static QString videoToImg(const QByteArray &rawVideoData, int maxSize);
+	/// Reads an opened video device, rejecting impossible HTML sizes before allocating
+	/// the payload. A bounded read also handles files growing after the size check.
+	/// maxSize == 0 preserves unlimited embedding; tooLarge distinguishes size refusal.
+	static QString videoToImg(QIODevice &videoData, int maxSize, bool *tooLarge = nullptr);
 	/// Returns whether the given data looks like a WebM container (EBML magic)
 	static bool isWebM(const QByteArray &rawVideoData);
 
