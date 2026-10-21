@@ -294,6 +294,7 @@ private slots:
 		error.set_actor(42);
 		error.set_transfer_id(id.constData(), static_cast< size_t >(id.size()));
 		error.set_data("");
+		error.set_chunk_index(0);
 		error.set_relay_error("injected peer error");
 		manager.handleDataMessage(error);
 		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
@@ -301,6 +302,15 @@ private slots:
 		for (const auto &event : updates)
 			QVERIFY(event.first().value< PQFT::FTTransferInfo >().state != PQFT::FTTransferInfo::State::Failed);
 		error.set_actor(41);
+		error.clear_chunk_index();
+		manager.handleDataMessage(error);
+		QVERIFY(QMetaObject::invokeMethod(manager.m_engine, []() {}, Qt::BlockingQueuedConnection));
+		QCoreApplication::sendPostedEvents(&manager, QEvent::MetaCall);
+		for (const auto &event : updates) {
+			QVERIFY(event.first().value< PQFT::FTTransferInfo >().state != PQFT::FTTransferInfo::State::Failed);
+		}
+		// A missing index must not be interpreted as the first chunk, even for relay responses.
+		error.set_chunk_index(0);
 		manager.handleDataMessage(error);
 		QTRY_VERIFY_WITH_TIMEOUT(
 			updates.last().first().value< PQFT::FTTransferInfo >().state == PQFT::FTTransferInfo::State::Failed, 5000);

@@ -270,6 +270,7 @@ MainWindow::MainWindow(QWidget *p)
 	qtbSendFile->setIcon(
 		QIcon::fromTheme(QStringLiteral("mail-attachment"), QIcon::fromTheme(QStringLiteral("attach"))));
 	qtbSendFile->setToolTip(tr("Send a file to the channel"));
+	qtbSendFile->setEnabled(false);
 #else
 	qtbSendFile->hide();
 #endif
@@ -3725,7 +3726,11 @@ void MainWindow::serverConnected() {
 	Global::get().uiMaxUsers      = 0;
 
 	enableRecording(true);
-	qaScreenShare->setEnabled(true);
+	// Official servers do not relay video. Wait for an explicit capability announcement.
+	qaScreenShare->setEnabled(false);
+#ifdef USE_FILE_SHARING
+	qtbSendFile->setEnabled(false);
+#endif
 
 	if (Global::get().s.bMute || Global::get().s.bDeaf) {
 		Global::get().sh->setSelfMuteDeafState(Global::get().s.bMute, Global::get().s.bDeaf);
@@ -3847,6 +3852,9 @@ void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString re
 	// We can't record or share screen without a server, so disable that functionality here
 	enableRecording(false);
 	qaScreenShare->setEnabled(false);
+#ifdef USE_FILE_SHARING
+	qtbSendFile->setEnabled(false);
+#endif
 	if (Global::get().sc && Global::get().sc->isCapturing()) {
 		Global::get().sc->stopCapture();
 	}
@@ -4331,6 +4339,10 @@ void MainWindow::recording() {
 }
 
 void MainWindow::screenShare() {
+	if (!qaScreenShare->isEnabled()) {
+		return;
+	}
+
 	ClientUser *p = ClientUser::get(Global::get().uiSession);
 	if (!p || !Global::get().sh)
 		return;
@@ -5018,6 +5030,9 @@ void MainWindow::onFilePasswordRequired(const QByteArray &transferId, const QStr
 }
 
 void MainWindow::startFileSend(const QString &path) {
+	if (!qtbSendFile->isEnabled()) {
+		return;
+	}
 	auto *manager = Global::get().fileTransferManager;
 	if (!manager) {
 		return;
@@ -5108,11 +5123,14 @@ void MainWindow::startFileSend(const QString &path) {
 }
 
 void MainWindow::bootstrapFileTransferIdentity() {
-	// The guard covers the automatic (ServerSync) prompt only: prompting again
+	if (!Global::get().s.bFTEnabled) {
+		return;
+	}
+	// The guard covers the automatic capability-negotiation prompt only: prompting again
 	// on every reconnect would be annoying. Declining it must not, however,
 	// disable later sends - startFileSend offers the one-time setup again via
 	// promptForFileTransferIdentity(). The capability announcement must run
-	// for EVERY ServerSync - a reconnected client that stays silent is
+	// for EVERY connection - a reconnected client that stays silent is
 	// invisible to other senders and the relay drops its chunks.
 	static bool prompted = false;
 

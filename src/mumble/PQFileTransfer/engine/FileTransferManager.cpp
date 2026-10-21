@@ -373,7 +373,7 @@ void FileTransferManager::handleControlMessage(const MumbleProto::FileTransferCo
 }
 
 void FileTransferManager::handleDataMessage(const MumbleProto::FileData &msg) {
-	if (!msg.has_transfer_id() || !msg.has_data() || msg.transfer_id().size() != 16) {
+	if (!msg.has_transfer_id() || !msg.has_chunk_index() || !msg.has_data() || msg.transfer_id().size() != 16) {
 		return;
 	}
 	const unsigned int actor = msg.has_actor() ? msg.actor() : 0;

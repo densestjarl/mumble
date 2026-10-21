@@ -132,8 +132,10 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 	Global::get().uiSession = msg.session();
 
 #ifdef USE_FILE_SHARING
-	// First-run identity creation / unlock, then advertise capability.
-	Global::get().mw->bootstrapFileTransferIdentity();
+	// A capability config can precede sync; otherwise defer setup until it arrives.
+	if (qtbSendFile->isEnabled()) {
+		bootstrapFileTransferIdentity();
+	}
 #endif
 
 	// Send an initial ping and establish the UDP connection unless TCP mode is forced
@@ -207,9 +209,18 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 ///
 /// @param msg The message object
 void MainWindow::msgServerConfig(const MumbleProto::ServerConfig &msg) {
+	if (msg.has_video_relay_version()) {
+		qaScreenShare->setEnabled(msg.video_relay_version() >= 1);
+	}
 #ifdef USE_FILE_SHARING
+	if (msg.has_file_transfer_relay_version()) {
+		qtbSendFile->setEnabled(msg.file_transfer_relay_version() >= 1);
+	}
 	if (Global::get().fileTransferManager)
 		Global::get().fileTransferManager->configureRelay(msg);
+	if (msg.has_file_transfer_relay_version() && qtbSendFile->isEnabled() && Global::get().uiSession != 0) {
+		bootstrapFileTransferIdentity();
+	}
 #endif
 	if (msg.has_welcome_text()) {
 		QString str = u8(msg.welcome_text());
