@@ -77,6 +77,7 @@ private slots:
 	void selectedPinSurvivesCacheRemoval();
 	void passwordRoundTrip();
 	void wrongPasswordFailsClosed();
+	void passwordRetryAfterTypo();
 	void duplicateChunkIsFatal();
 	void latePasswordSpoolsAllChunks();
 	void secondTransferWhileFirstReady();
@@ -1417,9 +1418,24 @@ void TestFileTransferEngine::wrongPasswordFailsClosed() {
 		}(),
 		30000);
 
+	// Typos keep the prompt open and report the one generic error.
+	const auto retriesOffered = [&]() {
+		int retries = 0;
+		for (const auto &argument : bobUpdates) {
+			const PQFT::FTTransferInfo info = argument.at(0).value< PQFT::FTTransferInfo >();
+			if (info.transferId == passwordTransfer && info.state == PQFT::FTTransferInfo::State::WaitingPassword
+				&& info.error.contains("Decryption failed"))
+				++retries;
+		}
+		return retries;
+	};
+	for (int attempt = 1; attempt < PQFT::MaxPasswordAttempts; ++attempt) {
+		pair.bob.providePassword(passwordTransfer, QByteArray("the wrong password"));
+		QTRY_COMPARE_WITH_TIMEOUT(retriesOffered(), attempt, 30000);
+	}
 	pair.bob.providePassword(passwordTransfer, QByteArray("the wrong password"));
 
-	// Wrong password -> Failed with the one generic error, no partial output
+	// The last allowed wrong password -> Failed with the one generic error, no partial output
 	bool failedWithGenericError = false;
 	QTRY_VERIFY_WITH_TIMEOUT(
 		[&]() {
@@ -1438,6 +1454,52 @@ void TestFileTransferEngine::wrongPasswordFailsClosed() {
 	// No temp directory survived for that transfer
 	const QString dir = stagingDirectory(passwordTransfer);
 	QVERIFY(!QFile::exists(dir + "/content.bin"));
+}
+
+void TestFileTransferEngine::passwordRetryAfterTypo() {
+	EnginePair pair(m_alice, m_bob, m_aliceFp, m_bobFp);
+	PQFT::FileTransferEngine::Config fast;
+	fast.sendRateBytesPerSecond = 0;
+	pair.alice.setConfig(fast);
+	pair.bob.setConfig(fast);
+
+	QSignalSpy bobUpdates(&pair.bob, &PQFT::FileTransferEngine::transferUpdated);
+	QSignalSpy bobPassword(&pair.bob, &PQFT::FileTransferEngine::passwordRequired);
+
+	const QString source = writeTestFile(64 * 1024);
+	QVERIFY(!source.isEmpty());
+	QCOMPARE(pair.alice.startSend(source, "application/octet-stream", true, QByteArray("the right password"),
+								  { { BobSession, m_bobFp } }),
+			 64ull * 1024);
+	QTRY_VERIFY_WITH_TIMEOUT(!bobPassword.isEmpty(), 30000);
+	const QByteArray passwordTransfer = bobPassword.first().at(0).toByteArray();
+
+	const auto lastState = [&]() {
+		PQFT::FTTransferInfo last;
+		for (const auto &argument : bobUpdates) {
+			const PQFT::FTTransferInfo info = argument.at(0).value< PQFT::FTTransferInfo >();
+			if (info.transferId == passwordTransfer)
+				last = info;
+		}
+		return last;
+	};
+
+	pair.bob.providePassword(passwordTransfer, QByteArray("the rihgt password"));
+	QTRY_VERIFY_WITH_TIMEOUT(!lastState().error.isEmpty(), 30000);
+	QCOMPARE(lastState().state, PQFT::FTTransferInfo::State::WaitingPassword);
+
+	pair.bob.providePassword(passwordTransfer, QByteArray("the right password"));
+	QTRY_COMPARE_WITH_TIMEOUT(lastState().state, PQFT::FTTransferInfo::State::Ready, 30000);
+	QVERIFY(lastState().error.isEmpty());
+
+	const QString target = m_tempDir.filePath("received-after-typo.bin");
+	pair.bob.saveTransferAs(passwordTransfer, target);
+	QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(target), 10000);
+	QFile original(source);
+	QFile received(target);
+	QVERIFY(original.open(QIODevice::ReadOnly));
+	QVERIFY(received.open(QIODevice::ReadOnly));
+	QCOMPARE(original.readAll(), received.readAll());
 }
 
 void TestFileTransferEngine::duplicateChunkIsFatal() {

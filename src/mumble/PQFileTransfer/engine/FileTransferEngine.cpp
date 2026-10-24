@@ -1595,6 +1595,13 @@ void FileTransferEngine::providePassword(const QByteArray &transferId, QByteArra
 		QByteArray layer1;
 		if (!unwrapPasswordLayer(layer1, job.manifest.wrappedFileKey, pwWrapKey, job.transferId, true, job.manifest.fpA,
 								 job.manifest.fpB, *job.manifest.argon2, job.manifest.argon2Salt)) {
+			// Allow a few retries so a typo does not throw the transfer away. The
+			// receiver already holds everything an offline guess needs, so retries
+			// reveal nothing new; the error text stays the generic one.
+			if (++job.passwordAttempts < MaxPasswordAttempts) {
+				updateReceiveState(job, FTTransferInfo::State::WaitingPassword, genericDecryptionError());
+				return;
+			}
 			updateReceiveState(job, FTTransferInfo::State::Failed, genericDecryptionError());
 			cleanupReceive(jobPtr);
 			return;
