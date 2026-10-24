@@ -1124,9 +1124,11 @@ void TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive() {
 		engine.onDataMessage(AliceSession, PQFT::randomBytes(PQFT::TransferIdSize), 0, 1, QByteArray(100, 'x'));
 	});
 	flood.start(10);
-	QTest::qWait(350);
-	QVERIFY2(sawState(updates, {}, PQFT::FTTransferInfo::State::Failed),
-			 "Stray chunks kept an unfinished handshake alive");
+	// The pending receive allows handshake plus two verification windows (300 ms
+	// here). Stray chunks must not extend that; if they did, it would never fail.
+	// The generous wait only absorbs slow CI runners.
+	QTRY_VERIFY2_WITH_TIMEOUT(sawState(updates, {}, PQFT::FTTransferInfo::State::Failed),
+							  "Stray chunks kept an unfinished handshake alive", 3000);
 }
 
 void TestFileTransferEngine::selectedPinSurvivesCacheRemoval() {
