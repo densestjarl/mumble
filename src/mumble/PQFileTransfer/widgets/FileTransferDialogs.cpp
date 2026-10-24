@@ -297,7 +297,7 @@ FileSendDialog::FileSendDialog(const QStringList &fileNames, quint64 totalSize, 
 		}
 	}
 	// Keep short recipient lists compact instead of showing a tall empty box.
-	const int rows = static_cast< int >(qBound< qsizetype >(1, recipients.size(), 6));
+	const int rows = static_cast< int >(qBound(qsizetype(1), recipients.size(), qsizetype(6)));
 	m_recipients->setMaximumHeight(rows * m_recipients->fontMetrics().height() * 3 / 2 + 2 * m_recipients->frameWidth()
 								   + 6);
 	layout->addWidget(m_recipients);
