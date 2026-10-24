@@ -515,8 +515,9 @@ void FileTransferEngine::handleIncomingM1(unsigned int actorSession, const QByte
 	}
 
 	if (pinned.isEmpty()) {
-		// First contact: park the handshake until the user verifies the
-		// safety number (mandatory out-of-band verification, §5).
+		// First contact: park the handshake until the manager decides. It
+		// resumes at once under trust on first use, or after the user verifies
+		// the safety number when verification is required (§5).
 		// One prompt per peer: refuse replacements until its exact request is resolved or expires.
 		if (m_pendingHandshakes.contains(actorSession) || m_pendingHandshakes.size() >= 32)
 			return;
