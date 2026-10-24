@@ -42,9 +42,8 @@ bool webmDebugEnabled() {
 /// Dumps the PCM that is fed into the audio sink, for debugging (MUMBLE_WEBM_DEBUG)
 void dumpAudioChunk(const QByteArray &pcm) {
 	static QFile dump(QStringLiteral("/tmp/webm_pcm_%1.raw").arg(QCoreApplication::applicationPid()));
-	if (!dump.isOpen()) {
-		dump.open(QIODevice::WriteOnly | QIODevice::Append);
-	}
+	if (!dump.isOpen() && !dump.open(QIODevice::WriteOnly | QIODevice::Append))
+		return;
 	dump.write(pcm);
 }
 #endif // MUMBLE_CHAT_WEBM_HAS_AUDIO
