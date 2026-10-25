@@ -69,9 +69,12 @@ bool isDeviceMarker(const QString &kdfParams) {
 	return kdfParams == DeviceDpapiMarker || kdfParams == DeviceLocalMarker;
 }
 
-/// Seal the random device key for storage in the `kek_salt` column. On
-/// Windows DPAPI binds it to the user account. Elsewhere it is stored as is,
-/// which matches how Mumble stores its client certificate.
+/// Seal the random device key for storage in the `kek_salt` column. For device
+/// identities that column holds the sealed key, not a salt; the name predates
+/// device mode and is kept to avoid a schema change. On Windows DPAPI binds the
+/// key to the user account. Elsewhere it is stored as is, which matches how
+/// Mumble stores its client certificate: file permissions are the only
+/// protection, and a passphrase is the way to add more.
 bool sealDeviceKey(QByteArray &sealed, QString &marker, const QByteArray &key) {
 #ifdef Q_OS_WIN
 	DATA_BLOB input;

@@ -149,6 +149,9 @@ signals:
 private:
 	friend class TestFileTransferManager;
 	void setupEngineTransports();
+	/// Keep safety-number verification on for profiles that used file sharing
+	/// before trust on first use became the default. Runs once per profile.
+	void applyUpgradeTrustDefault();
 	void updateConnectionTransport();
 	void forwardEngineEvent(std::function< void() > event);
 	void rejectReceive(const PQFT::FTTransferInfo &info, PQFT::TrustState state);

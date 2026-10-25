@@ -985,6 +985,33 @@ private slots:
 		QVERIFY(!receiver.markPeerVerified(*shown)); // stale: trust is now Verified
 	}
 
+	void upgradeKeepsVerificationForExistingProfiles_data() {
+		QTest::addColumn< QString >("profile");
+		QTest::newRow("fresh") << QStringLiteral("fresh");
+		QTest::newRow("existing-identity") << QStringLiteral("identity");
+		QTest::newRow("existing-pins") << QStringLiteral("pins");
+	}
+	void upgradeKeepsVerificationForExistingProfiles() {
+		QFETCH(QString, profile);
+		m_global->s.bFTRequireVerification = false;
+		FileTransferManager manager;
+		QVERIFY(setupTrustFixture(manager));
+		if (profile == QLatin1String("identity"))
+			QVERIFY(manager.m_identity->createDeviceIdentity());
+		else if (profile == QLatin1String("pins"))
+			QCOMPARE(manager.m_trustStore->checkAndPin(m_serverDigest, m_peer->qsName, QByteArray(48, 'p'), "pin"),
+					 PQFT::TrustState::Pinned);
+		QVERIFY(!m_global->s.bFTTrustDefaultMigrated);
+		manager.applyUpgradeTrustDefault();
+		QVERIFY(m_global->s.bFTTrustDefaultMigrated);
+		// Only profiles that used file sharing before keep the old strict default.
+		QCOMPARE(m_global->s.bFTRequireVerification, profile != QLatin1String("fresh"));
+		// The check runs once, so a later choice in Settings sticks.
+		m_global->s.bFTRequireVerification = false;
+		manager.applyUpgradeTrustDefault();
+		QVERIFY(!m_global->s.bFTRequireVerification);
+	}
+
 	void changedDialogContextDoesNotPin_data() {
 		QTest::addColumn< QString >("change");
 		for (const char *change : { "rename", "connection", "session-reuse", "channel", "capability", "disabled" })

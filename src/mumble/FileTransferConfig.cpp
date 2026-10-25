@@ -92,7 +92,14 @@ void FileTransferConfig::updateIdentityStatus() {
 									   "you connect."));
 		qpbFTPassphrase->setText(tr("&Remove passphrase"));
 	} else {
-		qlFTIdentityStatus->setText(tr("Your file-sharing key unlocks automatically on this computer."));
+#ifdef Q_OS_WIN
+		qlFTIdentityStatus->setText(tr("Your file-sharing key unlocks automatically on this computer. Windows "
+									   "protects it with your user account."));
+#else
+		qlFTIdentityStatus->setText(tr("Your file-sharing key unlocks automatically on this computer. Like your "
+									   "Mumble certificate, it is protected only by your account's file "
+									   "permissions. Set a passphrase for more protection."));
+#endif
 		qpbFTPassphrase->setText(tr("Set &passphrase…"));
 	}
 }

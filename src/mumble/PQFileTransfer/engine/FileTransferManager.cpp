@@ -28,6 +28,7 @@ FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent) {
 		PQFT::FileTransferIdentity::ensureSchema(connection);
 		m_identity   = std::make_unique< FileTransferIdentity >(connection);
 		m_trustStore = std::make_unique< PeerTrustStore >(connection);
+		applyUpgradeTrustDefault();
 	}
 
 	m_workerThread = std::make_unique< QThread >(this);
@@ -139,10 +140,12 @@ void FileTransferManager::setupEngineTransports() {
 						}
 						return;
 					}
+					// The engine emits these receive states only after the signed manifest
+					// verified against the session's peer fingerprint, so the pin is never
+					// taken from an unauthenticated M1 claim. Keep this list post-manifest.
 					if (!Global::get().s.bFTRequireVerification && info.error.isEmpty()
 						&& (info.state == PQFT::FTTransferInfo::State::Transferring
 							|| info.state == PQFT::FTTransferInfo::State::WaitingPassword
-							|| info.state == PQFT::FTTransferInfo::State::Verifying
 							|| info.state == PQFT::FTTransferInfo::State::Ready)
 						&& !adoptFirstUsePin(info))
 						return;
@@ -747,6 +750,20 @@ bool FileTransferManager::markPeerVerified(const SendRecipient &shown) {
 		return false;
 	refreshPinCache();
 	return true;
+}
+
+void FileTransferManager::applyUpgradeTrustDefault() {
+	Settings &settings = Global::get().s;
+	if (settings.bFTTrustDefaultMigrated || !m_identity || !m_trustStore)
+		return;
+	// Older builds always compared safety numbers before a first transfer. Users
+	// who already have a key or saved contacts keep that; new profiles get trust
+	// on first use. Either way the user can change it in Settings.
+	if (m_identity->hasIdentity() || !m_trustStore->list().isEmpty()) {
+		settings.bFTRequireVerification = true;
+		qInfo("FileTransferManager: existing file-sharing profile, keeping safety-number verification on");
+	}
+	settings.bFTTrustDefaultMigrated = true;
 }
 
 bool FileTransferManager::adoptFirstUsePin(const PQFT::FTTransferInfo &info) {

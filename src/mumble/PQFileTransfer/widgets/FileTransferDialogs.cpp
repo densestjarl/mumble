@@ -267,6 +267,7 @@ FileSendDialog::FileSendDialog(const QStringList &fileNames, quint64 totalSize, 
 				trust = tr("verified ✓");
 				break;
 			case PQFT::TrustState::Pinned:
+				trust = tr("saved, not verified");
 				break;
 			case PQFT::TrustState::StorageError:
 				trust = tr("can't read their saved key — unavailable");
@@ -276,8 +277,8 @@ FileSendDialog::FileSendDialog(const QStringList &fileNames, quint64 totalSize, 
 				break;
 			case PQFT::TrustState::NewPeer:
 			default:
-				if (verificationRequired)
-					trust = tr("first transfer — you'll compare safety numbers first");
+				trust = verificationRequired ? tr("first transfer — you'll compare safety numbers first")
+											 : tr("new, saved on first transfer");
 				break;
 		}
 		item->setText(trust.isEmpty() ? recipient.name : tr("%1 — %2").arg(recipient.name, trust));

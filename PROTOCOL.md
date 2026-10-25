@@ -223,6 +223,8 @@ or replay control messages, or truncate undetected.
   use. The sender pins the key authenticated by M4; the receiver pins the key once the
   signed manifest verifies (never the unsigned M1 claim). Pins start unverified;
   out-of-band verification (QR/in-person/voice) marks them verified from the user menu.
+  Profiles that already had an identity or pins when this default shipped keep the
+  "verify new contacts first" setting on.
   With the "verify new contacts first" setting, first contact MUST be verified
   out-of-band before sending any file content or accepting a transfer, and the pin is
   written only after verification. Any fingerprint change ⇒ hard block with a loud

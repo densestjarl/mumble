@@ -484,6 +484,9 @@ struct Settings {
 	/// The user chose to protect their file-transfer identity with a
 	/// passphrase (otherwise the device key unlocks it automatically).
 	bool bFTIdentityPassphraseChosen = false;
+	/// The upgrade check for bFTRequireVerification has run (see
+	/// FileTransferManager::applyUpgradeTrustDefault).
+	bool bFTTrustDefaultMigrated = false;
 
 	bool bUpdateCheck      = true;
 	bool bPluginCheck      = true;

@@ -74,7 +74,9 @@ side pins the honest key, any substitution is a hard block. Users who want
 the strict rule enable *Ask me to verify new contacts before their first
 transfer* (Settings → File Sharing). Every first transfer then waits for the
 safety-number dialog; on the receiving side nothing is pinned until it is
-accepted, and declining leaves no pin behind.
+accepted, and declining leaves no pin behind. Profiles that already had a
+file-sharing key or saved contacts when TOFU became the default keep the
+strict rule on upgrade; only new profiles start with TOFU.
 
 ## Operational notes
 
@@ -85,7 +87,9 @@ accepted, and declining leaves no pin behind.
   rest with AES-256-GCM. By default the key-encryption key is a random
   device key: on Windows it is sealed with DPAPI to the user account; on
   other platforms it is stored next to the identity, the same protection the
-  Mumble client certificate gets. Users can opt into a passphrase instead
+  Mumble client certificate gets: file permissions only, which the settings
+  page says. OS keychain storage there is not implemented yet. Users can opt
+  into a passphrase instead
   (Argon2id-derived key, entered on connect) under Settings → File Sharing.
 - A receiver gets five attempts at a file password before the transfer
   fails. The receiver already holds everything an offline guess needs, so
