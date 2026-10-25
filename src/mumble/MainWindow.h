@@ -35,8 +35,8 @@
 #define MB_QEVENT (QEvent::User + 939)
 #define OU_QEVENT (QEvent::User + 940)
 
-class QDialog;
 class ACLEditor;
+class ChatWindow;
 class BanEditor;
 class UserEdit;
 class ServerHandler;
@@ -139,7 +139,7 @@ public:
 	GlobalShortcut *gsAdaptivePush;
 
 	DockTitleBar *dtbLogDockTitle, *dtbChatDockTitle;
-	QDialog *m_chatWindow    = nullptr;
+	ChatWindow *m_chatWindow = nullptr;
 	bool m_chatLogWasVisible = true;
 	bool m_chatBarWasVisible = true;
 	QByteArray m_chatWindowGeometry;

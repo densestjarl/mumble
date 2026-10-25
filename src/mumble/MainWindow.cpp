@@ -109,7 +109,6 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QToolTip>
-#include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QWhatsThis>
 
 #include "widgets/BanDialog.h"
@@ -2478,12 +2477,8 @@ void MainWindow::on_qaConfigPopOutChat_triggered(bool checked) {
 	m_chatWindow->setWindowTitle(tr("Mumble Chat"));
 	m_chatWindow->setAttribute(Qt::WA_DeleteOnClose);
 	m_chatWindow->resize(600, 450);
-	auto *layout = new QVBoxLayout(m_chatWindow);
-	// Move the existing widgets so history, drafts, targets, and signal connections survive.
-	layout->addWidget(qteLog, 1);
-	layout->addWidget(qteChat);
-	qteLog->show();
-	qteChat->show();
+	// Moves qteLog and qwChatBar (the chat input plus the send-file button).
+	m_chatWindow->takeDockContents(qdwLog, qdwChat);
 	qdwLog->hide();
 	qdwChat->hide();
 	qdwLog->toggleViewAction()->setEnabled(false);
@@ -2501,12 +2496,7 @@ void MainWindow::restoreChatWidgets() {
 		return;
 	}
 	m_chatWindowGeometry = m_chatWindow->saveGeometry();
-	m_chatWindow->layout()->removeWidget(qteLog);
-	m_chatWindow->layout()->removeWidget(qteChat);
-	qdwLog->setWidget(qteLog);
-	qdwChat->setWidget(qteChat);
-	qteLog->show();
-	qteChat->show();
+	m_chatWindow->restoreDockContents();
 	qdwLog->setVisible(m_chatLogWasVisible && !Global::get().s.bMinimalView);
 	qdwChat->setVisible(m_chatBarWasVisible && !Global::get().s.bMinimalView);
 	qdwLog->toggleViewAction()->setEnabled(true);
