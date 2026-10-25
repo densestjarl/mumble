@@ -126,7 +126,8 @@ jobs:
           MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}
           MUMBLE_CI_TESTS: ${{ matrix.tests }}
           MUMBLE_CI_PACKAGING: ${{ github.event_name == 'pull_request' && 'OFF' || 'ON' }}
-          MUMBLE_CI_LTO: ${{ github.event_name == 'pull_request' && 'OFF' || 'ON' }}
+          # GCC 13 diagnoses AudioOutputCache's vector resize in non-LTO unity builds.
+          MUMBLE_CI_LTO: ${{ github.event_name == 'pull_request' && !startsWith(matrix.compiler, 'gcc') && 'OFF' || 'ON' }}
 
     - name: Test
       if: matrix.tests == 'ON'

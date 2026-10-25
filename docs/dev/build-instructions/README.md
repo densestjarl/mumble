@@ -47,9 +47,12 @@ to perform this HTTP request automatically.
 
 ## CI build and test settings
 
-The CI workflow disables link-time optimization (LTO) for pull-request verification
-builds. Builds on `master`, manual CI builds, and preview installers retain LTO.
-CodeQL builds disable LTO because their executables are only used for analysis.
+The CI workflow disables link-time optimization (LTO) for Windows and macOS
+pull-request verification builds. GCC verification retains LTO: GCC 13 otherwise
+emits a `-Wstringop-overflow` diagnostic for `AudioOutputCache::loadFrom` in Release
+unity builds, which fails the warnings-as-errors check. Builds on `master`, manual
+CI builds, and preview installers also retain LTO. CodeQL builds disable LTO
+because their executables are only used for analysis.
 
 CI and preview installers run two CTest suites at a time. To use the same test
 scheduling locally, run:
