@@ -16,6 +16,7 @@ Compare protobuf descriptors and TCP/UDP IDs with an official source checkout:
 
 Existing field names, numbers, types, labels, defaults and enum values must stay
 unchanged. New fields must be optional/repeated, including fields in new messages.
+The official reference must contain proto files; an empty reference fails.
 The script also checks transport IDs for removals, renumbering and collisions.
 Review version negotiation, feature gating and PROTOCOL.md separately.
 
@@ -43,7 +44,8 @@ and receives another text message at the end. Fork clients must keep video/file
 sending disabled against official servers; a fork-to-fork fixture checks the
 positive capability path. File sharing is enabled in every fork client's
 settings: the automatic identity setup must prompt only on a fork server, and is
-cancelled there. SIGTERM after the final measurement is intentional
+cancelled there. Unexpected identity prompts are checked for four seconds after
+connection, after channel operations, and throughout the soak. SIGTERM after the final measurement is intentional
 fixture cleanup, recorded separately from client liveness. A client or server
 shutdown requiring SIGKILL is recorded as `client_shutdown_timeout` or
 `server_shutdown_timeout` for investigation; the run still writes `result.json`.

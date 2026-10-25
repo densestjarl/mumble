@@ -88,6 +88,8 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         scratch = Path(directory)
         official, fork = descriptors(args.official, scratch), descriptors(args.fork, scratch)
+        if not official:
+            failures.append(f"No official proto files under {args.official / 'src'}")
         for name, original in official.items():
             candidate = fork.get(name)
             if candidate is None:
