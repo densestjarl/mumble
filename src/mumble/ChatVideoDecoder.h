@@ -49,6 +49,8 @@ class ChatVideoDecoder : public QObject {
 public:
 	/// Default audio output rate (S16LE stereo)
 	static constexpr int DEFAULT_AUDIO_SAMPLE_RATE = 48000;
+	/// Maximum video output of one request, used to reserve room in the player's queue
+	static constexpr int MAX_BURST_VIDEO_FRAMES = 3;
 
 	struct VideoFrame {
 		QImage image;
@@ -117,13 +119,14 @@ public slots:
 signals:
 	void videoFrameDecoded(const QImage &image, qint64 ptsMs);
 	void audioChunkDecoded(const QByteArray &pcm, qint64 ptsMs, qint64 durationMs);
+	/// Emitted after all output from one requestWork() call has been delivered
+	void workFinished();
 	/// Emitted once all streams have been demuxed and decoded to the end
 	void finished();
 	void error(const QString &message);
 
 private:
-	static constexpr int MAX_BURST_VIDEO_FRAMES = 3;
-	static constexpr qint64 MAX_BURST_AUDIO_MS  = 300;
+	static constexpr qint64 MAX_BURST_AUDIO_MS = 300;
 	/// Output format the audio is resampled to: S16LE stereo
 	static constexpr int AUDIO_OUT_CHANNELS = 2;
 

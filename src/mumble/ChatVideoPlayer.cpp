@@ -207,6 +207,7 @@ bool ChatVideoPlayer::ensureWorker() {
 
 	connect(m_decoder, &ChatVideoDecoder::videoFrameDecoded, this, &ChatVideoPlayer::onDecoderVideoFrame);
 	connect(m_decoder, &ChatVideoDecoder::audioChunkDecoded, this, &ChatVideoPlayer::onDecoderAudioChunk);
+	connect(m_decoder, &ChatVideoDecoder::workFinished, this, [this]() { m_workRequested = false; });
 	connect(m_decoder, &ChatVideoDecoder::finished, this, &ChatVideoPlayer::onDecoderFinished);
 	connect(m_decoder, &ChatVideoDecoder::error, this, &ChatVideoPlayer::onDecoderError);
 
@@ -466,7 +467,6 @@ void ChatVideoPlayer::requestWork() {
 }
 
 void ChatVideoPlayer::onDecoderVideoFrame(const QImage &image, qint64 ptsMs) {
-	m_workRequested = false;
 	if (m_state != Playing)
 		return;
 
@@ -479,8 +479,7 @@ void ChatVideoPlayer::onDecoderVideoFrame(const QImage &image, qint64 ptsMs) {
 }
 
 void ChatVideoPlayer::onDecoderAudioChunk(const QByteArray &pcm, qint64, qint64) {
-	m_workRequested = false;
-#ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
 	if (!m_audioSource || m_state != Playing)
 		return;
 
@@ -491,32 +490,36 @@ void ChatVideoPlayer::onDecoderAudioChunk(const QByteArray &pcm, qint64, qint64)
 	if (webmDebugEnabled()) {
 		dumpAudioChunk(pcm);
 	}
-#else
+#	else
 	Q_UNUSED(pcm);
-#endif
+#	endif
 }
 
 void ChatVideoPlayer::onDecoderFinished() {
-	m_workRequested = false;
-	m_decoderAtEof  = true;
+	m_decoderAtEof = true;
 }
 
 void ChatVideoPlayer::onDecoderError(const QString &message) {
 	qWarning("ChatVideoPlayer: %s", qPrintable(message));
-	m_workRequested = false;
-	m_decoderAtEof  = true;
+	m_decoderAtEof = true;
 }
 
 void ChatVideoPlayer::keepDecoderFed() {
 	if (m_decoderAtEof)
 		return;
+	// An audio refill also decodes video. Reserve a complete burst so it cannot
+	// evict frames that are still waiting for their presentation time. Keep the
+	// request in flight until workFinished(), rather than releasing it on the
+	// first audio/video signal while the worker is still producing that burst.
+	if (m_videoQueue.size() > MAX_QUEUED_FRAMES - ChatVideoDecoder::MAX_BURST_VIDEO_FRAMES)
+		return;
 
 	const bool videoHungry = m_videoQueue.size() <= 1;
-#ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
 	const bool audioHungry = m_audioSource && bufferedAudioBytes() < MAX_AUDIO_BUFFER_BYTES / 3;
-#else
+#	else
 	const bool audioHungry = false;
-#endif
+#	endif
 	if (videoHungry || audioHungry)
 		requestWork();
 }
@@ -544,13 +547,12 @@ void ChatVideoPlayer::maybeLoop(qint64 clockMs) {
 	m_wallPaced   = false;
 	rebaseClock();
 
-	m_decoderAtEof  = false;
-	m_workRequested = false;
+	m_decoderAtEof = false;
 	if (webmDebugEnabled()) {
 		qInfo("ChatVideoPlayer: looping (clock=%lldms)", static_cast< long long >(clockMs));
 	}
 	const bool reopenQueued = QMetaObject::invokeMethod(m_decoder, "reopen", Qt::QueuedConnection);
-	QMetaObject::invokeMethod(m_decoder, "requestWork", Qt::QueuedConnection);
+	requestWork();
 	if (!reopenQueued && webmDebugEnabled()) {
 		qInfo("ChatVideoPlayer: FAILED to queue reopen invocation");
 	}

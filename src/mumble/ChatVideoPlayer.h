@@ -149,9 +149,7 @@ private slots:
 	void onDecoderError(const QString &message);
 
 private:
-#ifdef USE_CHAT_WEBM_AUDIO
 	friend class TestChatWebM;
-#endif
 
 	enum State { Poster, Playing, Paused };
 
@@ -224,8 +222,8 @@ private:
 	/// Diagnostics: tick counter for the periodic debug line (MUMBLE_WEBM_DEBUG)
 	int m_debugTick = 0;
 
-	/// Video frames buffered ahead per video (bounded queue on the GUI side)
-	static constexpr int MAX_QUEUED_FRAMES = 3;
+	/// Two decode bursts, so audio refills can run without evicting upcoming frames
+	static constexpr int MAX_QUEUED_FRAMES = 6;
 	/// Audio buffered ahead at most (bytes; 48 kHz S16 stereo = 192000 B/s)
 	static constexpr int MAX_AUDIO_BUFFER_BYTES = 192000 / 2;
 	/// A frame may be presented this many milliseconds early

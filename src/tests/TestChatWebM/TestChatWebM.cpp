@@ -9,6 +9,9 @@
 #ifdef USE_CHAT_WEBM
 #	include "ChatVideoDecoder.h"
 #	include "ChatVideoPlayer.h"
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+#		include "QueueWebMFixture.h"
+#	endif
 #endif
 #ifdef USE_CHAT_WEBM_AUDIO
 #	include <QtMultimedia/QAudioSink>
@@ -18,6 +21,8 @@
 #include <limits>
 #include <memory>
 
+#include <QtCore/QCoreApplication>
+#include <QtCore/QEvent>
 #include <QtCore/QIODevice>
 #include <QtCore/QMimeData>
 #include <QtCore/QScopeGuard>
@@ -686,9 +691,12 @@ private slots:
 	void posterDoesNotAutoplay();
 	void clickTogglesPlayback();
 	void audioPlaybackAdvancesClockAndResumes();
-#ifdef USE_CHAT_WEBM_AUDIO
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+	void audioRefillPreservesUpcomingVideoFrames();
+#	endif
+#	ifdef USE_CHAT_WEBM_AUDIO
 	void idleAudioRecoveryPreservesQueuedPcm();
-#endif
+#	endif
 	void loopsAfterEnd();
 	void resumeAtClipEndRestartsImmediately();
 	void pauseResumeKeepsFrameSchedule();
@@ -1080,7 +1088,63 @@ void TestChatWebM::audioPlaybackAdvancesClockAndResumes() {
 	document.toggleChatVideo(url);
 }
 
-#ifdef USE_CHAT_WEBM_AUDIO
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+void TestChatWebM::audioRefillPreservesUpcomingVideoFrames() {
+	if (!ChatVideoDecoder::isSupported()) {
+		QSKIP("WebM decoder not available");
+	}
+
+	const QByteArray fixture = queueWebMFixture();
+	const QImage poster      = ChatVideoDecoder::decodePoster(fixture);
+	QVERIFY(!poster.isNull());
+	std::unique_ptr< ChatVideoPlayer > player(
+		ChatVideoPlayer::create(QUrl(QStringLiteral("data:video/webm")), fixture, poster, nullptr));
+	QVERIFY(player);
+	ChatVideoDecoder decoder;
+	QVERIFY(decoder.open(fixture, true));
+	QVERIFY(decoder.decodingAudio());
+
+	// Drive the real decoder and player refill logic without an output device.
+	// A simulated mixer consumes PCM and presentation consumes due frames every
+	// 50 ms, matching the timer cadence observed in the Windows two-client test.
+	player->m_decoder     = &decoder;
+	player->m_state       = ChatVideoPlayer::Playing;
+	player->m_audioSource = new ChatVideoAudioSource(player.get());
+	connect(&decoder, &ChatVideoDecoder::videoFrameDecoded, player.get(), &ChatVideoPlayer::onDecoderVideoFrame);
+	connect(&decoder, &ChatVideoDecoder::audioChunkDecoded, player.get(), &ChatVideoPlayer::onDecoderAudioChunk);
+	connect(&decoder, &ChatVideoDecoder::finished, player.get(), &ChatVideoPlayer::onDecoderFinished);
+	bool releasedBeforeBurstEnd = false;
+	connect(&decoder, &ChatVideoDecoder::videoFrameDecoded, player.get(),
+			[&]() { releasedBeforeBurstEnd |= !player->m_workRequested; });
+	connect(&decoder, &ChatVideoDecoder::audioChunkDecoded, player.get(),
+			[&]() { releasedBeforeBurstEnd |= !player->m_workRequested; });
+	connect(&decoder, &ChatVideoDecoder::workFinished, player.get(), [&]() { player->m_workRequested = false; });
+
+	QByteArray pcm(9600, '\0'); // 50 ms of S16 stereo at 48 kHz
+	qint64 consumedBytes   = 0;
+	qint64 lastPresentedMs = -1;
+	int presentedFrames    = 0;
+	for (int tick = 0; tick < 60; ++tick) {
+		consumedBytes += player->m_audioSource->take(pcm.data(), pcm.size());
+		const qint64 clockMs = consumedBytes * 1000 / 192000;
+		while (!player->m_videoQueue.isEmpty() && player->m_videoQueue.first().ptsMs <= clockMs) {
+			const qint64 ptsMs = player->m_videoQueue.takeFirst().ptsMs;
+			if (!ChatVideoPlayer::shouldDropFrame(ptsMs, clockMs)) {
+				++presentedFrames;
+				lastPresentedMs = ptsMs;
+			}
+		}
+		player->keepDecoderFed();
+		QCoreApplication::sendPostedEvents(&decoder, QEvent::MetaCall);
+	}
+
+	QVERIFY2(!releasedBeforeBurstEnd, "a partial decode burst released the in-flight request");
+	QVERIFY2(presentedFrames >= 24, "audio refills evicted video frames before they could be presented");
+	QVERIFY2(lastPresentedMs >= 1800, "video froze while the audio clock continued advancing");
+}
+#	endif
+
+#	ifdef USE_CHAT_WEBM_AUDIO
 void TestChatWebM::idleAudioRecoveryPreservesQueuedPcm() {
 	if (!ChatVideoDecoder::isSupported()) {
 		QSKIP("WebM decoder not available");
@@ -1124,7 +1188,7 @@ void TestChatWebM::idleAudioRecoveryPreservesQueuedPcm() {
 		QTRY_COMPARE_WITH_TIMEOUT(source->bufferedBytes(), 0, 3000);
 	}
 }
-#endif
+#	endif
 
 void TestChatWebM::loopsAfterEnd() {
 	if (TINY_WEBM.isEmpty() || !ChatVideoDecoder::isSupported()) {

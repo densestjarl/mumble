@@ -292,7 +292,7 @@ void ChatVideoDecoder::requestWork() {
 		AudioChunk audioChunk;
 		if (!step(videoFrame, audioChunk)) {
 			emit finished();
-			return;
+			break;
 		}
 		if (videoFrame.isValid()) {
 			emit videoFrameDecoded(videoFrame.image, videoFrame.ptsMs);
@@ -303,6 +303,7 @@ void ChatVideoDecoder::requestWork() {
 			audioProduced += audioChunk.durationMs;
 		}
 	}
+	emit workFinished();
 }
 
 void ChatVideoDecoder::shutdown() {
