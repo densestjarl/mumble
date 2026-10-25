@@ -2471,8 +2471,8 @@ void MainWindow::on_qaConfigPopOutChat_triggered(bool checked) {
 		return;
 	}
 
-	m_chatLogWasVisible = Global::get().s.bMinimalView || !qdwLog->isHidden();
-	m_chatBarWasVisible = Global::get().s.bMinimalView || !qdwChat->isHidden();
+	m_chatLogWasVisible = !qdwLog->isHidden();
+	m_chatBarWasVisible = !qdwChat->isHidden();
 	m_chatWindow        = new ChatWindow(this);
 	m_chatWindow->setWindowTitle(tr("Mumble Chat"));
 	m_chatWindow->setAttribute(Qt::WA_DeleteOnClose);
