@@ -689,7 +689,7 @@ private slots:
 	}
 };
 
-int main(int argc, char **argv) {
+int mumbleTestMain_TestFileTransferMainWindow(int argc, char **argv) {
 	MumbleApplication application(argc, argv);
 #ifdef MUMBLE_TEST_MURMUR_BINARY
 	MumbleSSL::initialize();

@@ -374,7 +374,7 @@ private slots:
 		QVERIFY(!ok);
 	}
 };
-int main(int argc, char **argv) {
+int mumbleTestMain_TestFileTransferUi(int argc, char **argv) {
 	QApplication app(argc, argv);
 	if (app.arguments().contains(QStringLiteral("--file-card-layout-child")))
 		return fileCardLayoutChild();

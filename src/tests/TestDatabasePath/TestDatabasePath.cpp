@@ -132,7 +132,7 @@ private slots:
 	}
 };
 
-int main(int argc, char **argv) {
+int mumbleTestMain_TestDatabasePath(int argc, char **argv) {
 	QStandardPaths::setTestModeEnabled(true);
 	QApplication app(argc, argv);
 	const QStringList args = app.arguments();

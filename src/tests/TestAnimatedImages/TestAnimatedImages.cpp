@@ -3,6 +3,7 @@
 // that can be found in the LICENSE file at the root of the
 // Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
+#include "ClientTest.h"
 #include "CustomElements.h"
 #include "Log.h"
 
@@ -217,5 +218,5 @@ void TestAnimatedImages::scalesAnimatedGifWithoutStoppingAnimation() {
 	QCOMPARE(document->findChildren< QMovie * >().size(), 1);
 }
 
-QTEST_MAIN(TestAnimatedImages)
+MUMBLE_CLIENT_TEST_MAIN(TestAnimatedImages)
 #include "TestAnimatedImages.moc"
