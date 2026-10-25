@@ -74,7 +74,7 @@ jobs:
         with:
           key: preview.windows.${{ github.base_ref || github.ref_name }}
           max-size: 1G
-          save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          save: ${{ github.event_name != 'pull_request' }}
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
@@ -168,7 +168,7 @@ jobs:
           # Migrate away from the legacy fixed key, which masks newer snapshots.
           key: preview.v2.macos.${{ github.base_ref || github.ref_name }}
           restore-keys: preview.macos.${{ github.base_ref || github.ref_name }}
-          save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          save: ${{ github.event_name != 'pull_request' }}
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
@@ -417,7 +417,7 @@ jobs:
         with:
           key: preview.v2.ubuntu.${{ github.base_ref || github.ref_name }}
           restore-keys: preview.ubuntu.${{ github.base_ref || github.ref_name }}
-          save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          save: ${{ github.event_name != 'pull_request' }}
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies

@@ -53,6 +53,8 @@ emits a `-Wstringop-overflow` diagnostic for `AudioOutputCache::loadFrom` in Rel
 unity builds, which fails the warnings-as-errors check. Builds on `master`, manual
 CI builds, and preview installers also retain LTO. CodeQL builds disable LTO
 because their executables are only used for analysis.
+Windows/macOS server LTO-specific checks therefore run on `master` and manual CI
+builds rather than before merging a pull request.
 
 CI and preview installers run two CTest suites at a time. To use the same test
 scheduling locally, run:
@@ -65,11 +67,17 @@ CTEST_PARALLEL_LEVEL=2 .github/workflows/test.sh build Debug
 reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
 that uses that database. Other tests use separate fixtures or temporary storage.
 
-Compiler caches restore from the pull request's base branch. Same-repository
-pull requests also save snapshots scoped to their own merge ref so subsequent
-pushes can reuse newly compiled objects. Fork pull requests only restore caches.
-Snapshots use timestamped keys so successful builds can refresh them; the
-dependency archive caches remain keyed by their dependency versions.
+Compiler caches restore from the pull request's base branch. Windows/macOS PR
+verification uses different compiler flags from LTO-enabled `master` builds, so
+the first push cannot reuse those compiled objects. Fork PRs remain restore-only.
+Only same-repository Windows CI jobs save PR-specific snapshots for later pushes;
+other PR jobs restore caches without saving, reducing cache storage pressure.
+Windows PR caches are limited to 1 GB, while non-PR Windows CI caches allow 2 GB.
+The cleanup workflow deletes merge-ref caches when a same-repository PR closes.
+
+Cache-saving jobs use timestamped keys and can save after failed or cancelled
+runs, allowing later builds to reuse completed compilations. Dependency archive
+caches remain keyed by their dependency versions.
 The macOS/Linux preview compiler keys use a new version prefix so older fixed-key
 snapshots cannot mask refreshed caches. Those old keys remain restore fallbacks
 for the first build after migration.

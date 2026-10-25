@@ -108,10 +108,10 @@ jobs:
     - uses: hendrikmuhs/ccache-action@v1.2.24
       with:
         key: ${{ github.base_ref || github.ref_name }}_${{ matrix.os }}_${{ matrix.type }}.${{ matrix.compiler }}.${{ matrix.arch }}
-        max-size: ${{ startsWith(matrix.os, 'windows') && '2G' || '500M' }}
-        # Same-repository PRs can reuse their own non-LTO objects on later pushes.
-        # GitHub scopes those snapshots to the PR merge ref, away from master.
-        save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        max-size: ${{ startsWith(matrix.os, 'windows') && (github.event_name == 'pull_request' && '1G' || '2G') || '500M' }}
+        # Limit PR snapshots to Windows CI to reduce repository cache eviction.
+        # These non-LTO objects can be reused on later pushes to the same PR.
+        save: ${{ github.event_name != 'pull_request' || (startsWith(matrix.os, 'windows') && github.event.pull_request.head.repo.full_name == github.repository) }}
 
     - uses: ./.github/actions/install-dependencies
       with:
