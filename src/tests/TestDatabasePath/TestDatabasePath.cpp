@@ -1,5 +1,6 @@
 // Copyright The Mumble Developers. All rights reserved.
 // BSD-style license: see LICENSE at the source root.
+#include "ClientTest.h"
 #include "Database.h"
 #include "Logger.h"
 #include "Global.h"
@@ -85,7 +86,7 @@ private slots:
 		QVERIFY(!unselectedHash.isEmpty());
 		QProcess child;
 		child.start(QCoreApplication::applicationFilePath(),
-					{ "-platform", "offscreen", "--database-child", root.path(), mode });
+					clientTestArguments({ "-platform", "offscreen", "--database-child", root.path(), mode }));
 		QVERIFY(child.waitForStarted());
 		QVERIFY(child.waitForFinished(10000));
 		QCOMPARE(child.exitStatus(), QProcess::NormalExit);
@@ -114,7 +115,7 @@ private slots:
 		environment.insert("QT_FORCE_STDERR_LOGGING", "1");
 		child.setProcessEnvironment(environment);
 		child.start(QCoreApplication::applicationFilePath(),
-					{ "-platform", "offscreen", "--database-child", root.path(), mode });
+					clientTestArguments({ "-platform", "offscreen", "--database-child", root.path(), mode }));
 		QVERIFY(child.waitForStarted());
 		QVERIFY(child.waitForFinished(10000));
 		if (mode == "directory-app-logger") {

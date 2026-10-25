@@ -63,6 +63,14 @@ scheduling locally, run:
 CTEST_PARALLEL_LEVEL=2 .github/workflows/test.sh build Debug
 ```
 
+The suites that use the full client library share the `mumble-client-tests`
+executable, avoiding repeated client LTO links. CTest still starts a separate
+process for every suite, with the same names, timeouts and fixtures. Build that
+executable with `cmake --build build --target mumble-client-tests`; run an
+individual suite with `ctest --test-dir build -R '^TestAudioWizard$'` or
+`build/tests/mumble-client-tests TestAudioWizard -platform offscreen`.
+Use `build/tests/mumble-client-tests --list` to list the compiled suites.
+
 `TestDatabase` and `TestServerDatabase` share a CTest resource lock because they
 reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
 that uses that database. Other tests use separate fixtures or temporary storage.

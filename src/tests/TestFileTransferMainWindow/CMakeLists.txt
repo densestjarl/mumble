@@ -1,11 +1,9 @@
 # Copyright The Mumble Developers. All rights reserved.
 # BSD-style license: see LICENSE at the source root.
-add_executable(TestFileTransferMainWindow TestFileTransferMainWindow.cpp
+mumble_add_client_test(TestFileTransferMainWindow TestFileTransferMainWindow.cpp
 	"${CMAKE_SOURCE_DIR}/themes/DefaultTheme.qrc")
-set_target_properties(TestFileTransferMainWindow PROPERTIES AUTOMOC ON AUTORCC ON)
-target_include_directories(TestFileTransferMainWindow PRIVATE "${CMAKE_SOURCE_DIR}/src/mumble")
-target_link_libraries(TestFileTransferMainWindow PRIVATE mumble_client_lib Qt6::Test)
-add_test(NAME TestFileTransferMainWindow COMMAND $<TARGET_FILE:TestFileTransferMainWindow> -platform offscreen)
+set_target_properties(TestFileTransferMainWindow PROPERTIES AUTORCC ON)
+add_test(NAME TestFileTransferMainWindow COMMAND $<TARGET_FILE:mumble-client-tests> TestFileTransferMainWindow -platform offscreen)
 # Four TLS rows allow 193s each for bounded startup, transfer and cleanup,
 # plus the 30s document row and fixture preparation/scheduling headroom.
 set_tests_properties(TestFileTransferMainWindow PROPERTIES TIMEOUT 900 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")

@@ -1,5 +1,6 @@
 // Copyright The Mumble Developers. All rights reserved.
 // BSD-style license: see LICENSE at the source root.
+#include "ClientTest.h"
 #include "CustomElements.h"
 #include "JSONSerialization.h"
 #include "Log.h"
@@ -85,8 +86,9 @@ class TestFileTransferUi : public QObject {
 private slots:
 	void fileCardDocumentLayoutCompletes() {
 		QProcess child;
-		child.start(QCoreApplication::applicationFilePath(), { QStringLiteral("-platform"), QStringLiteral("offscreen"),
-															   QStringLiteral("--file-card-layout-child") });
+		child.start(QCoreApplication::applicationFilePath(),
+					clientTestArguments({ QStringLiteral("-platform"), QStringLiteral("offscreen"),
+										  QStringLiteral("--file-card-layout-child") }));
 		QVERIFY(child.waitForStarted());
 		const bool finished = child.waitForFinished(10000);
 		if (!finished) {

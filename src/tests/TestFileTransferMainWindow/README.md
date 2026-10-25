@@ -30,7 +30,7 @@ not an Explorer/OLE drag performed with physical input.
 Build and run through CTest:
 
 ```text
-cmake --build <build> --target TestFileTransferMainWindow
+cmake --build <build> --target mumble-client-tests
 ctest --test-dir <build> -R ^TestFileTransferMainWindow$ --output-on-failure
 ```
 
@@ -45,11 +45,11 @@ CTest uses the offscreen Qt platform. For the native Windows Qt platform, run
 from the build directory with the same runtime DLL search path used by CTest:
 
 ```text
-.\tests\TestFileTransferMainWindow.exe -platform windows -o mainwindow-windows.txt,txt
+.\tests\mumble-client-tests.exe TestFileTransferMainWindow -platform windows -o mainwindow-windows.txt,txt
 ```
 
-Windows GUI executables require the explicit QtTest output file to retain the
-report reliably. Children inherit the parent's Qt platform. Set
+The explicit QtTest output file retains the report for later inspection.
+Children inherit the parent's Qt platform. Set
 `MUMBLE_TEST_FT_CONTACT_DELAY_MS=15000` to leave each safety-number dialog open for
 15 seconds before the test accepts it; the supported range is zero to 20000 ms.
 

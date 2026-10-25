@@ -27,16 +27,13 @@ add_custom_command(
 		"${CMAKE_SOURCE_DIR}/src/mumble/JSONSerialization.h"
 )
 
-add_executable(TestSettingsJSONSerialization "${TEST_CASE_SOURCE_FILE}")
-target_link_libraries(TestSettingsJSONSerialization PRIVATE mumble_client_lib)
-target_link_libraries(TestSettingsJSONSerialization PRIVATE Qt6::Test)
-
-set_target_properties(TestSettingsJSONSerialization PROPERTIES AUTOMOC ON)
-
+mumble_add_client_test(TestSettingsJSONSerialization "${TEST_CASE_SOURCE_FILE}")
 
 add_test(
 	NAME TestSettingsJSONSerialization
-	COMMAND $<TARGET_FILE:TestSettingsJSONSerialization>
+	COMMAND $<TARGET_FILE:mumble-client-tests> TestSettingsJSONSerialization
 	# Specifying the working directory is necessary, to make sure the dependent DLLs are found (on Windows)
 	WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+
+mumble_client_test_runtime(TestSettingsJSONSerialization)
