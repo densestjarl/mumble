@@ -65,7 +65,6 @@ private slots:
 	void missingReceiptReportsPartialDelivery();
 	void peerResetKeepsUnrelatedReadyFileAndRetiresPrompt();
 	void initTestCase();
-	void cleanupTestCase();
 
 	void privateReceiveStorage_data();
 	void privateReceiveStorage();
@@ -131,9 +130,6 @@ void TestFileTransferEngine::initTestCase() {
 	m_bob	= makeIdentity();
 	m_aliceFp = PQFT::identityFingerprint(m_alice.publicKey);
 	m_bobFp   = PQFT::identityFingerprint(m_bob.publicKey);
-}
-
-void TestFileTransferEngine::cleanupTestCase() {
 }
 
 void TestFileTransferEngine::cancelledPromptTimerCannotRemoveReplacementHandshake_data() {
@@ -1124,11 +1120,10 @@ void TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive() {
 		engine.onDataMessage(AliceSession, PQFT::randomBytes(PQFT::TransferIdSize), 0, 1, QByteArray(100, 'x'));
 	});
 	flood.start(10);
-	// The pending receive allows handshake plus two verification windows (300 ms
-	// here). Stray chunks must not extend that; if they did, it would never fail.
-	// The generous wait only absorbs slow CI runners.
+	// The pending budget includes two verification windows. Keep flooding while
+	// awaiting expiry, allowing for delayed timer delivery on busy CI runners.
 	QTRY_VERIFY2_WITH_TIMEOUT(sawState(updates, {}, PQFT::FTTransferInfo::State::Failed),
-							  "Stray chunks kept an unfinished handshake alive", 3000);
+							  "Stray chunks kept an unfinished handshake alive", 1500);
 }
 
 void TestFileTransferEngine::selectedPinSurvivesCacheRemoval() {

@@ -45,6 +45,54 @@ for a given commit, feel free to fallback to ``0``. There is also a [Python scri
 to perform this HTTP request automatically.
 
 
+## CI build and test settings
+
+The CI workflow disables link-time optimization (LTO) for Windows and macOS
+pull-request verification builds. GCC verification retains LTO: GCC 13 otherwise
+emits a `-Wstringop-overflow` diagnostic for `AudioOutputCache::loadFrom` in Release
+unity builds, which fails the warnings-as-errors check. Builds on `master`, manual
+CI builds, and preview installers also retain LTO. CodeQL builds disable LTO
+because their executables are only used for analysis.
+Windows/macOS server LTO-specific checks therefore run on `master` and manual CI
+builds rather than before merging a pull request.
+
+CI and preview installers run two CTest suites at a time. To use the same test
+scheduling locally, run:
+
+```sh
+CTEST_PARALLEL_LEVEL=2 .github/workflows/test.sh build Debug
+```
+
+The suites that use the full client library share the `TestGuiRunner`
+executable, avoiding repeated client LTO links. CTest still starts a separate
+process for every suite, with the same names, timeouts and fixtures. Build that
+executable with `cmake --build build --target TestGuiRunner`; run an
+individual suite with `ctest --test-dir build -R '^TestAudioWizard$'` or
+`build/tests/TestGuiRunner TestAudioWizard -platform offscreen`.
+Use `build/tests/TestGuiRunner --list` to list the compiled suites.
+
+The end-to-end file-transfer and server-database suites have explicit CTest costs
+so fresh CI runners start the longest work first when running tests in parallel.
+
+`TestDatabase` and `TestServerDatabase` share a CTest resource lock because they
+reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
+that uses that database. Other tests use separate fixtures or temporary storage.
+
+Compiler caches restore from the pull request's base branch. Windows/macOS PR
+verification uses different compiler flags from LTO-enabled `master` builds, so
+the first push cannot reuse those compiled objects. Fork PRs remain restore-only.
+Only same-repository Windows CI jobs save PR-specific snapshots for later pushes;
+other PR jobs restore caches without saving, reducing cache storage pressure.
+Windows PR caches are limited to 1 GB, while non-PR Windows CI caches allow 2 GB.
+The cleanup workflow deletes merge-ref caches when a same-repository PR closes.
+
+Cache-saving jobs use timestamped keys and can save after failed or cancelled
+runs, allowing later builds to reuse completed compilations. Dependency archive
+caches remain keyed by their dependency versions.
+The macOS/Linux preview compiler keys use a new version prefix so older fixed-key
+snapshots cannot mask refreshed caches. Those old keys remain restore fallbacks
+for the first build after migration.
+
 ## Specific Instructions
 
 In order to actually build Mumble, you can follow one of the following instruction sets:

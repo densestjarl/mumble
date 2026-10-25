@@ -41,4 +41,6 @@ target_compile_definitions(TestFileTransferE2E PRIVATE
 )
 
 add_test(NAME TestFileTransferE2E COMMAND $<TARGET_FILE:TestFileTransferE2E>)
-set_tests_properties(TestFileTransferE2E PROPERTIES TIMEOUT 600)
+# Hosted runners start without CTest timing history. Start this long suite first
+# so shorter suites can fill the other parallel slot while its transfers run.
+set_tests_properties(TestFileTransferE2E PROPERTIES TIMEOUT 600 COST 300)

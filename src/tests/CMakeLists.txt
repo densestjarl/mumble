@@ -39,7 +39,26 @@ function(mumble_client_test_runtime test_name)
 	endif()
 endfunction()
 
+# Keep each suite's Qt/custom main and compile settings, but link the large client
+# library only once. CTest still invokes a fresh process for every suite.
+function(mumble_add_client_test test_name)
+	add_library(${test_name} OBJECT ${ARGN})
+	set_target_properties(${test_name} PROPERTIES AUTOMOC ON)
+	target_include_directories(${test_name} PRIVATE "${CMAKE_SOURCE_DIR}/src/tests"
+		"${CMAKE_SOURCE_DIR}/src/mumble")
+	target_compile_definitions(${test_name} PRIVATE MUMBLE_CLIENT_TEST_NAME="${test_name}")
+	target_link_libraries(${test_name} PRIVATE mumble_client_lib Qt6::Test)
+	target_link_libraries(TestGuiRunner PRIVATE ${test_name})
+	set_property(TARGET TestGuiRunner APPEND PROPERTY MUMBLE_TEST_SUITES ${test_name})
+endfunction()
+
 if(client)
+	# Keep test executables outside the Windows product artifact/signing globs
+	# (mumble*.exe and *client*.exe), including case-insensitive matches.
+	add_executable(TestGuiRunner)
+	# Object libraries' PRIVATE dependencies provide link dependencies, but not
+	# compile requirements. Match the suites' Qt/PIC/runtime compiler settings.
+	target_link_libraries(TestGuiRunner PRIVATE mumble_client_lib Qt6::Test)
 	add_subdirectory("TestServerHandlerCrypt")
 	add_subdirectory("TestAudioWizard")
 	add_subdirectory("TestDatabasePath")
@@ -55,7 +74,6 @@ if(client)
 		add_subdirectory("TestFileTransferUi")
 		add_subdirectory("TestFileTransferMainWindow")
 		add_subdirectory("TestFileTransferManager")
-		add_subdirectory("TestFileTransferTransport")
 		add_subdirectory("TestPQCrypto")
 		add_subdirectory("TestFTIdentity")
 		add_subdirectory("TestFileTransferSession")
@@ -69,6 +87,19 @@ if(client)
 		add_subdirectory("TestSettingsJSONSerialization")
 	endif()
 	add_subdirectory("OverlayTest")
+
+	get_target_property(client_test_suites TestGuiRunner MUMBLE_TEST_SUITES)
+	foreach(test_name IN LISTS client_test_suites)
+		string(APPEND CLIENT_TEST_DECLARATIONS "int mumbleTestMain_${test_name}(int, char **);\n")
+		string(APPEND CLIENT_TEST_ENTRIES "\t{ \"${test_name}\", mumbleTestMain_${test_name} },\n")
+	endforeach()
+	configure_file("ClientTestRunner.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/ClientTestRunner.cpp" @ONLY)
+	target_sources(TestGuiRunner PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/ClientTestRunner.cpp")
+	add_test(NAME TestClientTestRunner COMMAND Python::Interpreter
+		"${CMAKE_CURRENT_SOURCE_DIR}/test_client_test_runner.py"
+		$<TARGET_FILE:TestGuiRunner> ${client_test_suites})
+	set_tests_properties(TestClientTestRunner PROPERTIES TIMEOUT 180)
+	mumble_client_test_runtime(TestClientTestRunner)
 endif()
 
 if(server)

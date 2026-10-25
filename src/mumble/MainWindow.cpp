@@ -266,7 +266,10 @@ MainWindow::MainWindow(QWidget *p)
 	connect(
 		Global::get().fileTransferManager, &FileTransferManager::sendSlotsChanged, this,
 		[this]() { drainFileSendQueue(); }, Qt::QueuedConnection);
+	connect(Global::get().fileTransferManager, &FileTransferManager::availabilityChanged, this,
+			&MainWindow::onFileTransferAvailabilityChanged);
 
+	// startFileSends() explains once when sending is unavailable instead of discarding the drop silently.
 	connect(qteChat, &ChatbarTextEdit::fileDropRequested, this,
 			[this](const QStringList &paths) { startFileSends(paths); });
 
@@ -290,7 +293,7 @@ MainWindow::MainWindow(QWidget *p)
 
 	qtbSendFile->setIcon(
 		QIcon::fromTheme(QStringLiteral("mail-attachment"), QIcon::fromTheme(QStringLiteral("attach"))));
-	qtbSendFile->setToolTip(tr("Send files to the channel"));
+	updateFileTransferAvailability();
 #else
 	qtbSendFile->hide();
 #endif
@@ -3771,7 +3774,12 @@ void MainWindow::serverConnected() {
 	Global::get().uiMaxUsers      = 0;
 
 	enableRecording(true);
-	qaScreenShare->setEnabled(true);
+	// Official servers do not relay video or files. Wait for an explicit capability announcement.
+	m_videoRelaySupported = false;
+	updateScreenShareAvailability();
+#ifdef USE_FILE_SHARING
+	updateFileTransferAvailability();
+#endif
 
 	if (Global::get().s.bMute || Global::get().s.bDeaf) {
 		Global::get().sh->setSelfMuteDeafState(Global::get().s.bMute, Global::get().s.bDeaf);
@@ -3895,7 +3903,11 @@ void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString re
 
 	// We can't record or share screen without a server, so disable that functionality here
 	enableRecording(false);
-	qaScreenShare->setEnabled(false);
+	m_videoRelaySupported = false;
+	updateScreenShareAvailability();
+#ifdef USE_FILE_SHARING
+	updateFileTransferAvailability();
+#endif
 	if (Global::get().sc && Global::get().sc->isCapturing()) {
 		Global::get().sc->stopCapture();
 	}
@@ -4379,12 +4391,31 @@ void MainWindow::recording() {
 	}
 }
 
+void MainWindow::updateScreenShareAvailability() {
+	const bool sharing = Global::get().sc && Global::get().sc->isCapturing();
+	// An active share must stay stoppable; it keeps its "Stop sharing" text and tooltip.
+	qaScreenShare->setEnabled(m_videoRelaySupported || sharing);
+	if (sharing) {
+		return;
+	}
+	const QString tip = m_videoRelaySupported ? tr("Share a camera, screen, or window with your channel")
+											  : tr("Video sharing needs a server that relays video. Official "
+												   "Mumble servers and older servers of this fork do not.");
+	qaScreenShare->setToolTip(tip);
+	qaScreenShare->setStatusTip(tip);
+}
+
 void MainWindow::screenShare() {
 	ClientUser *p = ClientUser::get(Global::get().uiSession);
 	if (!p || !Global::get().sh)
 		return;
 
 	const bool currentlySharing = Global::get().sc && Global::get().sc->isCapturing();
+	// Stopping is always allowed; starting requires a server that relays video.
+	if (!currentlySharing && !m_videoRelaySupported) {
+		qaScreenShare->setChecked(false);
+		return;
+	}
 
 	if (!currentlySharing) {
 		if (!Global::get().sc) {
@@ -4538,7 +4569,7 @@ void MainWindow::onRemoteFrameDecoded(quint32 senderSession, QImage frame) {
 	if (m_activeVideoDisplayMode == VideoDisplayMode::SeparateWindows) {
 		ScreenShareWindow *window = m_screenShareWindows.value(senderSession);
 		if (!window) {
-			window = new ScreenShareWindow(senderSession, name, this);
+			window = new ScreenShareWindow(name, this);
 			m_screenShareWindows.insert(senderSession, window);
 		}
 		window->updateFrame(frame);
@@ -4555,12 +4586,11 @@ void MainWindow::on_qaUserViewScreenShare_triggered() {
 	if (m_activeVideoDisplayMode == VideoDisplayMode::SeparateWindows) {
 		ScreenShareWindow *window = m_screenShareWindows.value(p->uiSession);
 		if (!window) {
-			window = new ScreenShareWindow(p->uiSession, p->qsName, this);
+			window = new ScreenShareWindow(p->qsName, this);
 			m_screenShareWindows.insert(p->uiSession, window);
 		}
 		window->showAndRefresh();
 	} else {
-		// Clears the dismissed flag and opens one gallery containing every active shared video.
 		m_screenShareViewer->showAndRefresh(p->uiSession, p->qsName);
 	}
 }
@@ -4580,7 +4610,7 @@ void MainWindow::onSelfShareStopped() {
 	m_videoPacketPacer.reset();
 	m_videoPacerConnectionId = 0;
 	qaScreenShare->setText(tr("Share vi&deo…"));
-	qaScreenShare->setToolTip(tr("Share a camera, screen, or window with your channel"));
+	updateScreenShareAvailability();
 	// Single funnel for every way the local share can end: the user toggling Share Screen off,
 	// a mid-share capture/encoder failure (whose error paths bypass the toggle logic), and
 	// disconnect-triggered stops. Everything that tracked the share is reset here.
@@ -4646,7 +4676,7 @@ void MainWindow::applyVideoDisplayMode() {
 		const QList< ScreenShareViewer::StreamInfo > streams = m_screenShareViewer->streams();
 		const bool galleryVisible = m_screenShareViewer->isVisible();
 		for (const ScreenShareViewer::StreamInfo &stream : streams) {
-			ScreenShareWindow *window = new ScreenShareWindow(stream.session, stream.name, this);
+			ScreenShareWindow *window = new ScreenShareWindow(stream.name, this);
 			// A null frame leaves the window on its placeholder, exactly like a tile
 			// that has not seen its first frame yet.
 			window->updateFrame(stream.frame);
@@ -5096,15 +5126,50 @@ void MainWindow::requestFilePassword(const PQFT::FTTransferInfo &info, bool focu
 		m_filePasswordBar->focusTransfer(info.transferId);
 }
 
+bool MainWindow::ensureFileSendAvailable() {
+	auto *manager = Global::get().fileTransferManager;
+	if (!manager) {
+		return false;
+	}
+	if (!manager->sendingAvailable()) {
+		QMessageBox::information(this, tr("File transfer"), manager->sendAvailabilityError());
+		return false;
+	}
+	return true;
+}
+
+void MainWindow::updateFileTransferAvailability() {
+	auto *manager        = Global::get().fileTransferManager;
+	const bool available = manager && manager->sendingAvailable();
+	qtbSendFile->setEnabled(available);
+	if (available) {
+		qtbSendFile->setToolTip(tr("Send files to the channel"));
+	} else if (!Global::get().s.bFTEnabled) {
+		qtbSendFile->setToolTip(tr("File transfers are disabled in the File Sharing settings"));
+	} else {
+		qtbSendFile->setToolTip(tr("File sending needs a connected server that relays files. Official Mumble "
+								   "servers and older servers of this fork do not."));
+	}
+}
+
+void MainWindow::onFileTransferAvailabilityChanged(bool available) {
+	updateFileTransferAvailability();
+	// Covers capability configs received after ServerSync and re-enabling the feature
+	// mid-session. A config that precedes ServerSync is handled in msgServerSync().
+	if (available && Global::get().uiSession != 0) {
+		bootstrapFileTransferIdentity();
+	}
+}
+
 void MainWindow::startFileSend(const QString &path) {
 	startFileSends(QStringList{ path });
 }
 
 void MainWindow::startFileSends(const QStringList &paths) {
-	auto *manager = Global::get().fileTransferManager;
-	if (!manager || paths.isEmpty()) {
+	if (paths.isEmpty() || !ensureFileSendAvailable()) {
 		return;
 	}
+	auto *manager = Global::get().fileTransferManager;
 	if (!manager->hasUsableIdentity()) {
 		// Device-protected identities unlock silently; only a passphrase asks.
 		if (!promptForFileTransferIdentity()) {
@@ -5247,10 +5312,13 @@ void MainWindow::clearFileSendQueue() {
 }
 
 void MainWindow::bootstrapFileTransferIdentity() {
+	if (!Global::get().s.bFTEnabled) {
+		return;
+	}
 	// Runs on every ServerSync. Identities protected by the device key unlock
 	// (or are created) silently. Only a passphrase the user chose asks, and
 	// only once per launch: declining must not disable later sends, which ask
-	// again. The capability announcement must run for EVERY ServerSync - a
+	// again. The capability announcement must run for EVERY connection - a
 	// reconnected client that stays silent is invisible to other senders and
 	// the relay drops its chunks.
 	static bool prompted = false;
