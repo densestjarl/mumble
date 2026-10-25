@@ -27,6 +27,7 @@ FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent) {
 		PQFT::FileTransferIdentity::ensureSchema(connection);
 		m_identity   = std::make_unique< FileTransferIdentity >(connection);
 		m_trustStore = std::make_unique< PeerTrustStore >(connection);
+		applyUpgradeTrustDefault();
 	}
 
 	m_workerThread = std::make_unique< QThread >(this);
@@ -138,6 +139,15 @@ void FileTransferManager::setupEngineTransports() {
 						}
 						return;
 					}
+					// The engine emits these receive states only after the signed manifest
+					// verified against the session's peer fingerprint, so the pin is never
+					// taken from an unauthenticated M1 claim. Keep this list post-manifest.
+					if (!Global::get().s.bFTRequireVerification && info.error.isEmpty()
+						&& (info.state == PQFT::FTTransferInfo::State::Transferring
+							|| info.state == PQFT::FTTransferInfo::State::WaitingPassword
+							|| info.state == PQFT::FTTransferInfo::State::Ready)
+						&& !adoptFirstUsePin(info))
+						return;
 					if (info.state == PQFT::FTTransferInfo::State::Ready) {
 						QByteArray pinned;
 						const auto state = trustStateForTransfer(info, pinned);
@@ -220,6 +230,27 @@ void FileTransferManager::setupEngineTransports() {
 						m_pinCache.insert(peerSession, fingerprint);
 						m_unavailablePeers.remove(peerSession);
 					}
+					resume(true);
+					return;
+				}
+				if (!Global::get().s.bFTRequireVerification) {
+					// Trust on first use: no prompt. Verification stays available from the
+					// user menu, and a later key change is still hard-blocked.
+					if (sending) {
+						// M4 proved the recipient holds this key, so it can be pinned now.
+						const auto pinned = m_trustStore->checkAndPin(digest, capturedName, fingerprint, safety);
+						if (pinned != PQFT::TrustState::Pinned && pinned != PQFT::TrustState::Verified) {
+							resume(false);
+							if (pinned == PQFT::TrustState::Changed)
+								emit peerBlocked(peerSession, capturedName);
+							return;
+						}
+						QMutexLocker lock(&m_pinCacheMutex);
+						m_pinCache.insert(peerSession, fingerprint);
+						m_unavailablePeers.remove(peerSession);
+					}
+					// Receiving: the M1 key is only a claim. Let the handshake run and pin
+					// once the sender's signed manifest has been verified (adoptFirstUsePin).
 					resume(true);
 					return;
 				}
@@ -520,6 +551,14 @@ QList< FileTransferManager::SendRecipient >
 	return recipients;
 }
 
+bool FileTransferManager::hasPendingSendTo(unsigned int session) const {
+	for (const auto &active : m_sendSelections)
+		for (const SendRecipient &existing : active)
+			if (existing.session == session)
+				return true;
+	return false;
+}
+
 bool FileTransferManager::sendRecipientStillCurrent(const SendRecipient &recipient) const {
 	const auto current = sendRecipient(recipient.session);
 	return current && current->user == recipient.user && current->name == recipient.name
@@ -583,7 +622,10 @@ bool FileTransferManager::startSend(const QString &filePath, const QString &mime
 		m_engine,
 		[this, path, mime, pwMode, pw, sessions, names, sendContext]() {
 			if (!m_engine->startSend(path, mime, pwMode, pw, sessions, names, sendContext))
-				forwardEngineEvent([this, sendContext]() { m_sendSelections.remove(sendContext); });
+				forwardEngineEvent([this, sendContext]() {
+					m_sendSelections.remove(sendContext);
+					emit sendSlotsChanged();
+				});
 		},
 		Qt::QueuedConnection);
 	return true;
@@ -688,7 +730,8 @@ bool FileTransferManager::resetPeerTrust(const SendRecipient &shown) {
 		|| !m_trustStore->removePin(shown.serverDigest, shown.name, shown.fingerprint))
 		return false;
 	// An explicit reset never adopts the observed replacement key. The next handshake
-	// must complete mandatory safety-number verification before any file content.
+	// starts over as a first contact (trust on first use, or the safety-number
+	// dialog when verification is required).
 	refreshPinCache();
 	for (auto it = m_contactRequests.begin(); it != m_contactRequests.end();) {
 		if (it->peerSession == shown.session) {
@@ -701,6 +744,52 @@ bool FileTransferManager::resetPeerTrust(const SendRecipient &shown) {
 	QMetaObject::invokeMethod(
 		m_engine, [this, session = shown.session]() { m_engine->abortPeer(session); }, Qt::QueuedConnection);
 	return true;
+}
+
+bool FileTransferManager::markPeerVerified(const SendRecipient &shown) {
+	if (!m_trustStore || shown.fingerprint.size() != PQFT::HashSize || !sendRecipientStillCurrent(shown)
+		|| !m_trustStore->markVerified(shown.serverDigest, shown.name, shown.fingerprint))
+		return false;
+	refreshPinCache();
+	return true;
+}
+
+void FileTransferManager::applyUpgradeTrustDefault() {
+	Settings &settings = Global::get().s;
+	if (settings.bFTTrustDefaultMigrated || !m_identity || !m_trustStore)
+		return;
+	// Older builds always compared safety numbers before a first transfer. Users
+	// who already have a key or saved contacts keep that; new profiles get trust
+	// on first use. Either way the user can change it in Settings.
+	if (m_identity->hasIdentity() || !m_trustStore->list().isEmpty()) {
+		settings.bFTRequireVerification = true;
+		qInfo("FileTransferManager: existing file-sharing profile, keeping safety-number verification on");
+	}
+	settings.bFTTrustDefaultMigrated = true;
+}
+
+bool FileTransferManager::adoptFirstUsePin(const PQFT::FTTransferInfo &info) {
+	QByteArray pinned;
+	if (trustStateForTransfer(info, pinned) != PQFT::TrustState::NewPeer)
+		return true; // An existing pin is checked again before the file can be saved.
+	const QByteArray digest = serverDigest();
+	if (!m_trustStore || !m_identity || !m_identity->isUnlocked() || digest.isEmpty() || info.peerName.isEmpty()
+		|| info.peerFingerprint.size() != PQFT::HashSize)
+		return true; // Without a pin the Ready check rejects the file.
+	// The manifest signature proved the sender holds this key: pin it unverified.
+	const auto state = m_trustStore->checkAndPin(digest, info.peerName, info.peerFingerprint,
+												 PQFT::safetyNumber(m_identity->fingerprint(), info.peerFingerprint));
+	if (state == PQFT::TrustState::Pinned || state == PQFT::TrustState::Verified) {
+		const ClientUser *user = ClientUser::get(info.peerSession);
+		if (user && user->qsName == info.peerName) {
+			QMutexLocker lock(&m_pinCacheMutex);
+			m_pinCache.insert(info.peerSession, info.peerFingerprint);
+			m_unavailablePeers.remove(info.peerSession);
+		}
+		return true;
+	}
+	rejectReceive(info, state);
+	return false;
 }
 
 bool FileTransferManager::pinPeer(unsigned int peerSession, const QByteArray &shownFingerprint, bool verified) {
@@ -783,8 +872,26 @@ void FileTransferManager::resetTransfers() {
 	m_peerNameCache.clear();
 }
 
+void FileTransferManager::updateVerifiedNames(const QByteArray &digest) {
+	QSet< QString > verified;
+	if (m_trustStore && !digest.isEmpty()) {
+		for (const PQFT::PinnedPeer &peer : m_trustStore->list())
+			if (peer.verified && peer.serverDigest == digest)
+				verified.insert(peer.username);
+	}
+	if (verified != m_verifiedNames) {
+		m_verifiedNames = std::move(verified);
+		emit trustChanged();
+	}
+}
+
+bool FileTransferManager::isVerifiedPeer(const ClientUser *user) const {
+	return user && user->bFileTransferCapable && m_verifiedNames.contains(user->qsName);
+}
+
 void FileTransferManager::refreshPinCache() {
 	if (!m_trustStore || !m_identity) {
+		updateVerifiedNames(QByteArray());
 		QMutexLocker lock(&m_pinCacheMutex);
 		m_pinCache.clear();
 		m_peerNameCache.clear();
@@ -793,6 +900,7 @@ void FileTransferManager::refreshPinCache() {
 	// Re-apply limits whenever the world changes; cheap and idempotent
 	applyEngineConfig();
 	const QByteArray digest = serverDigest();
+	updateVerifiedNames(digest);
 	if (digest.isEmpty()) {
 		QMutexLocker lock(&m_pinCacheMutex);
 		m_pinCache.clear();
