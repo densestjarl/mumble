@@ -32,6 +32,8 @@ public:
 	/// Creates a sink attached to the running audio output.
 	/// @return The sink, or nullptr if no audio output is running
 	static ChatVideoMixerSink *create(QObject *parent);
+	/// A replacement output is running but has not published its mixer rate yet
+	static bool isOutputInitializing();
 	~ChatVideoMixerSink() override;
 
 	/// Sample rate the source PCM (S16LE stereo) has to be provided in

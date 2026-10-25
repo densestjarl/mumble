@@ -1152,6 +1152,7 @@ void WASAPIOutput::run() {
 		pAudioClient->GetBufferSize(&bufferFrameCount);
 		qWarning("WASAPIOutput: Stream Latency %lld (%d)", latency, bufferFrameCount);
 
+		setBufferSize(bufferFrameCount);
 		iMixerFreq = pwfx->nSamplesPerSec;
 
 		qWarning("WASAPIOutput: Periods %lldus %lldus (latency %lldus)", def / 10LL, min / 10LL, latency / 10LL);

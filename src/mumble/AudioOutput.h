@@ -15,6 +15,7 @@
 #	include "ManualPlugin.h"
 #endif
 
+#include <atomic>
 #include <memory>
 
 #ifndef SPEAKER_FRONT_LEFT
@@ -93,7 +94,7 @@ protected:
 	volatile unsigned int iMixerFreq                = 0;
 	unsigned int iChannels                          = 0;
 	unsigned int iSampleSize                        = 0;
-	unsigned int iBufferSize                        = 0;
+	std::atomic< unsigned int > iBufferSize{ 0 };
 	QReadWriteLock qrwlOutputs;
 	QMultiHash< const ClientUser *, AudioOutputBuffer * > qmOutputs;
 
@@ -133,6 +134,8 @@ public:
 	const float *getSpeakerPos(unsigned int &nspeakers);
 	static float calcGain(float dotproduct, float distance);
 	unsigned int getMixerFreq() const;
+	/// Backend-reported size used to preallocate sample buffers
+	unsigned int getBufferSize() const;
 	void setBufferSize(unsigned int bufferSize);
 	void setBufferPosition(const AudioOutputToken &, float x, float y, float z);
 	void invalidateToken(const AudioOutputToken &);

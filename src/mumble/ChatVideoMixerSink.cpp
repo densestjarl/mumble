@@ -42,16 +42,18 @@ namespace {
 constexpr unsigned int MIXER_CHANNELS  = 2;
 constexpr qint64 MIXER_BYTES_PER_FRAME = MIXER_CHANNELS * static_cast< qint64 >(sizeof(qint16));
 constexpr float MIXER_S16_TO_FLOAT     = 1.0f / 32768.0f;
-/// Frames preallocated so the audio thread normally never allocates
+/// Fallback headroom for backends that do not report a maximum buffer size
 constexpr unsigned int MIXER_PREALLOC_FRAMES = 4800;
 
 class ChatVideoMixerBuffer : public AudioOutputBuffer {
 public:
-	explicit ChatVideoMixerBuffer(std::shared_ptr< ChatVideoMixerShared > shared) : m_shared(std::move(shared)) {
+	ChatVideoMixerBuffer(std::shared_ptr< ChatVideoMixerShared > shared, unsigned int systemMaxBufferSize)
+		: m_shared(std::move(shared)) {
 		bStereo     = true;
 		iBufferSize = 0;
-		resizeBuffer(MIXER_PREALLOC_FRAMES * MIXER_CHANNELS);
-		m_pcm.resize(MIXER_PREALLOC_FRAMES * MIXER_CHANNELS);
+		const unsigned int frames = qMax(MIXER_PREALLOC_FRAMES, systemMaxBufferSize);
+		resizeBuffer(frames * MIXER_CHANNELS);
+		m_pcm.resize(frames * MIXER_CHANNELS);
 	}
 
 	~ChatVideoMixerBuffer() override { m_shared->detached = true; }
@@ -109,10 +111,18 @@ ChatVideoMixerSink *ChatVideoMixerSink::create(QObject *parent) {
 		return nullptr;
 
 	auto shared = std::make_shared< ChatVideoMixerShared >();
-	if (!ao->addSampleBuffer(new ChatVideoMixerBuffer(shared)))
+	if (!ao->addSampleBuffer(new ChatVideoMixerBuffer(shared, ao->getBufferSize())))
 		return nullptr;
 
 	return new ChatVideoMixerSink(std::move(shared), static_cast< int >(rate), parent);
+}
+
+bool ChatVideoMixerSink::isOutputInitializing() {
+	if (!Global::g_global_struct) {
+		return false;
+	}
+	AudioOutputPtr output = Global::get().ao;
+	return output && output->isAlive() && output->getMixerFreq() == 0;
 }
 
 ChatVideoMixerSink::ChatVideoMixerSink(std::shared_ptr< ChatVideoMixerShared > shared, int sampleRate,

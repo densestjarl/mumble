@@ -899,6 +899,10 @@ void AudioOutput::setBufferSize(unsigned int bufferSize) {
 	iBufferSize = bufferSize;
 }
 
+unsigned int AudioOutput::getBufferSize() const {
+	return iBufferSize.load();
+}
+
 bool AudioOutput::supportsTransportRecording() const {
 	return false;
 }
