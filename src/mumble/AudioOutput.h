@@ -15,6 +15,7 @@
 #	include "ManualPlugin.h"
 #endif
 
+#include <atomic>
 #include <memory>
 
 #ifndef SPEAKER_FRONT_LEFT
@@ -93,7 +94,7 @@ protected:
 	volatile unsigned int iMixerFreq                = 0;
 	unsigned int iChannels                          = 0;
 	unsigned int iSampleSize                        = 0;
-	unsigned int iBufferSize                        = 0;
+	std::atomic< unsigned int > iBufferSize{ 0 };
 	QReadWriteLock qrwlOutputs;
 	QMultiHash< const ClientUser *, AudioOutputBuffer * > qmOutputs;
 
@@ -124,11 +125,17 @@ public:
 
 	void addFrameToBuffer(ClientUser *sender, const Mumble::Protocol::AudioData &audioData);
 	AudioOutputToken playSample(const QString &filename, float volume, bool loop = false);
+	/// Mixes an externally fed, non-speech buffer like a sample. Takes ownership:
+	/// the buffer is deleted once its prepareSampleBuffer() returns false, or
+	/// when this output is wiped or destroyed.
+	AudioOutputToken addSampleBuffer(AudioOutputBuffer *buffer);
 	void run() Q_DECL_OVERRIDE = 0;
 	virtual bool isAlive() const;
 	const float *getSpeakerPos(unsigned int &nspeakers);
 	static float calcGain(float dotproduct, float distance);
 	unsigned int getMixerFreq() const;
+	/// Backend-reported size used to preallocate sample buffers
+	unsigned int getBufferSize() const;
 	void setBufferSize(unsigned int bufferSize);
 	void setBufferPosition(const AudioOutputToken &, float x, float y, float z);
 	void invalidateToken(const AudioOutputToken &);

@@ -308,6 +308,15 @@ AudioOutputToken AudioOutput::playSample(const QString &filename, float volume, 
 	return AudioOutputToken(sample);
 }
 
+AudioOutputToken AudioOutput::addSampleBuffer(AudioOutputBuffer *buffer) {
+	if (!buffer)
+		return AudioOutputToken();
+
+	QWriteLocker locker(&qrwlOutputs);
+	qmOutputs.insert(nullptr, buffer);
+	return AudioOutputToken(buffer);
+}
+
 void AudioOutput::initializeMixer(const unsigned int *chanmasks, bool forceheadphone) {
 	delete[] fSpeakers;
 	delete[] bSpeakerPositional;
@@ -888,6 +897,10 @@ unsigned int AudioOutput::getMixerFreq() const {
 
 void AudioOutput::setBufferSize(unsigned int bufferSize) {
 	iBufferSize = bufferSize;
+}
+
+unsigned int AudioOutput::getBufferSize() const {
+	return iBufferSize.load();
 }
 
 bool AudioOutput::supportsTransportRecording() const {

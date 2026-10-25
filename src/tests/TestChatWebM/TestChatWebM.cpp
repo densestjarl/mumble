@@ -10,15 +10,24 @@
 #ifdef USE_CHAT_WEBM
 #	include "ChatVideoDecoder.h"
 #	include "ChatVideoPlayer.h"
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+#		include "AudioOutput.h"
+#		include "AudioOutputBuffer.h"
+#		include "ChatVideoMixerSink.h"
+#		include "QueueWebMFixture.h"
+#	endif
 #endif
 #ifdef USE_CHAT_WEBM_AUDIO
 #	include <QtMultimedia/QAudioSink>
 #endif
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <memory>
 
+#include <QtCore/QCoreApplication>
+#include <QtCore/QEvent>
 #include <QtCore/QIODevice>
 #include <QtCore/QMimeData>
 #include <QtCore/QScopeGuard>
@@ -602,6 +611,25 @@ public:
 	using ChatbarTextEdit::insertFromMimeData;
 };
 
+#ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+// Registers the production mixer buffer through the real sink factory. Tests
+// drive that buffer as an audio backend would, without a device or a thread.
+class TestMixerOutput : public AudioOutput {
+public:
+	explicit TestMixerOutput(unsigned int rate = 48000) { setRate(rate); }
+	void run() override {}
+	bool isAlive() const override { return true; }
+	void setRate(unsigned int rate) { iMixerFreq = rate; }
+	AudioOutputBuffer *sampleBuffer() const { return qmOutputs.value(nullptr); }
+};
+
+QByteArray stereoTestPcm(unsigned int frames) {
+	const qint16 samples[] = { 8192, -16384 };
+	return QByteArray(reinterpret_cast< const char * >(samples), static_cast< qsizetype >(sizeof(samples)))
+		.repeated(static_cast< qsizetype >(frames));
+}
+#endif
+
 QString webmImageHtml(const QByteArray &webm) {
 	return Log::videoToImg(webm, 0);
 }
@@ -687,9 +715,22 @@ private slots:
 	void posterDoesNotAutoplay();
 	void clickTogglesPlayback();
 	void audioPlaybackAdvancesClockAndResumes();
-#ifdef USE_CHAT_WEBM_AUDIO
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+	void audioRefillPreservesUpcomingVideoFrames();
+	void mixerSinkConsumesStereo_data();
+	void mixerSinkConsumesStereo();
+	void mixerSinkReportsDetach();
+	void mixerSinkPreallocatesBackendMaximum();
+#	endif
+#	ifdef USE_CHAT_WEBM_MIXER_AUDIO
+	void mixerRestartWaitsForInitialization_data();
+	void mixerRestartWaitsForInitialization();
+	void mixerRestartTimesOut();
+	void mixerRestartRejectsRateChange();
+#	endif
+#	ifdef USE_CHAT_WEBM_AUDIO
 	void idleAudioRecoveryPreservesQueuedPcm();
-#endif
+#	endif
 	void loopsAfterEnd();
 	void resumeAtClipEndRestartsImmediately();
 	void pauseResumeKeepsFrameSchedule();
@@ -1081,7 +1122,287 @@ void TestChatWebM::audioPlaybackAdvancesClockAndResumes() {
 	document.toggleChatVideo(url);
 }
 
-#ifdef USE_CHAT_WEBM_AUDIO
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+void TestChatWebM::audioRefillPreservesUpcomingVideoFrames() {
+	if (!ChatVideoDecoder::isSupported()) {
+		QSKIP("WebM decoder not available");
+	}
+
+	const QByteArray fixture = queueWebMFixture();
+	const QImage poster      = ChatVideoDecoder::decodePoster(fixture);
+	QVERIFY(!poster.isNull());
+	std::unique_ptr< ChatVideoPlayer > player(
+		ChatVideoPlayer::create(QUrl(QStringLiteral("data:video/webm")), fixture, poster, nullptr));
+	QVERIFY(player);
+	ChatVideoDecoder decoder;
+	QVERIFY(decoder.open(fixture, true));
+	QVERIFY(decoder.decodingAudio());
+
+	// Drive the real decoder and player refill logic without an output device.
+	// A simulated mixer consumes PCM and presentation consumes due frames every
+	// 50 ms, matching the timer cadence observed in the Windows two-client test.
+	player->m_decoder     = &decoder;
+	player->m_state       = ChatVideoPlayer::Playing;
+	player->m_audioSource = new ChatVideoAudioSource(player.get());
+	connect(&decoder, &ChatVideoDecoder::videoFrameDecoded, player.get(), &ChatVideoPlayer::onDecoderVideoFrame);
+	connect(&decoder, &ChatVideoDecoder::audioChunkDecoded, player.get(), &ChatVideoPlayer::onDecoderAudioChunk);
+	connect(&decoder, &ChatVideoDecoder::finished, player.get(), &ChatVideoPlayer::onDecoderFinished);
+	bool releasedBeforeBurstEnd = false;
+	connect(&decoder, &ChatVideoDecoder::videoFrameDecoded, player.get(),
+			[&]() { releasedBeforeBurstEnd |= !player->m_workRequested; });
+	connect(&decoder, &ChatVideoDecoder::audioChunkDecoded, player.get(),
+			[&]() { releasedBeforeBurstEnd |= !player->m_workRequested; });
+	connect(&decoder, &ChatVideoDecoder::workFinished, player.get(), &ChatVideoPlayer::onDecoderWorkFinished);
+
+	QByteArray pcm(9600, '\0'); // 50 ms of S16 stereo at 48 kHz
+	qint64 consumedBytes   = 0;
+	qint64 lastPresentedMs = -1;
+	int presentedFrames    = 0;
+	for (int tick = 0; tick < 60; ++tick) {
+		consumedBytes += player->m_audioSource->take(pcm.data(), pcm.size());
+		const qint64 clockMs = consumedBytes * 1000 / 192000;
+		while (!player->m_videoQueue.isEmpty() && player->m_videoQueue.first().ptsMs <= clockMs) {
+			const qint64 ptsMs = player->m_videoQueue.takeFirst().ptsMs;
+			if (!ChatVideoPlayer::shouldDropFrame(ptsMs, clockMs)) {
+				++presentedFrames;
+				lastPresentedMs = ptsMs;
+			}
+		}
+		player->keepDecoderFed();
+		QCoreApplication::sendPostedEvents(&decoder, QEvent::MetaCall);
+	}
+
+	QVERIFY2(!releasedBeforeBurstEnd, "a partial decode burst released the in-flight request");
+	QVERIFY2(presentedFrames >= 24, "audio refills evicted video frames before they could be presented");
+	QVERIFY2(lastPresentedMs >= 1800, "video froze while the audio clock continued advancing");
+}
+#	endif
+
+#	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
+void TestChatWebM::mixerSinkConsumesStereo_data() {
+	QTest::addColumn< unsigned int >("rate");
+	QTest::newRow("48000") << 48000U;
+	QTest::newRow("44100") << 44100U;
+}
+
+void TestChatWebM::mixerSinkConsumesStereo() {
+	QFETCH(unsigned int, rate);
+	const AudioOutputPtr previous = Global::get().ao;
+	auto output                   = std::make_shared< TestMixerOutput >(rate);
+	Global::get().ao              = output;
+	const auto restore            = qScopeGuard([&]() { Global::get().ao = previous; });
+	ChatVideoAudioSource source(nullptr);
+	std::unique_ptr< ChatVideoMixerSink > sink(ChatVideoMixerSink::create(nullptr));
+	QVERIFY(sink);
+	sink->start(&source);
+	AudioOutputBuffer *buffer = output->sampleBuffer();
+	QVERIFY(buffer);
+	QCOMPARE(sink->sampleRate(), static_cast< int >(rate));
+	QCOMPARE(sink->error(), ChatVideoMixerSink::NoError);
+	const unsigned int frames = rate / 100;
+	QVERIFY(buffer->prepareSampleBuffer(frames));
+	QCOMPARE(sink->state(), ChatVideoMixerSink::IdleState);
+	QCOMPARE(sink->processedUSecs(), 0);
+	QVERIFY(std::all_of(buffer->pfBuffer, buffer->pfBuffer + frames * 2, [](float sample) { return sample == 0; }));
+
+	source.append(stereoTestPcm(frames));
+	QCOMPARE(sink->state(), ChatVideoMixerSink::ActiveState);
+	QVERIFY(buffer->prepareSampleBuffer(frames));
+	QCOMPARE(source.bufferedBytes(), 0);
+	QCOMPARE(sink->processedUSecs(), 10000);
+	for (unsigned int frame = 0; frame < frames; ++frame) {
+		QCOMPARE(buffer->pfBuffer[frame * 2], 0.25f);
+		QCOMPARE(buffer->pfBuffer[frame * 2 + 1], -0.5f);
+	}
+
+	// Partial pulls count only the PCM consumed and pad the rest with silence.
+	const unsigned int partial = frames / 2;
+	source.append(stereoTestPcm(partial));
+	QVERIFY(buffer->prepareSampleBuffer(frames));
+	QCOMPARE(sink->state(), ChatVideoMixerSink::IdleState);
+	const qint64 playedFrames = frames + partial;
+	QCOMPARE(sink->processedUSecs(), playedFrames * 1000000 / rate);
+	QVERIFY(std::all_of(buffer->pfBuffer + partial * 2, buffer->pfBuffer + frames * 2,
+						[](float sample) { return sample == 0; }));
+
+	source.append(stereoTestPcm(frames));
+	sink->suspend();
+	const qint64 beforePause     = sink->processedUSecs();
+	const qint64 bufferedAtPause = source.bufferedBytes();
+	QVERIFY(buffer->prepareSampleBuffer(frames));
+	QCOMPARE(sink->state(), ChatVideoMixerSink::SuspendedState);
+	QCOMPARE(sink->processedUSecs(), beforePause);
+	QCOMPARE(source.bufferedBytes(), bufferedAtPause);
+	QVERIFY(std::all_of(buffer->pfBuffer, buffer->pfBuffer + frames * 2, [](float sample) { return sample == 0; }));
+	sink->resume();
+	QCOMPARE(sink->state(), ChatVideoMixerSink::ActiveState);
+	QVERIFY(buffer->prepareSampleBuffer(frames));
+	QCOMPARE(sink->processedUSecs(), (playedFrames + frames) * 1000000 / rate);
+	QCOMPARE(buffer->pfBuffer[0], 0.25f);
+	QCOMPARE(buffer->pfBuffer[1], -0.5f);
+
+	sink->stop();
+	QCOMPARE(sink->state(), ChatVideoMixerSink::StoppedState);
+	QVERIFY(!buffer->prepareSampleBuffer(frames));
+	output->wipe();
+	QCOMPARE(sink->error(), ChatVideoMixerSink::NoError);
+}
+
+void TestChatWebM::mixerSinkReportsDetach() {
+	const AudioOutputPtr previous = Global::get().ao;
+	auto output                   = std::make_shared< TestMixerOutput >();
+	Global::get().ao              = output;
+	const auto restore            = qScopeGuard([&]() { Global::get().ao = previous; });
+	ChatVideoAudioSource source(nullptr);
+	std::unique_ptr< ChatVideoMixerSink > sink(ChatVideoMixerSink::create(nullptr));
+	QVERIFY(sink);
+	sink->start(&source);
+	source.append(stereoTestPcm(480));
+	QVERIFY(output->sampleBuffer()->prepareSampleBuffer(480));
+	QCOMPARE(sink->processedUSecs(), 10000);
+	QCOMPARE(sink->error(), ChatVideoMixerSink::NoError);
+	output->wipe();
+	QCOMPARE(sink->state(), ChatVideoMixerSink::StoppedState);
+	QCOMPARE(sink->error(), ChatVideoMixerSink::FatalError);
+	QCOMPARE(sink->processedUSecs(), 10000);
+	sink->stop();
+	QCOMPARE(sink->error(), ChatVideoMixerSink::NoError);
+}
+
+void TestChatWebM::mixerSinkPreallocatesBackendMaximum() {
+	const AudioOutputPtr previous = Global::get().ao;
+	auto output                   = std::make_shared< TestMixerOutput >();
+	output->setBufferSize(9600); // 200 ms, larger than the fallback's 100 ms
+	Global::get().ao   = output;
+	const auto restore = qScopeGuard([&]() { Global::get().ao = previous; });
+	ChatVideoAudioSource source(nullptr);
+	std::unique_ptr< ChatVideoMixerSink > sink(ChatVideoMixerSink::create(nullptr));
+	QVERIFY(sink);
+	sink->start(&source);
+	AudioOutputBuffer *buffer = output->sampleBuffer();
+	QVERIFY(buffer);
+	const float *preallocated = buffer->pfBuffer;
+	source.append(stereoTestPcm(9600));
+	QVERIFY(buffer->prepareSampleBuffer(9600));
+	QCOMPARE(buffer->pfBuffer, preallocated);
+	QCOMPARE(buffer->pfBuffer[19198], 0.25f);
+	QCOMPARE(buffer->pfBuffer[19199], -0.5f);
+	QCOMPARE(sink->processedUSecs(), 200000);
+}
+#	endif
+
+#	ifdef USE_CHAT_WEBM_MIXER_AUDIO
+void TestChatWebM::mixerRestartWaitsForInitialization_data() {
+	QTest::addColumn< bool >("pauseDuringRestart");
+	QTest::newRow("playing") << false;
+	QTest::newRow("pause-resume") << true;
+}
+
+void TestChatWebM::mixerRestartWaitsForInitialization() {
+	QFETCH(bool, pauseDuringRestart);
+	const AudioOutputPtr previous = Global::get().ao;
+	auto output                   = std::make_shared< TestMixerOutput >();
+	Global::get().ao              = output;
+	const auto restore            = qScopeGuard([&]() { Global::get().ao = previous; });
+	QImage poster(32, 24, QImage::Format_RGBA8888);
+	poster.fill(Qt::black);
+	std::unique_ptr< ChatVideoPlayer > player(
+		ChatVideoPlayer::create(QUrl(QStringLiteral("data:video/webm")), QByteArray(), poster, nullptr));
+	QVERIFY(player);
+	QVERIFY(player->ensureAudioSink());
+	player->m_state            = ChatVideoPlayer::Playing;
+	player->m_decoderAudioRate = 48000;
+	player->m_clockBaseMs      = 750;
+	player->m_loopAccumMs      = 500;
+	player->rebaseClock();
+	ChatVideoAudioSource *source = player->m_audioSource;
+	source->append(stereoTestPcm(4800));
+	QVERIFY(output->sampleBuffer()->prepareSampleBuffer(480));
+	const qint64 clockBefore    = player->currentClockMs();
+	const qint64 bufferedBefore = source->bufferedBytes();
+	player->m_videoQueue.append({ poster, 500 });
+	output->wipe();
+	auto replacement = std::make_shared< TestMixerOutput >(0);
+	Global::get().ao = replacement;
+	QVERIFY(ChatVideoMixerSink::isOutputInitializing());
+	player->presentTick();
+	QVERIFY(player->m_audioReattachWait.isValid());
+	QTest::qWait(30);
+	player->presentTick();
+	QCOMPARE(player->currentClockMs(), clockBefore);
+	QCOMPARE(player->m_audioSource, source);
+	QCOMPARE(source->bufferedBytes(), bufferedBefore);
+	QVERIFY(!player->m_wallPaced);
+
+	if (pauseDuringRestart) {
+		player->pause();
+		QTest::qWait(20);
+		player->toggle();
+	}
+	replacement->setRate(48000);
+	player->presentTick();
+	QVERIFY(!player->m_audioReattachWait.isValid());
+	QCOMPARE(player->m_audioSource, source);
+	QCOMPARE(source->bufferedBytes(), bufferedBefore);
+	QCOMPARE(player->currentClockMs(), clockBefore);
+	QCOMPARE(player->m_loopAccumMs, 500);
+	QCOMPARE(player->queuedVideoFrames(), 1);
+	QVERIFY(replacement->sampleBuffer());
+	QVERIFY(replacement->sampleBuffer()->prepareSampleBuffer(480));
+	QCOMPARE(player->currentClockMs(), clockBefore + 10);
+}
+
+void TestChatWebM::mixerRestartTimesOut() {
+	const AudioOutputPtr previous = Global::get().ao;
+	auto output                   = std::make_shared< TestMixerOutput >();
+	Global::get().ao              = output;
+	const auto restore            = qScopeGuard([&]() { Global::get().ao = previous; });
+	QImage poster(32, 24, QImage::Format_RGBA8888);
+	poster.fill(Qt::black);
+	std::unique_ptr< ChatVideoPlayer > player(
+		ChatVideoPlayer::create(QUrl(QStringLiteral("data:video/webm")), QByteArray(), poster, nullptr));
+	QVERIFY(player);
+	QVERIFY(player->ensureAudioSink());
+	player->m_state            = ChatVideoPlayer::Playing;
+	player->m_decoderAudioRate = 48000;
+	player->rebaseClock();
+	output->wipe();
+	Global::get().ao = std::make_shared< TestMixerOutput >(0);
+	player->presentTick();
+	QVERIFY(player->hasAudioOutput());
+	QTest::qWait(1050);
+	player->presentTick();
+	QVERIFY(!player->hasAudioOutput());
+	QVERIFY(player->m_wallPaced);
+	const qint64 clockAfterFallback = player->currentClockMs();
+	QTest::qWait(20);
+	QVERIFY(player->currentClockMs() > clockAfterFallback);
+}
+
+void TestChatWebM::mixerRestartRejectsRateChange() {
+	const AudioOutputPtr previous = Global::get().ao;
+	auto output                   = std::make_shared< TestMixerOutput >();
+	Global::get().ao              = output;
+	const auto restore            = qScopeGuard([&]() { Global::get().ao = previous; });
+	QImage poster(32, 24, QImage::Format_RGBA8888);
+	poster.fill(Qt::black);
+	std::unique_ptr< ChatVideoPlayer > player(
+		ChatVideoPlayer::create(QUrl(QStringLiteral("data:video/webm")), QByteArray(), poster, nullptr));
+	QVERIFY(player);
+	QVERIFY(player->ensureAudioSink());
+	player->m_state            = ChatVideoPlayer::Playing;
+	player->m_decoderAudioRate = 48000;
+	player->rebaseClock();
+	output->wipe();
+	Global::get().ao = std::make_shared< TestMixerOutput >(44100);
+	player->presentTick();
+	QVERIFY(!player->hasAudioOutput());
+	QVERIFY(player->m_wallPaced);
+	QVERIFY(!player->m_audioReattachWait.isValid());
+}
+#	endif
+
+#	ifdef USE_CHAT_WEBM_AUDIO
 void TestChatWebM::idleAudioRecoveryPreservesQueuedPcm() {
 	if (!ChatVideoDecoder::isSupported()) {
 		QSKIP("WebM decoder not available");
@@ -1125,7 +1446,7 @@ void TestChatWebM::idleAudioRecoveryPreservesQueuedPcm() {
 		QTRY_COMPARE_WITH_TIMEOUT(source->bufferedBytes(), 0, 3000);
 	}
 }
-#endif
+#	endif
 
 void TestChatWebM::loopsAfterEnd() {
 	if (TINY_WEBM.isEmpty() || !ChatVideoDecoder::isSupported()) {
