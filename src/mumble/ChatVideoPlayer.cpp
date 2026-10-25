@@ -578,6 +578,19 @@ void ChatVideoPlayer::presentTick() {
 	// an audio settings change). Re-attach to the current output, keeping the
 	// clock position; fall back to the wall clock if that is impossible.
 	if (m_audioSource && !m_wallPaced && m_sink->error() == ChatVideoMixerSink::FatalError) {
+		// WASAPI starts its thread before device activation publishes the mixer
+		// rate. Keep the detached sink's frozen clock and queued PCM while the
+		// replacement initializes; retry for up to one second on later ticks
+		// without blocking the GUI.
+		if (ChatVideoMixerSink::isOutputInitializing()) {
+			if (!m_audioReattachWait.isValid()) {
+				m_audioReattachWait.start();
+			}
+			if (!m_audioReattachWait.hasExpired(1000)) {
+				return;
+			}
+		}
+		m_audioReattachWait.invalidate();
 		qWarning("ChatVideoPlayer: audio output was restarted - re-attaching");
 		m_clockBaseMs = currentClockMs();
 		m_sink->stop();

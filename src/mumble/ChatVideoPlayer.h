@@ -198,6 +198,8 @@ private:
 	ChatVideoMixerSink *m_sink = nullptr;
 	/// Rate the decoder was opened with (a replacement sink has to match it)
 	int m_decoderAudioRate = 0;
+	/// Bounds the non-blocking wait for a replacement output's mixer initialization
+	QElapsedTimer m_audioReattachWait;
 #endif
 #ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO
 	ChatVideoAudioSource *m_audioSource = nullptr;
