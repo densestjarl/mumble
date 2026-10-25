@@ -71,6 +71,9 @@ individual suite with `ctest --test-dir build -R '^TestAudioWizard$'` or
 `build/tests/mumble-client-tests TestAudioWizard -platform offscreen`.
 Use `build/tests/mumble-client-tests --list` to list the compiled suites.
 
+The end-to-end file-transfer and server-database suites have explicit CTest costs
+so fresh CI runners start the longest work first when running tests in parallel.
+
 `TestDatabase` and `TestServerDatabase` share a CTest resource lock because they
 reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
 that uses that database. Other tests use separate fixtures or temporary storage.
