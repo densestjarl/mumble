@@ -207,7 +207,7 @@ bool ChatVideoPlayer::ensureWorker() {
 
 	connect(m_decoder, &ChatVideoDecoder::videoFrameDecoded, this, &ChatVideoPlayer::onDecoderVideoFrame);
 	connect(m_decoder, &ChatVideoDecoder::audioChunkDecoded, this, &ChatVideoPlayer::onDecoderAudioChunk);
-	connect(m_decoder, &ChatVideoDecoder::workFinished, this, [this]() { m_workRequested = false; });
+	connect(m_decoder, &ChatVideoDecoder::workFinished, this, &ChatVideoPlayer::onDecoderWorkFinished);
 	connect(m_decoder, &ChatVideoDecoder::finished, this, &ChatVideoPlayer::onDecoderFinished);
 	connect(m_decoder, &ChatVideoDecoder::error, this, &ChatVideoPlayer::onDecoderError);
 
@@ -495,6 +495,16 @@ void ChatVideoPlayer::onDecoderAudioChunk(const QByteArray &pcm, qint64, qint64)
 #	endif
 }
 
+void ChatVideoPlayer::onDecoderWorkFinished() {
+	m_workRequested = false;
+	// Refill promptly when a short burst did not supply enough audio, rather
+	// than waiting for another presentation tick. The queue reservation still
+	// bounds all work, including high-frame-rate clips with little audio per burst.
+	if (m_state == Playing) {
+		keepDecoderFed();
+	}
+}
+
 void ChatVideoPlayer::onDecoderFinished() {
 	m_decoderAtEof = true;
 }
@@ -511,8 +521,9 @@ void ChatVideoPlayer::keepDecoderFed() {
 	// evict frames that are still waiting for their presentation time. Keep the
 	// request in flight until workFinished(), rather than releasing it on the
 	// first audio/video signal while the worker is still producing that burst.
-	if (m_videoQueue.size() > MAX_QUEUED_FRAMES - ChatVideoDecoder::MAX_BURST_VIDEO_FRAMES)
+	if (m_videoQueue.size() > MAX_QUEUED_FRAMES - ChatVideoDecoder::MAX_BURST_VIDEO_FRAMES) {
 		return;
+	}
 
 	const bool videoHungry = m_videoQueue.size() <= 1;
 #	ifdef MUMBLE_CHAT_WEBM_HAS_AUDIO

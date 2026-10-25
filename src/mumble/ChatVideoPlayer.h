@@ -145,6 +145,7 @@ public slots:
 private slots:
 	void onDecoderVideoFrame(const QImage &image, qint64 ptsMs);
 	void onDecoderAudioChunk(const QByteArray &pcm, qint64 ptsMs, qint64 durationMs);
+	void onDecoderWorkFinished();
 	void onDecoderFinished();
 	void onDecoderError(const QString &message);
 

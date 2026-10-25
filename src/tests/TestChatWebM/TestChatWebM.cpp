@@ -1118,7 +1118,7 @@ void TestChatWebM::audioRefillPreservesUpcomingVideoFrames() {
 			[&]() { releasedBeforeBurstEnd |= !player->m_workRequested; });
 	connect(&decoder, &ChatVideoDecoder::audioChunkDecoded, player.get(),
 			[&]() { releasedBeforeBurstEnd |= !player->m_workRequested; });
-	connect(&decoder, &ChatVideoDecoder::workFinished, player.get(), [&]() { player->m_workRequested = false; });
+	connect(&decoder, &ChatVideoDecoder::workFinished, player.get(), &ChatVideoPlayer::onDecoderWorkFinished);
 
 	QByteArray pcm(9600, '\0'); // 50 ms of S16 stereo at 48 kHz
 	qint64 consumedBytes   = 0;
