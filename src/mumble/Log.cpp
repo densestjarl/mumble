@@ -707,6 +707,39 @@ bool Log::isWebM(const QByteArray &rawVideoData) {
 	return rawVideoData.size() >= 4 && std::memcmp(rawVideoData.constData(), webmMagic, 4) == 0;
 }
 
+QString Log::videoToImg(QIODevice &videoData, int maxSize, bool *tooLarge) {
+	if (tooLarge)
+		*tooLarge = false;
+	if (maxSize < 0)
+		return {};
+	QByteArray payload;
+	if (maxSize == 0) {
+		payload = videoData.readAll();
+	} else {
+		// Base64 alone needs at least four characters per three payload bytes.
+		// This conservative bound ignores markup/escaping; the existing encoder
+		// below still checks the exact final HTML, including those extra bytes.
+		const qint64 rawLimit = qMax(qint64(0), qint64(maxSize) * 3 / 4);
+		if (!videoData.isSequential() && videoData.size() - videoData.pos() > rawLimit) {
+			if (tooLarge)
+				*tooLarge = true;
+			return {};
+		}
+		payload = videoData.read(rawLimit + 1);
+		if (payload.size() > rawLimit) {
+			if (tooLarge)
+				*tooLarge = true;
+			return {};
+		}
+	}
+	if (!isWebM(payload))
+		return {};
+	const QString html = videoToImg(payload, maxSize);
+	if (tooLarge)
+		*tooLarge = html.isEmpty();
+	return html;
+}
+
 QString Log::videoToImg(const QByteArray &rawVideoData, int maxSize) {
 	// Videos cannot be re-encoded without heavy loss of quality (and never
 	// losslessly), so the raw data is embedded as-is - but only if the generated

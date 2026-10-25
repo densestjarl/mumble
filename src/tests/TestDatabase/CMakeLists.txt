@@ -54,5 +54,7 @@ set_target_properties(TestDatabase PROPERTIES AUTOMOC ON)
 target_link_libraries(TestDatabase PRIVATE Qt6::Test mumble_database shared)
 
 add_test(NAME TestDatabase COMMAND $<TARGET_FILE:TestDatabase>)
+# Both database suites reset the same MySQL/PostgreSQL database.
+set_tests_properties(TestDatabase PROPERTIES RESOURCE_LOCK mumble_test_database)
 
 add_subdirectory("server")

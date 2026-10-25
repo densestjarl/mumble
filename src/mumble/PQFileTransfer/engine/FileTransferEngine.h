@@ -95,9 +95,12 @@ public:
 		quint32 chunkSize  = 256 * 1024;
 		// Shared ciphertext-byte budget across all sends; 0 = unlimited.
 		quint32 sendRateBytesPerSecond = 4 * 1024 * 1024;
-		quint64 maxReceiveSize = 10ull * 1024 * 1024 * 1024;
-		int handshakeTimeoutMSecs	  = 10000;
-		int receiveIdleTimeoutMSecs   = 60000;
+		quint64 maxReceiveSize         = 10ull * 1024 * 1024 * 1024;
+		int handshakeTimeoutMSecs      = 10000;
+		// Human safety-number approval has its own bounded deadline.
+		// Non-positive values are normalized to 1 ms when applied.
+		int identityVerificationTimeoutMSecs = 60000;
+		int receiveIdleTimeoutMSecs          = 60000;
 	};
 
 	static quint32 sendChunkSize(const Config &config, qsizetype recipientCount);
@@ -323,7 +326,6 @@ private:
 	QHash< QByteArray, std::shared_ptr< SendJob > > m_sendJobs;
 	QHash< QByteArray, std::shared_ptr< ReceiveJob > > m_receiveJobs;
 	QHash< unsigned int, PendingHandshake > m_pendingHandshakes;   // responder side, pre-verification
-	quint64 m_nextJobNonce = 0;
 };
 
 } // namespace PQFT

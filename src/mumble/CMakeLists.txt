@@ -37,7 +37,7 @@ option(plugin-callback-debug "Build Mumble with debug output for plugin callback
 
 option(screen-sharing "Build support for screen sharing (requires libavcodec + libswscale with libx264)." ON)
 
-option(chat-webm "Build support for playing WebM videos (VP8/VP9/AV1, with audio) embedded in chat messages (non-Windows only, requires libavformat + libswresample)." ON)
+option(chat-webm "Build support for playing WebM videos (VP8/VP9/AV1, optional audio) embedded in chat messages (requires libavformat + libswresample)." ON)
 
 option(file-sharing "Build support for file sharing in chat (post-quantum encrypted; requires liboqs + libargon2)." ON)
 option(bundled-oqs "Build the bundled version of liboqs (ML-KEM-768, ML-DSA-65) instead of looking for one on the system." ${file-sharing})
@@ -980,6 +980,11 @@ if(screen-sharing)
 				${FFMPEG_AVUTIL_LIBRARY}
 				${FFMPEG_SWSCALE_LIBRARY}
 		)
+		if(chat-webm)
+			find_library(FFMPEG_AVFORMAT_LIBRARY NAMES avformat PATHS "${FFMPEG_DIR}/lib" NO_DEFAULT_PATH REQUIRED)
+			find_library(FFMPEG_SWRESAMPLE_LIBRARY NAMES swresample PATHS "${FFMPEG_DIR}/lib" NO_DEFAULT_PATH REQUIRED)
+			target_link_libraries(mumble_client_lib PUBLIC ${FFMPEG_AVFORMAT_LIBRARY} ${FFMPEG_SWRESAMPLE_LIBRARY})
+		endif()
 
 		file(GLOB FFMPEG_RUNTIME_LIBRARIES CONFIGURE_DEPENDS "${FFMPEG_DIR}/bin/*.dll")
 		set_property(TARGET mumble_client_lib PROPERTY MUMBLE_FFMPEG_RUNTIME_DIRECTORY "${FFMPEG_DIR}/bin")
@@ -1034,13 +1039,6 @@ if(screen-sharing)
 			# video scaling via libswscale and audio resampling via libswresample.
 			pkg_check_modules(LIBSWRESAMPLE REQUIRED libswresample)
 
-			target_sources(mumble_client_lib PRIVATE
-													"ChatVideoDecoder.h"
-													"ChatVideoDecoder.cpp"
-													"ChatVideoPlayer.h"
-													"ChatVideoPlayer.cpp"
-									)
-
 			target_include_directories(mumble_client_lib SYSTEM PUBLIC
 													${LIBSWRESAMPLE_INCLUDE_DIRS}
 											)
@@ -1050,18 +1048,6 @@ if(screen-sharing)
 			target_link_libraries(mumble_client_lib PUBLIC
 													${LIBSWRESAMPLE_LIBRARIES}
 											)
-
-			target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM")
-
-			# Audio playback of chat videos goes through Qt Multimedia's QAudioSink.
-			# It is optional: without it, videos play silently (paced by a wall clock).
-			find_package(Qt6 COMPONENTS Multimedia QUIET)
-			if(Qt6Multimedia_FOUND)
-				target_link_libraries(mumble_client_lib PUBLIC Qt6::Multimedia)
-				target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM_AUDIO")
-			else()
-				message(STATUS "Qt6 Multimedia not found - chat WebM videos will play without sound")
-			endif()
 		endif()
 
 		if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -1133,6 +1119,23 @@ if(screen-sharing)
 				)
 				target_compile_definitions(mumble_client_lib PRIVATE "HAS_WAYLAND_PORTAL")
 			endif()
+		endif()
+	endif()
+	if(chat-webm)
+		target_sources(mumble_client_lib PRIVATE
+			"ChatVideoDecoder.h"
+			"ChatVideoDecoder.cpp"
+			"ChatVideoPlayer.h"
+			"ChatVideoPlayer.cpp"
+		)
+		target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM")
+		# Audio is optional; without Qt Multimedia the wall clock paces silent playback.
+		find_package(Qt6 COMPONENTS Multimedia QUIET)
+		if(Qt6Multimedia_FOUND)
+			target_link_libraries(mumble_client_lib PUBLIC Qt6::Multimedia)
+			target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM_AUDIO")
+		else()
+			message(STATUS "Qt6 Multimedia not found - chat WebM videos will play without sound")
 		endif()
 	endif()
 endif()
@@ -1244,7 +1247,6 @@ if(file-sharing)
 		"PQFileTransfer/engine/FileTransferEngine.h"
 		"PQFileTransfer/engine/FileTransferEngine.cpp"
 		"PQFileTransfer/engine/FileTransferManager.h"
-		"PQFileTransfer/engine/FileTransferTransport.h"
 		"PQFileTransfer/engine/FileTransferManager.cpp"
 		"PQFileTransfer/engine/FileTransferSession.h"
 		"PQFileTransfer/engine/FileTransferSession.cpp"

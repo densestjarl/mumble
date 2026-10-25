@@ -24,6 +24,7 @@
 
 #include <cerrno>
 #include <filesystem>
+#include <limits>
 
 #ifdef Q_OS_WIN
 #	include <io.h>
@@ -36,6 +37,15 @@ namespace PQFT {
 
 namespace {
 constexpr int EarlyChunkBufferMax = 8;
+
+int verificationHandshakeTimeout(const FileTransferEngine::Config &config, int verificationWindows = 1) {
+	// The remote user may spend the entire approval window before answering M1.
+	// An existing local pin says nothing about the remote user's trust store.
+	const qint64 timeout =
+		qint64(qMax(0, config.handshakeTimeoutMSecs))
+		+ qint64(qMax(0, config.identityVerificationTimeoutMSecs)) * verificationWindows;
+	return static_cast< int >(qBound(qint64(1), timeout, qint64(std::numeric_limits< int >::max())));
+}
 
 bool syncSaveFile(QFileDevice &file) {
 	if (!file.flush() || file.handle() < 0)
@@ -146,7 +156,11 @@ void FileTransferEngine::setIdentity(QByteArray identityPublicKey, IdentitySign 
 void FileTransferEngine::setConfig(const Config &config) {
 	const bool rateChanged = m_config.sendRateBytesPerSecond != config.sendRateBytesPerSecond
 							 || m_config.aggregateSendRate != config.aggregateSendRate;
-	m_config = config;
+	m_config               = config;
+	// Zero/negative verification budgets must expire promptly, not disable
+	// pending-prompt timers on Qt versions that reject negative intervals.
+	// Normalize once so standalone and composed deadlines use the same budget.
+	m_config.identityVerificationTimeoutMSecs = qMax(1, config.identityVerificationTimeoutMSecs);
 	// Pin-cache refreshes and new sends also apply configuration. Preserve
 	// earned credit unless the rate itself changes, so these cannot starve sends.
 	if (rateChanged) {
@@ -294,7 +308,10 @@ void FileTransferEngine::processControlForSend(SendJob &job, SendPeer &peer, con
 			if (type == FTFrame::TypeM4 && peer.session_->processM4(payload)) {
 				if (peer.pinnedFingerprint.isEmpty() || m_config.authorizeSendPeers) {
 					peer.awaitingAuthorization = true;
-					job.handshakeTimer->start(60000);
+					// Another recipient may still be using the remote verification
+					// grace. A quick M4 must not shorten that outstanding deadline.
+					job.handshakeTimer->start(
+						qMax(m_config.identityVerificationTimeoutMSecs, job.handshakeTimer->remainingTime()));
 					updateSendState(job, FTTransferInfo::State::VerifyingIdentity);
 					const QByteArray peerFp = peer.session_->peerFingerprint();
 					emit firstContact(peer.session, peerFp, safetyNumber(identityFingerprint(m_identityPk), peerFp),
@@ -521,7 +538,7 @@ void FileTransferEngine::handleIncomingM1(unsigned int actorSession, const QByte
 			}
 			timer->deleteLater();
 		});
-		pending.timeout->start(60'000);
+		pending.timeout->start(m_config.identityVerificationTimeoutMSecs);
 		m_pendingHandshakes.insert(actorSession, std::move(pending));
 
 		FTTransferInfo info;
@@ -572,7 +589,10 @@ void FileTransferEngine::startResponder(unsigned int actorSession, const QByteAr
 		const QByteArray m2 = job->session_->buildM2();
 		if (!m2.isEmpty() && m_transportControl) {
 			m_receiveJobs.insert(preManifestKey(actorSession), job);
-			job->idleTimer->start(m_config.receiveIdleTimeoutMSecs);
+			// An early recipient also waits while another recipient verifies the
+			// sender, followed by the sender's shared authorization window.
+			// The manifest restores normal receive idle limits.
+			job->idleTimer->start(qMax(m_config.receiveIdleTimeoutMSecs, verificationHandshakeTimeout(m_config, 2)));
 			m_transportControl(actorSession, m2);
 			return;
 		}
@@ -871,7 +891,7 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 			maybeStartHandshakePhase2(*it->get());
 		}
 	});
-	job->handshakeTimer->start(m_config.handshakeTimeoutMSecs);
+	job->handshakeTimer->start(verificationHandshakeTimeout(m_config));
 
 	m_sendJobs.insert(job->transferId, job);
 

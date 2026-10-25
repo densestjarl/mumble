@@ -56,7 +56,10 @@ Build the included version of Speex instead of looking for one on the system.
 
 ### chat-webm
 
-Build support for playing WebM videos (VP8/VP9/AV1, with audio) embedded in chat messages (non-Windows only, requires libavformat + libswresample).
+Build support for playing WebM videos (VP8/VP9/AV1) embedded in chat messages.
+Requires `screen-sharing=ON`, libavformat and libswresample. On Windows these
+libraries and their runtime DLLs come from `FFMPEG_DIR`. Audio playback is
+enabled when Qt Multimedia is available; otherwise videos play silently.
 (Default: ON)
 
 ### client
