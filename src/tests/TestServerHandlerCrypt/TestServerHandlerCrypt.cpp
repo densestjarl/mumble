@@ -79,7 +79,7 @@ private slots:
 	}
 };
 
-int main(int argc, char **argv) {
+int mumbleTestMain_TestServerHandlerCrypt(int argc, char **argv) {
 	QApplication app(argc, argv);
 	QTemporaryDir directory;
 	if (!directory.isValid()) {

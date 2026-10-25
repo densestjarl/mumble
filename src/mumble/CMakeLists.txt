@@ -783,7 +783,8 @@ else()
 endif()
 
 if(rnnoise)
-	target_compile_definitions(mumble_client_lib PRIVATE "USE_RNNOISE")
+	# AudioInput.h has a conditional data member: consumers must see its layout.
+	target_compile_definitions(mumble_client_lib PUBLIC "USE_RNNOISE")
 
 	if(bundled-rnnoise)
 		add_subdirectory("${3RDPARTY_DIR}/rnnoise-build" "${CMAKE_CURRENT_BINARY_DIR}/rnnoise" EXCLUDE_FROM_ALL)

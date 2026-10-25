@@ -3,6 +3,7 @@
 // that can be found in the LICENSE file at the root of the
 // Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
+#include "ClientTest.h"
 #include "CustomElements.h"
 #include "Log.h"
 
@@ -1496,5 +1497,5 @@ void TestChatWebM::pacingMath() {
 
 #endif // USE_CHAT_WEBM
 
-QTEST_MAIN(TestChatWebM)
+MUMBLE_CLIENT_TEST_MAIN(TestChatWebM)
 #include "TestChatWebM.moc"

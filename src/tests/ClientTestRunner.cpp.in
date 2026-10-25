@@ -1,0 +1,38 @@
+// Copyright The Mumble Developers. All rights reserved.
+// BSD-style license: see LICENSE at the source root.
+
+#include <cstdio>
+#include <cstring>
+
+@CLIENT_TEST_DECLARATIONS@
+namespace {
+struct TestSuite {
+	const char *name;
+	int (*run)(int, char **);
+};
+
+const TestSuite suites[] = {
+@CLIENT_TEST_ENTRIES@};
+} // namespace
+
+int main(int argc, char **argv) {
+	if (argc >= 2) {
+		for (const TestSuite &suite : suites) {
+			if (std::strcmp(argv[1], suite.name) == 0) {
+				// Qt receives the suite name as argv[0], followed by its original
+				// arguments. Its applicationFilePath() still points at this runner.
+				return suite.run(argc - 1, argv + 1);
+			}
+		}
+	}
+
+	const bool list = argc == 2 && std::strcmp(argv[1], "--list") == 0;
+	FILE *output    = list ? stdout : stderr;
+	if (!list) {
+		std::fprintf(output, "Usage: %s <suite> [QtTest arguments]\nAvailable suites:\n", argv[0]);
+	}
+	for (const TestSuite &suite : suites) {
+		std::fprintf(output, "%s\n", suite.name);
+	}
+	return list ? 0 : 2;
+}

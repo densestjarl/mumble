@@ -1,6 +1,7 @@
 // Copyright The Mumble Developers. All rights reserved.
 // BSD-style license: see LICENSE at the source root.
 #include "AudioWizard.h"
+#include "ClientTest.h"
 #include "Global.h"
 
 #include <QScopeGuard>
@@ -101,5 +102,5 @@ private slots:
 	}
 };
 
-QTEST_MAIN(TestAudioWizard)
+MUMBLE_CLIENT_TEST_MAIN(TestAudioWizard)
 #include "TestAudioWizard.moc"

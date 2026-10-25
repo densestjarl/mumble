@@ -1,5 +1,6 @@
 // Copyright The Mumble Developers. All rights reserved.
 // BSD-style license: see LICENSE at the source root.
+#include "ClientTest.h"
 #include "ClientUser.h"
 #include "CustomElements.h"
 #include "Database.h"
@@ -623,13 +624,14 @@ private:
 		});
 		for (auto *child : { &sender, &receiver }) {
 			child->setProcessChannelMode(QProcess::MergedChannels);
-			child->start(QCoreApplication::applicationFilePath(),
-						 { QStringLiteral("-platform"), QGuiApplication::platformName(), QStringLiteral("--tls-child"),
-						   child == &sender ? QStringLiteral("sender") : QStringLiteral("receiver"), directory.path(),
-						   QString::number(port), QString::fromLatin1(certificateDigest),
-						   QString::fromLatin1(serverDigest),
-						   webm ? (oversized ? QStringLiteral("webm-oversized") : QStringLiteral("webm-small"))
-								: (firstContact ? QStringLiteral("first-contact") : QStringLiteral("preverified")) });
+			child->start(
+				QCoreApplication::applicationFilePath(),
+				clientTestArguments(
+					{ QStringLiteral("-platform"), QGuiApplication::platformName(), QStringLiteral("--tls-child"),
+					  child == &sender ? QStringLiteral("sender") : QStringLiteral("receiver"), directory.path(),
+					  QString::number(port), QString::fromLatin1(certificateDigest), QString::fromLatin1(serverDigest),
+					  webm ? (oversized ? QStringLiteral("webm-oversized") : QStringLiteral("webm-small"))
+						   : (firstContact ? QStringLiteral("first-contact") : QStringLiteral("preverified")) }));
 			QVERIFY(child->waitForStarted(5000));
 		}
 		const bool finished = waitFor(
@@ -669,9 +671,9 @@ private slots:
 	void transferUpdatesKeepGuiResponsive() {
 		QProcess child;
 		child.setProcessChannelMode(QProcess::MergedChannels);
-		child.start(
-			QCoreApplication::applicationFilePath(),
-			{ QStringLiteral("-platform"), QGuiApplication::platformName(), QStringLiteral("--main-window-child") });
+		child.start(QCoreApplication::applicationFilePath(),
+					clientTestArguments({ QStringLiteral("-platform"), QGuiApplication::platformName(),
+										  QStringLiteral("--main-window-child") }));
 		QVERIFY(child.waitForStarted(5000));
 		const bool finished = child.waitForFinished(20000);
 		if (!finished) {
@@ -687,7 +689,7 @@ private slots:
 	}
 };
 
-int main(int argc, char **argv) {
+int mumbleTestMain_TestFileTransferMainWindow(int argc, char **argv) {
 	MumbleApplication application(argc, argv);
 #ifdef MUMBLE_TEST_MURMUR_BINARY
 	MumbleSSL::initialize();

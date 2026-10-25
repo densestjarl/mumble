@@ -4,6 +4,7 @@
 // Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
 #include "Channel.h"
+#include "ClientTest.h"
 #include "ClientUser.h"
 #include "PQFileTransfer/crypto/SigMLDSA65.h"
 #include "PQFileTransfer/engine/FTSavePolicy.h"
@@ -1131,5 +1132,5 @@ private:
 	std::unique_ptr< Channel > m_channel;
 };
 
-QTEST_MAIN(TestFileTransferManager)
+MUMBLE_CLIENT_TEST_MAIN(TestFileTransferManager)
 #include "TestFileTransferManager.moc"
