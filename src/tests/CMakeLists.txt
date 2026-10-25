@@ -51,12 +51,14 @@ function(mumble_add_client_test test_name)
 	target_compile_definitions(${test_name} PRIVATE main=mumbleTestMain_${test_name}
 		MUMBLE_CLIENT_TEST_NAME="${test_name}")
 	target_link_libraries(${test_name} PRIVATE mumble_client_lib Qt6::Test)
-	target_link_libraries(mumble-client-tests PRIVATE ${test_name})
-	set_property(TARGET mumble-client-tests APPEND PROPERTY MUMBLE_TEST_SUITES ${test_name})
+	target_link_libraries(TestGuiRunner PRIVATE ${test_name})
+	set_property(TARGET TestGuiRunner APPEND PROPERTY MUMBLE_TEST_SUITES ${test_name})
 endfunction()
 
 if(client)
-	add_executable(mumble-client-tests)
+	# Keep test executables outside the Windows product artifact/signing globs
+	# (mumble*.exe and *client*.exe), including case-insensitive matches.
+	add_executable(TestGuiRunner)
 	add_subdirectory("TestServerHandlerCrypt")
 	add_subdirectory("TestAudioWizard")
 	add_subdirectory("TestDatabasePath")
@@ -86,16 +88,16 @@ if(client)
 	endif()
 	add_subdirectory("OverlayTest")
 
-	get_target_property(client_test_suites mumble-client-tests MUMBLE_TEST_SUITES)
+	get_target_property(client_test_suites TestGuiRunner MUMBLE_TEST_SUITES)
 	foreach(test_name IN LISTS client_test_suites)
 		string(APPEND CLIENT_TEST_DECLARATIONS "int mumbleTestMain_${test_name}(int, char **);\n")
 		string(APPEND CLIENT_TEST_ENTRIES "\t{ \"${test_name}\", mumbleTestMain_${test_name} },\n")
 	endforeach()
 	configure_file("ClientTestRunner.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/ClientTestRunner.cpp" @ONLY)
-	target_sources(mumble-client-tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/ClientTestRunner.cpp")
+	target_sources(TestGuiRunner PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/ClientTestRunner.cpp")
 	add_test(NAME TestClientTestRunner COMMAND Python::Interpreter
 		"${CMAKE_CURRENT_SOURCE_DIR}/test_client_test_runner.py"
-		$<TARGET_FILE:mumble-client-tests> ${client_test_suites})
+		$<TARGET_FILE:TestGuiRunner> ${client_test_suites})
 	set_tests_properties(TestClientTestRunner PROPERTIES TIMEOUT 180)
 	mumble_client_test_runtime(TestClientTestRunner)
 endif()

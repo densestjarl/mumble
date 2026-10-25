@@ -31,7 +31,7 @@ mumble_add_client_test(TestSettingsJSONSerialization "${TEST_CASE_SOURCE_FILE}")
 
 add_test(
 	NAME TestSettingsJSONSerialization
-	COMMAND $<TARGET_FILE:mumble-client-tests> TestSettingsJSONSerialization
+	COMMAND $<TARGET_FILE:TestGuiRunner> TestSettingsJSONSerialization
 	# Specifying the working directory is necessary, to make sure the dependent DLLs are found (on Windows)
 	WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )

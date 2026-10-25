@@ -30,7 +30,7 @@ not an Explorer/OLE drag performed with physical input.
 Build and run through CTest:
 
 ```text
-cmake --build <build> --target mumble-client-tests
+cmake --build <build> --target TestGuiRunner
 ctest --test-dir <build> -R ^TestFileTransferMainWindow$ --output-on-failure
 ```
 
@@ -45,7 +45,7 @@ CTest uses the offscreen Qt platform. For the native Windows Qt platform, run
 from the build directory with the same runtime DLL search path used by CTest:
 
 ```text
-.\tests\mumble-client-tests.exe TestFileTransferMainWindow -platform windows -o mainwindow-windows.txt,txt
+.\tests\TestGuiRunner.exe TestFileTransferMainWindow -platform windows -o mainwindow-windows.txt,txt
 ```
 
 The explicit QtTest output file retains the report for later inspection.

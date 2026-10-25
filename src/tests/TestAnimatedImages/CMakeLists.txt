@@ -5,7 +5,7 @@
 
 mumble_add_client_test(TestAnimatedImages TestAnimatedImages.cpp)
 
-add_test(NAME TestAnimatedImages COMMAND $<TARGET_FILE:mumble-client-tests> TestAnimatedImages)
+add_test(NAME TestAnimatedImages COMMAND $<TARGET_FILE:TestGuiRunner> TestAnimatedImages)
 set_tests_properties(TestAnimatedImages PROPERTIES TIMEOUT 60)
 
 mumble_client_test_runtime(TestAnimatedImages)
