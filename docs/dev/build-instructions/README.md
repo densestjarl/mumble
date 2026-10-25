@@ -70,6 +70,9 @@ pull requests also save snapshots scoped to their own merge ref so subsequent
 pushes can reuse newly compiled objects. Fork pull requests only restore caches.
 Snapshots use timestamped keys so successful builds can refresh them; the
 dependency archive caches remain keyed by their dependency versions.
+The macOS/Linux preview compiler keys use a new version prefix so older fixed-key
+snapshots cannot mask refreshed caches. Those old keys remain restore fallbacks
+for the first build after migration.
 
 ## Specific Instructions
 
