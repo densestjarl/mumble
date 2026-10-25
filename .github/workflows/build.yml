@@ -15,6 +15,11 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  # Cancel older pushes to a PR without interrupting master or manual builds.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
@@ -24,7 +29,7 @@ env:
     -Ddisplay-install-paths=ON
     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
     -DCMAKE_C_COMPILER_LAUNCHER=ccache
-  CCACHE_COMPRESSLEVEL: 10
+  CTEST_PARALLEL_LEVEL: 2
 
 
 jobs:
@@ -103,7 +108,10 @@ jobs:
     - uses: hendrikmuhs/ccache-action@v1.2.24
       with:
         key: ${{ github.base_ref || github.ref_name }}_${{ matrix.os }}_${{ matrix.type }}.${{ matrix.compiler }}.${{ matrix.arch }}
-        save: ${{ github.event_name != 'pull_request' }}
+        max-size: ${{ startsWith(matrix.os, 'windows') && '2G' || '500M' }}
+        # Same-repository PRs can reuse their own non-LTO objects on later pushes.
+        # GitHub scopes those snapshots to the PR merge ref, away from master.
+        save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     - uses: ./.github/actions/install-dependencies
       with:
@@ -118,6 +126,7 @@ jobs:
           MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}
           MUMBLE_CI_TESTS: ${{ matrix.tests }}
           MUMBLE_CI_PACKAGING: ${{ github.event_name == 'pull_request' && 'OFF' || 'ON' }}
+          MUMBLE_CI_LTO: ${{ github.event_name == 'pull_request' && 'OFF' || 'ON' }}
 
     - name: Test
       if: matrix.tests == 'ON'

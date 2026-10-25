@@ -45,6 +45,29 @@ for a given commit, feel free to fallback to ``0``. There is also a [Python scri
 to perform this HTTP request automatically.
 
 
+## CI build and test settings
+
+The CI workflow disables link-time optimization (LTO) for pull-request verification
+builds. Builds on `master`, manual CI builds, and preview installers retain LTO.
+CodeQL builds disable LTO because their executables are only used for analysis.
+
+CI and preview installers run two CTest suites at a time. To use the same test
+scheduling locally, run:
+
+```sh
+CTEST_PARALLEL_LEVEL=2 .github/workflows/test.sh build Debug
+```
+
+`TestDatabase` and `TestServerDatabase` share a CTest resource lock because they
+reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
+that uses that database. Other tests use separate fixtures or temporary storage.
+
+Compiler caches restore from the pull request's base branch. Same-repository
+pull requests also save snapshots scoped to their own merge ref so subsequent
+pushes can reuse newly compiled objects. Fork pull requests only restore caches.
+Snapshots use timestamped keys so successful builds can refresh them; the
+dependency archive caches remain keyed by their dependency versions.
+
 ## Specific Instructions
 
 In order to actually build Mumble, you can follow one of the following instruction sets:

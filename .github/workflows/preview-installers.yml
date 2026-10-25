@@ -18,6 +18,7 @@ concurrency:
 
 env:
   BUILD_TYPE: Release
+  CTEST_PARALLEL_LEVEL: 2
   CMAKE_OPTIONS: >-
     -Dclient=ON
     -Dserver=OFF
@@ -72,7 +73,8 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: preview.windows.${{ github.base_ref || github.ref_name }}
-          save: ${{ github.event_name != 'pull_request' }}
+          max-size: 1G
+          save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
@@ -163,9 +165,8 @@ jobs:
       - name: Restore compiler cache
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
-          key: preview.macos.${{ github.ref_name }}
-          save: ${{ github.event_name != 'pull_request' }}
-          append-timestamp: false
+          key: preview.macos.${{ github.base_ref || github.ref_name }}
+          save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
@@ -412,9 +413,8 @@ jobs:
       - name: Restore compiler cache
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
-          key: preview.ubuntu.${{ github.ref_name }}
-          save: ${{ github.event_name != 'pull_request' }}
-          append-timestamp: false
+          key: preview.ubuntu.${{ github.base_ref || github.ref_name }}
+          save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
