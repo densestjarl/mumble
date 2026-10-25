@@ -1121,11 +1121,15 @@ if(screen-sharing)
 		endif()
 	endif()
 	if(chat-webm)
+		# Compile the mixer sink with either audio backend so device-free tests also
+		# exercise it on platforms that normally use Qt Multimedia for playback.
 		target_sources(mumble_client_lib PRIVATE
 			"ChatVideoDecoder.h"
 			"ChatVideoDecoder.cpp"
 			"ChatVideoPlayer.h"
 			"ChatVideoPlayer.cpp"
+			"ChatVideoMixerSink.h"
+			"ChatVideoMixerSink.cpp"
 		)
 		target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM")
 		# Audio plays through Qt Multimedia when available. Otherwise (e.g. the static
@@ -1136,10 +1140,6 @@ if(screen-sharing)
 			target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM_AUDIO")
 		else()
 			message(STATUS "Qt6 Multimedia not found - chat WebM audio plays through the Mumble audio output")
-			target_sources(mumble_client_lib PRIVATE
-				"ChatVideoMixerSink.h"
-				"ChatVideoMixerSink.cpp"
-			)
 			target_compile_definitions(mumble_client_lib PUBLIC "USE_CHAT_WEBM_MIXER_AUDIO")
 		endif()
 	endif()
