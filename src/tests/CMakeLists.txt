@@ -59,6 +59,7 @@ if(client)
 	# Object libraries' PRIVATE dependencies provide link dependencies, but not
 	# compile requirements. Match the suites' Qt/PIC/runtime compiler settings.
 	target_link_libraries(TestGuiRunner PRIVATE mumble_client_lib Qt6::Test)
+	add_subdirectory("TestChatWindow")
 	add_subdirectory("TestServerHandlerCrypt")
 	add_subdirectory("TestAudioWizard")
 	add_subdirectory("TestDatabasePath")
