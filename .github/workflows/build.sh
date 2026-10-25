@@ -22,6 +22,10 @@ if [[ -n "${MUMBLE_CI_TESTS:-}" ]]; then
 	CI_SPECIFIC_CMAKE_OPTIONS="$CI_SPECIFIC_CMAKE_OPTIONS -Dtests=$MUMBLE_CI_TESTS"
 fi
 
+if [[ -n "${MUMBLE_CI_LTO:-}" ]]; then
+	CI_SPECIFIC_CMAKE_OPTIONS="$CI_SPECIFIC_CMAKE_OPTIONS -Dlto=$MUMBLE_CI_LTO"
+fi
+
 if ! [[ "$build_type" = "static" ]]; then
 	OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=cmake/mumble_dependency_provider.cmake -DBoost_NO_BOOST_CMAKE=ON"
 fi
