@@ -213,7 +213,8 @@ def getDefaultValueForType(dataType):
 
 
 def generateTestBody(settingsFields, settingsClassName, excludeFields = []):
-    contents = "#include <QObject>\n"
+    contents = "#include \"ClientTest.h\"\n"
+    contents += "#include <QObject>\n"
     contents += "#include <QtTest>\n"
     contents += "#include \"" + settingsClassName + ".h\"\n"
     contents += "#include \"JSONSerialization.h\"\n"
@@ -264,7 +265,7 @@ def generateTestBody(settingsFields, settingsClassName, excludeFields = []):
     contents += "\t}\n"
     contents += "};\n"
     contents += "\n"
-    contents += "QTEST_MAIN(TestSettingsJSONSerialization)\n"
+    contents += "MUMBLE_CLIENT_TEST_MAIN(TestSettingsJSONSerialization)\n"
     contents += "#include \"TestSettingsJSONSerialization.moc\"\n"
 
     return contents

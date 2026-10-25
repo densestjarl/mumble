@@ -63,6 +63,17 @@ scheduling locally, run:
 CTEST_PARALLEL_LEVEL=2 .github/workflows/test.sh build Debug
 ```
 
+The suites that use the full client library share the `TestGuiRunner`
+executable, avoiding repeated client LTO links. CTest still starts a separate
+process for every suite, with the same names, timeouts and fixtures. Build that
+executable with `cmake --build build --target TestGuiRunner`; run an
+individual suite with `ctest --test-dir build -R '^TestAudioWizard$'` or
+`build/tests/TestGuiRunner TestAudioWizard -platform offscreen`.
+Use `build/tests/TestGuiRunner --list` to list the compiled suites.
+
+The end-to-end file-transfer and server-database suites have explicit CTest costs
+so fresh CI runners start the longest work first when running tests in parallel.
+
 `TestDatabase` and `TestServerDatabase` share a CTest resource lock because they
 reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
 that uses that database. Other tests use separate fixtures or temporary storage.

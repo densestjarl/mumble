@@ -4,6 +4,7 @@
 // Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
 #include "ChatWindow.h"
+#include "ClientTest.h"
 
 #include <QtTest/QtTest>
 #include <QtWidgets/QHBoxLayout>
@@ -89,5 +90,5 @@ private slots:
 	}
 };
 
-QTEST_MAIN(TestChatWindow)
+MUMBLE_CLIENT_TEST_MAIN(TestChatWindow)
 #include "TestChatWindow.moc"

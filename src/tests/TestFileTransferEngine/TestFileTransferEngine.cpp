@@ -1119,9 +1119,10 @@ void TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive() {
 		engine.onDataMessage(AliceSession, PQFT::randomBytes(PQFT::TransferIdSize), 0, 1, QByteArray(100, 'x'));
 	});
 	flood.start(10);
-	QTest::qWait(350);
-	QVERIFY2(sawState(updates, {}, PQFT::FTTransferInfo::State::Failed),
-			 "Stray chunks kept an unfinished handshake alive");
+	// The pending budget includes two verification windows. Keep flooding while
+	// awaiting expiry, allowing for delayed timer delivery on busy CI runners.
+	QTRY_VERIFY2_WITH_TIMEOUT(sawState(updates, {}, PQFT::FTTransferInfo::State::Failed),
+							  "Stray chunks kept an unfinished handshake alive", 1500);
 }
 
 void TestFileTransferEngine::selectedPinSurvivesCacheRemoval() {
