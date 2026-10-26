@@ -93,6 +93,35 @@ The macOS/Linux preview compiler keys use a new version prefix so older fixed-ke
 snapshots cannot mask refreshed caches. Those old keys remain restore fallbacks
 for the first build after migration.
 
+### Workflow coverage and artifact retention
+
+The main CI workflow builds and tests Linux, Windows, macOS ARM64 and macOS Intel
+on pull requests. Keep these checks enabled when changing installer selection;
+they provide the platform coverage for ordinary source changes.
+
+Preview installers always build on `master` pushes and manual workflow runs.
+Pull requests build installers when packaging or build inputs change, or when a
+maintainer adds the `ci:installers` label. Adding or removing the label re-evaluates
+the selection. Build inputs include CMake files, dependencies, resources, scripts,
+installer assets, and workflows. If the complete changed-file list cannot be
+verified, the workflow builds installers. The `Preview installer checks` job
+reports success for an intentional source-only skip and requires all selected
+package checks to pass otherwise. The inexpensive update and publication tests
+still run on pull requests. Publishing a preview continues to require every
+package's regression and installation checks, plus the client QR round-trip check.
+
+CodeQL performs one traced C++ and Python analysis per workflow run. The results
+are also uploaded under the second historical analysis identity to preserve both
+GitHub pull-request comparisons without repeating the build or analysis.
+
+Installer and regression artifacts expire after seven days; the temporary CodeQL
+results shared between jobs expire after one day. Published preview downloads are
+uploaded separately to GitHub Releases and remain available after the workflow
+artifacts expire. Per-artifact retention changes apply to newly uploaded
+artifacts; existing artifacts keep their original expiration dates. After the
+shared CodeQL artifact expires, rerun all Security jobs instead of only the
+compatibility upload job.
+
 ## Specific Instructions
 
 In order to actually build Mumble, you can follow one of the following instruction sets:
