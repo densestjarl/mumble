@@ -7,7 +7,8 @@ function isInstallerInput(filename) {
     '.github/workflows/', '.github/actions/', '.github/scripts/', '.ci/',
     'cmake/', '3rdparty/', '3rdPartyLicenses/', 'installer/', 'macx/',
     'auxiliary_files/', 'scripts/', 'icons/', 'themes/', 'samples/',
-    'src/mumble/qttranslations/',
+    'src/mumble/qttranslations/', 'plugins/', 'overlay/', 'overlay_gl/',
+    'overlay_winx64/', 'helpers/',
   ];
   const basename = filename.split('/').at(-1);
   return prefixes.some(prefix => filename.startsWith(prefix))

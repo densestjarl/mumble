@@ -35,6 +35,11 @@
   { "name": "configured headers", "files": ["src/Version.h.in"], "build": true },
   { "name": "bundled theme", "files": ["themes/Default/Theme.qss"], "build": true },
   { "name": "installer icon", "files": ["icons/mumble.svg"], "build": true },
+  { "name": "bundled positional audio plugin", "files": ["plugins/testPlugin/testPlugin.cpp"], "build": true },
+  { "name": "Windows overlay binary", "files": ["overlay/HardHook.cpp"], "build": true },
+  { "name": "OpenGL overlay binary", "files": ["overlay_gl/overlay.c"], "build": true },
+  { "name": "Windows x64 overlay helper", "files": ["overlay_winx64/overlay_exe.cpp"], "build": true },
+  { "name": "bundled G15 helper", "files": ["helpers/g15helper/g15helper.c"], "build": true },
   {
     "name": "renaming an installer input into source still builds",
     "files": [{ "filename": "src/old-script.txt", "previous_filename": "macx/scripts/osxdist.py", "status": "renamed" }],

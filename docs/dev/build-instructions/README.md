@@ -103,8 +103,9 @@ Preview installers always build on `master` pushes and manual workflow runs.
 Pull requests build installers when packaging or build inputs change, or when a
 maintainer adds the `ci:installers` label. Adding or removing the label re-evaluates
 the selection. Build inputs include CMake files, dependencies, resources, scripts,
-installer assets, and workflows. If the complete changed-file list cannot be
-verified, the workflow builds installers. The `Preview installer checks` job
+plugins, overlays, helpers, installer assets, and workflows. If the complete
+changed-file list cannot be verified, the workflow builds installers. The
+`Preview installer checks` job
 reports success for an intentional source-only skip and requires all selected
 package checks to pass otherwise. The inexpensive update and publication tests
 still run on pull requests. Publishing a preview continues to require every
