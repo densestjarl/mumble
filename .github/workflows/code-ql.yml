@@ -19,16 +19,22 @@ env:
       -Dtests=OFF -Dsymbols=ON -Dwarnings-as-errors=OFF -Dlto=OFF
 
 jobs:
-  codeql:
-    name: CodeQL
-    runs-on: ubuntu-latest
+  # Preserve the historical analysis key and matrix used for PR comparisons.
+  CodeQL-Build:
+    name: CodeQL legacy comparison (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    outputs:
+      sarif-artifact-id: ${{ steps.sarif-artifact.outputs.artifact-id }}
 
     permissions: &codeql_permissions
       security-events: write
       actions: read
       contents: read
 
-    steps: &codeql_steps
+    steps:
     - uses: actions/checkout@v6
       with:
           submodules: 'recursive'
@@ -64,15 +70,63 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
+      with:
+          # Share the merged, fingerprinted C++/Python results, so the upload
+          # job needs neither another build nor the CodeQL CLI to merge files.
+          post-processed-sarif-path: ${{ runner.temp }}/codeql-sarif
 
-  # GitHub still compares PRs with this historical matrix configuration.
-  # Keep the current scan and run identical traced C++/Python analysis under
-  # the historical identity so neither comparison silently loses coverage.
-  CodeQL-Build:
-    name: CodeQL legacy comparison (${{ matrix.os }})
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    - name: Share CodeQL results
+      id: sarif-artifact
+      uses: actions/upload-artifact@v7
+      with:
+          # Fresh names support full reruns; the output ID also lets a rerun of
+          # only the compatibility job reuse the earlier artifact until expiry.
+          name: codeql-sarif-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/codeql-sarif/upload.sarif
+          if-no-files-found: error
+          retention-days: 1
+
+  # Both configurations exist on master. Re-upload the same results under the
+  # newer job ID, keeping its check and scan comparison without repeating the
+  # build or analysis. A success-only job would leave this configuration stale.
+  codeql:
+    name: CodeQL
+    needs: CodeQL-Build
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
     permissions: *codeql_permissions
-    steps: *codeql_steps
+
+    steps:
+    - name: Require successful CodeQL analysis
+      env:
+          ANALYSIS_RESULT: ${{ needs.CodeQL-Build.result }}
+      run: test "$ANALYSIS_RESULT" = success
+
+    - uses: actions/checkout@v6
+
+    - uses: actions/download-artifact@v8
+      with:
+          artifact-ids: ${{ needs.CodeQL-Build.outputs.sarif-artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/codeql-sarif
+
+    # upload-sarif does not override an existing SARIF automationDetails ID.
+    # Change only that ID to match the newer job's historical category.
+    - name: Set compatibility scan category
+      shell: python
+      run: |
+          import json
+          import os
+          from pathlib import Path
+
+          sarifPath = Path(os.environ["RUNNER_TEMP"]) / "codeql-sarif" / "upload.sarif"
+          sarif = json.loads(sarifPath.read_text(encoding="utf-8"))
+          for run in sarif["runs"]:
+              run.setdefault("automationDetails", {})["id"] = ".github/workflows/code-ql.yml:codeql/"
+          sarifPath.write_text(json.dumps(sarif), encoding="utf-8")
+
+    - name: Publish compatibility CodeQL results
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+          sarif_file: ${{ runner.temp }}/codeql-sarif/upload.sarif
+          wait-for-processing: true
