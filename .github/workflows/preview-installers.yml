@@ -5,6 +5,8 @@ on:
     branches:
       - master
   pull_request:
+    # Adding/removing ci:installers must re-evaluate source-only PRs too.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     branches:
       - master
   workflow_dispatch:
@@ -13,7 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: preview-installers-${{ github.ref }}
+  # Label events must not cancel builds started by source updates or other labels.
+  group: preview-installers-${{ github.ref }}-${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.run_id || 'updates' }}
   cancel-in-progress: true
 
 env:
@@ -31,11 +34,40 @@ env:
     -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
 jobs:
+  select-installers:
+    name: Select preview installers
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build-installers: ${{ steps.select.outputs.build-installers }}
+      run-checks: ${{ steps.select.outputs.run-checks }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        id: select
+        with:
+          script: |
+            const { selectInstallers } = require('./.github/scripts/preview-installers.cjs');
+            const selection = await selectInstallers({ github, context });
+            core.setOutput('build-installers', String(selection.build));
+            core.setOutput('run-checks', String(selection.runChecks !== false));
+            core.info(selection.reason);
+            await core.summary.addRaw(selection.reason).write();
+
   release-tests:
     name: Update and publication tests
+    needs: select-installers
+    if: needs.select-installers.outputs.run-checks != 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Test preview installer selection and result gates
+        run: node --test scripts/tests/test_preview_installers.cjs
       - run: python3 -m unittest discover -s scripts/tests -p 'test_publish_preview.py'
       - name: Install update test dependencies
         run: |
@@ -49,6 +81,8 @@ jobs:
 
   windows:
     name: Windows x64
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: windows-2025-vs2026
 
     steps:
@@ -99,6 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-windows-x64
           if-no-files-found: warn
           path: |
@@ -123,6 +158,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-Windows-x64
           compression-level: 9
           if-no-files-found: error
@@ -139,6 +175,8 @@ jobs:
 
   macos:
     name: macOS ARM64
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: macos-15
 
     steps:
@@ -191,6 +229,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-macos-arm64
           if-no-files-found: warn
           path: |
@@ -353,6 +392,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-macOS-arm64
           compression-level: 0
           if-no-files-found: error
@@ -369,6 +409,8 @@ jobs:
 
   ubuntu:
     name: Ubuntu 24.04 client (amd64)
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: ubuntu-24.04
     env:
       CMAKE_OPTIONS: >-
@@ -443,6 +485,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-ubuntu-amd64
           if-no-files-found: warn
           path: |
@@ -540,6 +583,7 @@ jobs:
       - name: Upload Ubuntu package
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-Ubuntu-24.04-amd64
           compression-level: 0
           if-no-files-found: error
@@ -556,6 +600,8 @@ jobs:
 
   debian:
     name: Debian 12 server (amd64)
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: ubuntu-24.04
     container: debian:12
     env:
@@ -618,6 +664,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-debian-amd64
           if-no-files-found: warn
           path: |
@@ -662,6 +709,7 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-Debian-12-amd64
           compression-level: 0
           if-no-files-found: error
@@ -693,13 +741,38 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: 7
           name: safety-qr-roundtrip-preview
           path: safety-qr-roundtrip.json
+
+  preview-check:
+    # Ignoring a label must not create a passing/skipped required check with the
+    # same name as the real installer gate for an in-flight or failed source run.
+    name: ${{ needs.select-installers.outputs.run-checks == 'false' && 'Unrelated label ignored' || 'Preview installer checks' }}
+    # Explicitly run after skipped needs, and fail for failed/cancelled/unexpected skips.
+    if: always() && needs.select-installers.outputs.run-checks != 'false'
+    needs: [select-installers, release-tests, windows, macos, ubuntu, debian, safety-qr]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        with:
+          script: |
+            const { checkResults } = require('./.github/scripts/preview-installers.cjs');
+            const result = checkResults(context.eventName, JSON.parse(process.env.JOB_RESULTS));
+            core.info(result);
+            await core.summary.addRaw(result).write();
 
   publish:
     name: Publish versioned preview
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs:
+      - preview-check
       - safety-qr
       - release-tests
       - windows

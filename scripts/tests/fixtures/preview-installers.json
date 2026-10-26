@@ -1,0 +1,194 @@
+[
+  {
+    "name": "routine source and documentation changes skip packaging",
+    "files": ["src/mumble/MainWindow.cpp", "src/murmur/Server.h", "src/tests/TestCrypt/TestCrypt.cpp", "docs/dev/README.md"],
+    "build": false
+  },
+  { "name": "Windows installer", "files": ["installer/ClientInstaller.cs"], "build": true },
+  { "name": "macOS bundle", "files": ["macx/scripts/osxdist.py"], "build": true },
+  { "name": "Ubuntu packaging", "files": [".github/workflows/package_ubuntu_client.sh"], "build": true },
+  { "name": "Debian packaging", "files": [".github/workflows/package_debian_server.sh"], "build": true },
+  { "name": "installed desktop and service files", "files": ["auxiliary_files/config_files/mumble-server.service.in"], "build": true },
+  { "name": "dependency versions", "files": ["dependencies.json"], "build": true },
+  { "name": "submodule pointers", "files": ["3rdparty/argon2"], "build": true },
+  { "name": "submodule configuration", "files": [".gitmodules"], "build": true },
+  { "name": "dependency licenses", "files": ["3rdPartyLicenses/README"], "build": true },
+  { "name": "root CMake version", "files": ["CMakeLists.txt"], "build": true },
+  { "name": "nested CMake target", "files": ["src/mumble/CMakeLists.txt"], "build": true },
+  { "name": "CMake module", "files": ["cmake/dependencies.cmake"], "build": true },
+  { "name": "CMake module outside cmake", "files": ["src/tests/test.cmake"], "build": true },
+  { "name": "CMake presets", "files": ["CMakePresets.json"], "build": true },
+  { "name": "build helper", "files": ["scripts/mumble-version.py"], "build": true },
+  { "name": "publication helper", "files": ["scripts/publish-preview.py"], "build": true },
+  { "name": "QR verification", "files": ["scripts/hosting/verify_safety_qr.py"], "build": true },
+  { "name": "selector changes", "files": [".github/scripts/preview-installers.cjs"], "build": true },
+  { "name": "selector tests", "files": ["scripts/tests/test_preview_installers.cjs"], "build": true },
+  { "name": "workflow changes", "files": [".github/workflows/preview-installers.yml"], "build": true },
+  { "name": "dependency installation actions", "files": [".github/actions/install-dependencies/main.sh"], "build": true },
+  { "name": "other build configuration", "files": [".ci/azure-pipelines/main-pr.yml"], "build": true },
+  { "name": "embedded resources", "files": ["src/mumble/mumble.qrc"], "build": true },
+  { "name": "embedded sound sample", "files": ["samples/on.ogg"], "build": true },
+  { "name": "client translation", "files": ["src/mumble/mumble_de.ts"], "build": true },
+  { "name": "Qt translation", "files": ["src/mumble/qttranslations/qt_de.ts"], "build": true },
+  { "name": "Qt translation configuration", "files": ["src/mumble/qttranslations/translations.conf"], "build": true },
+  { "name": "Windows resource", "files": ["src/mumble/mumble.rc"], "build": true },
+  { "name": "configured headers", "files": ["src/Version.h.in"], "build": true },
+  { "name": "bundled theme", "files": ["themes/Default/Theme.qss"], "build": true },
+  { "name": "installer icon", "files": ["icons/mumble.svg"], "build": true },
+  { "name": "bundled positional audio plugin", "files": ["plugins/testPlugin/testPlugin.cpp"], "build": true },
+  { "name": "Windows overlay binary", "files": ["overlay/HardHook.cpp"], "build": true },
+  { "name": "OpenGL overlay binary", "files": ["overlay_gl/overlay.c"], "build": true },
+  { "name": "Windows x64 overlay helper", "files": ["overlay_winx64/overlay_exe.cpp"], "build": true },
+  { "name": "bundled G15 helper", "files": ["helpers/g15helper/g15helper.c"], "build": true },
+  {
+    "name": "renaming an installer input into source still builds",
+    "files": [{ "filename": "src/old-script.txt", "previous_filename": "macx/scripts/osxdist.py", "status": "renamed" }],
+    "build": true
+  },
+  {
+    "name": "deleted installer inputs still build",
+    "files": [{ "filename": "installer/Theme.xml", "status": "removed" }],
+    "build": true
+  },
+  {
+    "name": "pagination finds installer changes after two source-only pages",
+    "sourceFileCount": 205,
+    "files": ["installer/Theme.xml"],
+    "expectedPages": 3,
+    "build": true
+  },
+  {
+    "name": "paginated source-only diff can skip packaging",
+    "sourceFileCount": 205,
+    "expectedPages": 3,
+    "build": false
+  },
+  {
+    "name": "installer label added to a source-only fork PR",
+    "action": "labeled",
+    "labels": ["ci:installers"],
+    "files": ["src/mumble/MainWindow.cpp"],
+    "expectApi": false,
+    "build": true
+  },
+  {
+    "name": "installer label comparison is case insensitive",
+    "action": "labeled",
+    "eventLabel": "CI:Installers",
+    "labels": ["CI:Installers"],
+    "files": ["src/mumble/MainWindow.cpp"],
+    "expectApi": false,
+    "build": true
+  },
+  {
+    "name": "removing installer label restores source-only skip",
+    "action": "unlabeled",
+    "labels": ["bug"],
+    "files": ["src/mumble/MainWindow.cpp"],
+    "build": false
+  },
+  {
+    "name": "removing label does not bypass packaging changes",
+    "action": "unlabeled",
+    "files": ["installer/ClientInstaller.cs"],
+    "build": true
+  },
+  {
+    "name": "unrelated label additions skip checks without reading the diff",
+    "action": "labeled",
+    "eventLabel": "enhancement",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "expectApi": false,
+    "runChecks": false,
+    "build": false
+  },
+  {
+    "name": "unrelated label removals do not rebuild packaging changes",
+    "action": "unlabeled",
+    "eventLabel": "duplicate",
+    "files": ["installer/ClientInstaller.cs"],
+    "expectApi": false,
+    "runChecks": false,
+    "build": false
+  },
+  {
+    "name": "unrelated labels do not repeat an existing installer request",
+    "action": "labeled",
+    "eventLabel": "bug",
+    "labels": ["ci:installers", "bug"],
+    "files": ["installer/ClientInstaller.cs"],
+    "expectApi": false,
+    "runChecks": false,
+    "build": false
+  },
+  {
+    "name": "missing label event metadata retains installer coverage",
+    "action": "labeled",
+    "eventLabel": null,
+    "files": ["installer/ClientInstaller.cs"],
+    "build": true
+  },
+  {
+    "name": "a newly applied live label requests installers",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "current": { "labels": [{ "name": "ci:installers" }] },
+    "build": true
+  },
+  {
+    "name": "push always builds without reading PR files",
+    "eventName": "push",
+    "expectApi": false,
+    "build": true
+  },
+  {
+    "name": "manual run always builds without reading PR files",
+    "eventName": "workflow_dispatch",
+    "expectApi": false,
+    "build": true
+  },
+  {
+    "name": "API truncation cannot skip packaging",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "changedFiles": 3001,
+    "expectApi": false,
+    "build": true
+  },
+  { "name": "empty diff builds conservatively", "changedFiles": 0, "expectApi": false, "build": true },
+  { "name": "missing changed file count builds conservatively", "changedFiles": null, "expectApi": false, "build": true },
+  {
+    "name": "incomplete API pages cannot skip packaging",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "changedFiles": 2,
+    "build": true
+  },
+  {
+    "name": "PR head movement during pagination cannot skip packaging",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "current": { "head": { "sha": "new-head" } },
+    "build": true
+  },
+  {
+    "name": "PR base movement cannot skip packaging",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "current": { "base": { "sha": "new-base" } },
+    "build": true
+  },
+  {
+    "name": "current file count mismatch cannot skip packaging",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "current": { "changed_files": 2 },
+    "build": true
+  },
+  {
+    "name": "fork permission failure retains installer coverage",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "apiError": "paginate",
+    "build": true
+  },
+  {
+    "name": "PR metadata failure retains installer coverage",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "apiError": "get",
+    "build": true
+  }
+]
