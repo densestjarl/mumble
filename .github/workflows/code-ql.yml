@@ -27,6 +27,8 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     outputs:
+      # This scalar output and the shared artifact name require a single matrix leg.
+      # Additional legs need per-leg artifacts and compatibility uploads.
       sarif-artifact-id: ${{ steps.sarif-artifact.outputs.artifact-id }}
 
     permissions: &codeql_permissions
