@@ -15,7 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: preview-installers-${{ github.ref }}
+  # Label events must not cancel builds started by source updates or other labels.
+  group: preview-installers-${{ github.ref }}-${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.run_id || 'updates' }}
   cancel-in-progress: true
 
 env:
@@ -41,6 +42,7 @@ jobs:
       pull-requests: read
     outputs:
       build-installers: ${{ steps.select.outputs.build-installers }}
+      run-checks: ${{ steps.select.outputs.run-checks }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -53,11 +55,14 @@ jobs:
             const { selectInstallers } = require('./.github/scripts/preview-installers.cjs');
             const selection = await selectInstallers({ github, context });
             core.setOutput('build-installers', String(selection.build));
+            core.setOutput('run-checks', String(selection.runChecks !== false));
             core.info(selection.reason);
             await core.summary.addRaw(selection.reason).write();
 
   release-tests:
     name: Update and publication tests
+    needs: select-installers
+    if: needs.select-installers.outputs.run-checks != 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -741,9 +746,11 @@ jobs:
           path: safety-qr-roundtrip.json
 
   preview-check:
-    name: Preview installer checks
+    # Ignoring a label must not create a passing/skipped required check with the
+    # same name as the real installer gate for an in-flight or failed source run.
+    name: ${{ needs.select-installers.outputs.run-checks == 'false' && 'Unrelated label ignored' || 'Preview installer checks' }}
     # Explicitly run after skipped needs, and fail for failed/cancelled/unexpected skips.
-    if: always()
+    if: always() && needs.select-installers.outputs.run-checks != 'false'
     needs: [select-installers, release-tests, windows, macos, ubuntu, debian, safety-qr]
     runs-on: ubuntu-latest
     steps:

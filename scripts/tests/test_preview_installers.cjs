@@ -22,6 +22,9 @@ for (const fixture of fixtures) {
       repo: { owner: 'densestjarl', repo: 'mumble' },
       payload: { action: fixture.action || 'synchronize', pull_request: pullRequest },
     };
+    if (['labeled', 'unlabeled'].includes(context.payload.action) && fixture.eventLabel !== null) {
+      context.payload.label = { name: fixture.eventLabel || 'ci:installers' };
+    }
     if (context.eventName !== 'pull_request') {
       context.payload = {};
     }
@@ -63,6 +66,7 @@ for (const fixture of fixtures) {
 
     const result = await selectInstallers({ github, context });
     assert.equal(result.build, fixture.build);
+    assert.equal(result.runChecks !== false, fixture.runChecks !== false);
     assert.equal(paginated, fixture.expectApi !== false);
     assert.ok(result.reason.length > 0);
   });
@@ -80,6 +84,12 @@ function jobResults(selection) {
 
 test('source-only PR has a successful stable check when packaging and QR needs are skipped', () => {
   assert.match(checkResults('pull_request', jobResults('false')), /intentionally skipped/);
+});
+
+test('ignored label events cannot be reported as successful installer checks', () => {
+  const needs = jobResults('false');
+  needs['release-tests'].result = 'skipped';
+  assert.throws(() => checkResults('pull_request', needs), /release-tests/);
 });
 
 for (const event of ['pull_request', 'push', 'workflow_dispatch']) {

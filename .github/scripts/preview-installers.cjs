@@ -26,6 +26,17 @@ async function selectInstallers({ github, context }) {
     return { build: true, reason: 'Pushes and manual runs build every installer.' };
   }
 
+  const labelEvent = ['labeled', 'unlabeled'].includes(context.payload.action);
+  const changedLabel = context.payload.label?.name;
+  if (labelEvent && typeof changedLabel === 'string'
+      && changedLabel.toLowerCase() !== installerLabel) {
+    return {
+      build: false,
+      runChecks: false,
+      reason: `Unrelated label change ignored; only ${installerLabel} re-evaluates installer checks.`,
+    };
+  }
+
   const pullRequest = context.payload.pull_request;
   if (requestsInstallers(pullRequest)) {
     return { build: true, reason: `The ${installerLabel} label requests every installer.` };
