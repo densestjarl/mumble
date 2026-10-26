@@ -5,6 +5,8 @@ on:
     branches:
       - master
   pull_request:
+    # Adding/removing ci:installers must re-evaluate source-only PRs too.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     branches:
       - master
   workflow_dispatch:
@@ -31,11 +33,36 @@ env:
     -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
 jobs:
+  select-installers:
+    name: Select preview installers
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build-installers: ${{ steps.select.outputs.build-installers }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        id: select
+        with:
+          script: |
+            const { selectInstallers } = require('./.github/scripts/preview-installers.cjs');
+            const selection = await selectInstallers({ github, context });
+            core.setOutput('build-installers', String(selection.build));
+            core.info(selection.reason);
+            await core.summary.addRaw(selection.reason).write();
+
   release-tests:
     name: Update and publication tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Test preview installer selection and result gates
+        run: node --test scripts/tests/test_preview_installers.cjs
       - run: python3 -m unittest discover -s scripts/tests -p 'test_publish_preview.py'
       - name: Install update test dependencies
         run: |
@@ -49,6 +76,8 @@ jobs:
 
   windows:
     name: Windows x64
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: windows-2025-vs2026
 
     steps:
@@ -139,6 +168,8 @@ jobs:
 
   macos:
     name: macOS ARM64
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: macos-15
 
     steps:
@@ -369,6 +400,8 @@ jobs:
 
   ubuntu:
     name: Ubuntu 24.04 client (amd64)
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: ubuntu-24.04
     env:
       CMAKE_OPTIONS: >-
@@ -556,6 +589,8 @@ jobs:
 
   debian:
     name: Debian 12 server (amd64)
+    needs: select-installers
+    if: needs.select-installers.outputs.build-installers == 'true'
     runs-on: ubuntu-24.04
     container: debian:12
     env:
@@ -696,10 +731,32 @@ jobs:
           name: safety-qr-roundtrip-preview
           path: safety-qr-roundtrip.json
 
+  preview-check:
+    name: Preview installer checks
+    # Explicitly run after skipped needs, and fail for failed/cancelled/unexpected skips.
+    if: always()
+    needs: [select-installers, release-tests, windows, macos, ubuntu, debian, safety-qr]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        with:
+          script: |
+            const { checkResults } = require('./.github/scripts/preview-installers.cjs');
+            const result = checkResults(context.eventName, JSON.parse(process.env.JOB_RESULTS));
+            core.info(result);
+            await core.summary.addRaw(result).write();
+
   publish:
     name: Publish versioned preview
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs:
+      - preview-check
       - safety-qr
       - release-tests
       - windows
