@@ -139,6 +139,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: tests-${{ matrix.os }}-${{ matrix.arch }}
+        retention-days: 7
         if-no-files-found: warn
         path: |
           build/test-results/
@@ -163,6 +164,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: 'Mumble_${{ matrix.os }}.${{ matrix.compiler }}.${{ matrix.arch }}'
+        retention-days: 7
         compression-level: 9
         path: |
           build/mumble
@@ -212,4 +214,5 @@ jobs:
         if: always()
         with:
           name: safety-qr-roundtrip-ci
+          retention-days: 7
           path: safety-qr-roundtrip.json

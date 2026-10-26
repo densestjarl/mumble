@@ -128,6 +128,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-windows-x64
           if-no-files-found: warn
           path: |
@@ -152,6 +153,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-Windows-x64
           compression-level: 9
           if-no-files-found: error
@@ -222,6 +224,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-macos-arm64
           if-no-files-found: warn
           path: |
@@ -384,6 +387,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-macOS-arm64
           compression-level: 0
           if-no-files-found: error
@@ -476,6 +480,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-ubuntu-amd64
           if-no-files-found: warn
           path: |
@@ -573,6 +578,7 @@ jobs:
       - name: Upload Ubuntu package
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-Ubuntu-24.04-amd64
           compression-level: 0
           if-no-files-found: error
@@ -653,6 +659,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: preview-tests-debian-amd64
           if-no-files-found: warn
           path: |
@@ -697,6 +704,7 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 7
           name: Mumble-Debian-12-amd64
           compression-level: 0
           if-no-files-found: error
@@ -728,6 +736,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: 7
           name: safety-qr-roundtrip-preview
           path: safety-qr-roundtrip.json
 
