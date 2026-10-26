@@ -73,6 +73,8 @@
   },
   {
     "name": "installer label comparison is case insensitive",
+    "action": "labeled",
+    "eventLabel": "CI:Installers",
     "labels": ["CI:Installers"],
     "files": ["src/mumble/MainWindow.cpp"],
     "expectApi": false,
@@ -88,6 +90,41 @@
   {
     "name": "removing label does not bypass packaging changes",
     "action": "unlabeled",
+    "files": ["installer/ClientInstaller.cs"],
+    "build": true
+  },
+  {
+    "name": "unrelated label additions skip checks without reading the diff",
+    "action": "labeled",
+    "eventLabel": "enhancement",
+    "files": ["src/mumble/MainWindow.cpp"],
+    "expectApi": false,
+    "runChecks": false,
+    "build": false
+  },
+  {
+    "name": "unrelated label removals do not rebuild packaging changes",
+    "action": "unlabeled",
+    "eventLabel": "duplicate",
+    "files": ["installer/ClientInstaller.cs"],
+    "expectApi": false,
+    "runChecks": false,
+    "build": false
+  },
+  {
+    "name": "unrelated labels do not repeat an existing installer request",
+    "action": "labeled",
+    "eventLabel": "bug",
+    "labels": ["ci:installers", "bug"],
+    "files": ["installer/ClientInstaller.cs"],
+    "expectApi": false,
+    "runChecks": false,
+    "build": false
+  },
+  {
+    "name": "missing label event metadata retains installer coverage",
+    "action": "labeled",
+    "eventLabel": null,
     "files": ["installer/ClientInstaller.cs"],
     "build": true
   },

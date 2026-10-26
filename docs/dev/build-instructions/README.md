@@ -111,6 +111,11 @@ package checks to pass otherwise. The inexpensive update and publication tests
 still run on pull requests. Publishing a preview continues to require every
 package's regression and installation checks, plus the client QR round-trip check.
 
+Label-triggered runs use separate concurrency groups, so they do not cancel
+in-flight source-update builds. Unrelated label changes only run the selector;
+they skip release tests and packaging without replacing `Preview installer checks`
+with a passing or skipped check of the same name.
+
 CodeQL performs one traced C++ and Python analysis per workflow run. The results
 are also uploaded under the second historical analysis identity to preserve both
 GitHub pull-request comparisons without repeating the build or analysis.
