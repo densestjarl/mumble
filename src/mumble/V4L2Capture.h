@@ -40,8 +40,6 @@ public:
 	/// indefinitely thanks to the FFmpeg interrupt callback.
 	void stop();
 
-	bool isRunning() const { return m_running; }
-
 private:
 	void run(const QString &devicePath, StartedCallback onStarted, ErrorCallback onError,
 			 YuvFrameCallback onYuvFrame);

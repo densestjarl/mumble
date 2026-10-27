@@ -127,8 +127,6 @@ private:
 	/// from the worker thread mid-stream, while the preview context is only ever freed from
 	/// stopCapture() / the destructor, i.e. after the worker has been joined.
 	SwsContext *m_previewSwsCtx = nullptr;
-	int m_previewWidth          = 0;
-	int m_previewHeight         = 0;
 	/// Time of the last previewFrame() emission; default-constructed means "emit immediately".
 	std::chrono::steady_clock::time_point m_lastPreviewEmit {};
 
