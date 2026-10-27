@@ -127,7 +127,7 @@ FileTransferEngine::~FileTransferEngine() {
 	// which would invalidate the iterators mid-loop.
 	const QList< std::shared_ptr< SendJob > > sendJobs = m_sendJobs.values();
 	for (const auto &job : sendJobs) {
-		cleanupSend(*job, true);
+		cleanupSend(*job);
 	}
 	const QList< std::shared_ptr< ReceiveJob > > recvJobs = m_receiveJobs.values();
 	for (const auto &job : recvJobs) {
@@ -809,7 +809,6 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 	auto job			= std::make_shared< SendJob >();
 	job->transferId		= randomBytes(TransferIdSize);
 	job->sendContext        = sendContext;
-	job->sourcePath		= fileInfo.absoluteFilePath();
 	job->fileName		= fileInfo.fileName();
 	job->mimeType		= mimeType.isEmpty() ? QStringLiteral("application/octet-stream") : mimeType;
 	job->passwordMode	= passwordMode;
@@ -818,7 +817,7 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 	job->effectiveChunkSize = sendChunkSize(m_config, recipients.size());
 	job->file			= new QFile(fileInfo.absoluteFilePath());
 	if (!job->file->open(QIODevice::ReadOnly)) {
-		cleanupSend(*job, true);
+		cleanupSend(*job);
 		zeroize(password);
 		return 0;
 	}
@@ -828,7 +827,7 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 	// One hashing pass, cancellable between bounded chunks and Merkle nodes.
 	job->merkleRoot = merkleRootFromDevice(*job->file, chunkSize, chunkCount, shutdownRequested);
 	if (shutdownRequested() || job->merkleRoot.isEmpty()) {
-		cleanupSend(*job, true);
+		cleanupSend(*job);
 		zeroize(password);
 		return 0;
 	}
@@ -855,14 +854,14 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 	bool anyPeer = false;
 	for (auto recipient = recipients.cbegin(); recipient != recipients.cend(); ++recipient) {
 		if (shutdownRequested()) {
-			cleanupSend(*job, true);
+			cleanupSend(*job);
 			zeroize(password);
 			return 0;
 		}
 		const unsigned int session = recipient.key();
 		const QByteArray pinned    = recipient.value();
 		if (!pinned.isEmpty() && pinned.size() != HashSize) {
-			cleanupSend(*job, true);
+			cleanupSend(*job);
 			zeroize(password);
 			return 0;
 		}
@@ -878,7 +877,7 @@ quint64 FileTransferEngine::startSend(const QString &filePath, const QString &mi
 		anyPeer = true;
 	}
 	if (!anyPeer) {
-		cleanupSend(*job, true);
+		cleanupSend(*job);
 		zeroize(password);
 		return 0;
 	}
@@ -1374,14 +1373,13 @@ void FileTransferEngine::finishSend(SendJob &job, bool success, const QString &e
 					: anyDelivered ? FTTransferInfo::State::PartiallyDelivered
 								   : FTTransferInfo::State::Failed,
 					error);
-	cleanupSend(job, true);
+	cleanupSend(job);
 	for (const auto &abort : aborts)
 		if (m_transportControl)
 			m_transportControl(abort.first, abort.second);
 }
 
-void FileTransferEngine::cleanupSend(SendJob &job, bool keepCard) {
-	Q_UNUSED(keepCard);
+void FileTransferEngine::cleanupSend(SendJob &job) {
 	if (job.file) {
 		job.file->close();
 		delete job.file;
@@ -1457,7 +1455,7 @@ void FileTransferEngine::abortTransfer(const QByteArray &transferId) {
 			}
 		}
 		updateSendState(job, FTTransferInfo::State::Aborted);
-		cleanupSend(job, true);
+		cleanupSend(job);
 		return;
 	}
 	auto recvIt = m_receiveJobs.find(transferId);
