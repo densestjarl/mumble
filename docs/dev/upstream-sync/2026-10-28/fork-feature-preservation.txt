@@ -1,0 +1,21 @@
+The merge produced no conflicts. Incoming changes are confined to translations, installer plugin registration and positional-audio plugins.
+
+installer/ClientInstaller.cs
+plugins/CMakeLists.txt
+plugins/grounded/grounded.cpp
+plugins/remnant2/CMakeLists.txt
+plugins/remnant2/remnant2.cpp
+plugins/teardown/teardown.cpp
+src/mumble/mumble_de.ts
+src/mumble/mumble_en_GB.ts
+src/mumble/mumble_fi.ts
+src/mumble/mumble_fr.ts
+src/mumble/mumble_hu.ts
+src/mumble/mumble_it.ts
+src/mumble/mumble_pl.ts
+src/mumble/mumble_pt_BR.ts
+src/mumble/mumble_ru.ts
+src/mumble/mumble_tr.ts
+src/mumble/mumble_zh_CN.ts
+
+No merge changes to AGENTS.md, CONTRIBUTING.md, agent tooling, protocol, authentication, persisted settings, server database or media/file-transfer implementations.

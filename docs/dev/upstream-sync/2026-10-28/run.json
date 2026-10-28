@@ -1,0 +1,10 @@
+{
+  "started_at": "2026-10-28T17:23:45.689936+00:00",
+  "fork_repository": "densestjarl/mumble",
+  "fork_master": "7aa4335fb3466ed98e80331c91c574e784f454f0",
+  "upstream_master": "162f42805ce095c37ab57f1d81ba92cdb31bbac5",
+  "stable_tag": "v1.5.939",
+  "stable_sha": "dfbac8d3d9c967003e74b4ffc5610f7d45e8f666",
+  "initial_ahead": 172,
+  "initial_behind": 18
+}

@@ -1,0 +1,18 @@
+b8f7a72a3f47d7507847f5d35adbf07d14269412 FEAT(positional-audio): Plugin for Remnant II
+1e52d3552f48c3c4dcdf5cff3cb714957157a2fd FIX(positional-audio): Support Teardown 2.1.0
+6f44917f13d4add811f4a13d8e30a922afdb9eef FIX(positional-audio): Update Grounded plugin author
+344b808af05f89400f1f34c8c6bf38465363c2ec Merge PR #7444: FIX(positional-audio): Update Grounded plugin author
+3fd00bcaeea87462543707c2c52bc43bdec2a48d Merge PR #7443: FIX(positional-audio): Support Teardown 2.1.0
+fcde493800c2190e6038ebfad333f849dd191b7b Merge PR #7442: FEAT(positional-audio): Plugin for Remnant II
+d5affa6d8a2286f461f94606507934c404189fec TRANSLATION: Update Turkish translation
+39c9fdd26a0501d95feac39f4a475f9c8fe29e8b TRANSLATION: Update Portuguese (Brazil) translation
+5639ccb83d9f395cbe29ca6b148dcccbddce80a1 TRANSLATION: Update German translation
+7c30502089edffc1dbe52d35f629643d59d3a81f TRANSLATION: Update Russian translation
+a04ac0a7867e53a259034dc2b17e2f22845cfcc9 TRANSLATION: Update English (United Kingdom) translation
+e99701dce00552d9427369adee2e33e23fb64e8c TRANSLATION: Update Hungarian translation
+e0a92d513f77c871b919410d216ff7f445fb1258 TRANSLATION: Update Polish translation
+6a752947012bd8a7bf30aa3e2201a10e23ec6339 TRANSLATION: Update Italian translation
+89aeee70b8ec2602500430f67f2d832aeb95bf1c TRANSLATION: Update French translation
+2a6d64a6940d91404b2049c44f6d23101b955c1d TRANSLATION: Update Finnish translation
+e1ded87810dc308d9c84d16b2923ea18d90c7816 TRANSLATION: Update Chinese (Simplified Han script) translation
+162f42805ce095c37ab57f1d81ba92cdb31bbac5 Merge PR #7410: Translations update from Hosted Weblate
