@@ -1,0 +1,218 @@
+Internal ctest changing into directory: /home/agent/.cache/mumble-sync-build/2026-10-21
+Test project /home/agent/.cache/mumble-sync-build/2026-10-21
+      Start  7: TestChatWebM
+      Start 19: TestFileTransferEngine
+ 1/46 Test #19: TestFileTransferEngine ...........Subprocess aborted***Exception:   7.37 sec
+********* Start testing of TestFileTransferEngine *********
+Config: Using QtTest library 6.4.2, Qt 6.4.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 13.2.0), ubuntu 24.04
+PASS   : TestFileTransferEngine::initTestCase()
+PASS   : TestFileTransferEngine::relayRetriesKeepCiphertextAndRequireAdmission()
+PASS   : TestFileTransferEngine::synchronousRelayAdmissionCompletes()
+PASS   : TestFileTransferEngine::incompleteRecipientHandshakeSendsNoContent()
+PASS   : TestFileTransferEngine::missingReceiptReportsPartialDelivery()
+PASS   : TestFileTransferEngine::peerResetKeepsUnrelatedReadyFileAndRetiresPrompt()
+PASS   : TestFileTransferEngine::privateReceiveStorage(plaintext)
+PASS   : TestFileTransferEngine::privateReceiveStorage(password-spool)
+PASS   : TestFileTransferEngine::predictableReceivePathCannotRedirectWrites()
+PASS   : TestFileTransferEngine::earlyChunksKeepTheirTransferIdentity()
+PASS   : TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive()
+PASS   : TestFileTransferEngine::sendReceiveRoundTrip()
+PASS   : TestFileTransferEngine::incomingIdentitySurvivesPeerRename()
+QFATAL : TestFileTransferEngine::selectedPinSurvivesCacheRemoval() ASSERT: "!isEmpty()" in file /usr/include/x86_64-linux-gnu/qt6/QtCore/qlist.h, line 607
+FAIL!  : TestFileTransferEngine::selectedPinSurvivesCacheRemoval() Received a fatal error.
+   Loc: [/usr/include/x86_64-linux-gnu/qt6/QtCore/qlist.h(607)]
+Totals: 13 passed, 1 failed, 0 skipped, 0 blacklisted, 6182ms
+********* Finished testing of TestFileTransferEngine *********
+Received signal 6 (SIGABRT)
+         selectedPinSurvivesCacheRemoval function time: 1ms, total time: 6182ms
+
+=== Stack trace ===
+Could not attach to process.  If your uid matches the uid of the target
+process, check the setting of /proc/sys/kernel/yama/ptrace_scope, or try
+again as the root user.  For more details, see /etc/sysctl.d/10-ptrace.conf
+ptrace: Inappropriate ioctl for device.
+=== End of stack trace ===
+
+      Start 20: TestFileTransferE2E
+ 2/46 Test  #7: TestChatWebM .....................***Failed   17.55 sec
+********* Start testing of TestChatWebM *********
+Config: Using QtTest library 6.4.2, Qt 6.4.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 13.2.0), ubuntu 24.04
+PASS   : TestChatWebM::initTestCase()
+PASS   : TestChatWebM::acceptsWebmFileDrop()
+PASS   : TestChatWebM::routesOversizedWebm()
+PASS   : TestChatWebM::videoToImgRejectsGarbage()
+PASS   : TestChatWebM::videoToImgBudgetTooLarge()
+PASS   : TestChatWebM::oversizedDeviceIsNotRead()
+PASS   : TestChatWebM::growingDeviceReadIsBounded()
+PASS   : TestChatWebM::deviceEncodingPreservesBudgetBoundary()
+PASS   : TestChatWebM::deviceRejectsNegativeBudgetWithoutReading()
+PASS   : TestChatWebM::deviceZeroBudgetRemainsUnlimited()
+PASS   : TestChatWebM::mixedDropRespectsFileTransferSetting(file-sharing-disabled)
+PASS   : TestChatWebM::mixedDropRespectsFileTransferSetting(file-sharing-enabled)
+PASS   : TestChatWebM::invalidWebmDoesNotBecomeFileTransfer()
+PASS   : TestChatWebM::droppedVideoRespectsCompleteMessageBudget()
+[matroska,webm @ 0x62e1ff8cc280] File ended prematurely at pos. 8 (0x8)
+[matroska,webm @ 0x62e1ff8cc280] EBML header parsing failed
+PASS   : TestChatWebM::placeholderForUndecodableWebm()
+[matroska,webm @ 0x62e1ff8cc280] File ended prematurely at pos. 8 (0x8)
+[matroska,webm @ 0x62e1ff8cc280] EBML header parsing failed
+PASS   : TestChatWebM::validationDocumentCreatesNoPlayers()
+PASS   : TestChatWebM::posterDoesNotAutoplay()
+PASS   : TestChatWebM::clickTogglesPlayback()
+[opus @ 0x62e1ff95bac0] Could not update timestamps for skipped samples.
+QINFO  : TestChatWebM::audioPlaybackAdvancesClockAndResumes() audio output: true clock: 140 queued frames: 3 decoder eof: false buffered audio: 73504
+FAIL!  : TestChatWebM::audioPlaybackAdvancesClockAndResumes() 'clockWhilePlaying >= 400' returned FALSE. ()
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-10-21/src/tests/TestChatWebM/TestChatWebM.cpp(1103)]
+[opus @ 0x62e1ff8efb00] Could not update timestamps for skipped samples.
+[opus @ 0x62e1ff8efb00] Could not update timestamps for discarded samples.
+PASS   : TestChatWebM::audioRefillPreservesUpcomingVideoFrames()
+PASS   : TestChatWebM::mixerSinkConsumesStereo(48000)
+PASS   : TestChatWebM::mixerSinkConsumesStereo(44100)
+PASS   : TestChatWebM::mixerSinkReportsDetach()
+PASS   : TestChatWebM::mixerSinkPreallocatesBackendMaximum()
+PASS   : TestChatWebM::idleAudioRecoveryPreservesQueuedPcm()
+[opus @ 0x62e1ff943480] Could not update timestamps for skipped samples.
+FAIL!  : TestChatWebM::loopsAfterEnd() 'player->currentClockMs() > 2000' returned FALSE. (playback clock did not continue past the end of the clip (looping broken))
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-10-21/src/tests/TestChatWebM/TestChatWebM.cpp(1470)]
+[opus @ 0x62e1ff9774c0] Could not update timestamps for skipped samples.
+[opus @ 0x62e1ff9774c0] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::resumeAtClipEndRestartsImmediately() QTestLib: This test case check ("player->decoderAtEof()") failed because the requested timeout (3000 ms) was too short, 3300 ms would have been sufficient this time.
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-10-21/src/tests/TestChatWebM/TestChatWebM.cpp(1500)]
+[opus @ 0x62e1ff97db80] Could not update timestamps for skipped samples.
+[opus @ 0x62e1ff97db80] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::pauseResumeKeepsFrameSchedule() QTestLib: This test case check ("player->decoderAtEof()") failed because the requested timeout (3000 ms) was too short, 3250 ms would have been sufficient this time.
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-10-21/src/tests/TestChatWebM/TestChatWebM.cpp(1539)]
+PASS   : TestChatWebM::silentVideoPacesOnWallClock()
+PASS   : TestChatWebM::releasesPlayerOnClear()
+PASS   : TestChatWebM::retainsPlayerUntilLastReferenceIsRemoved()
+PASS   : TestChatWebM::releasesPlayerOnMaximumBlockEviction()
+PASS   : TestChatWebM::playingCapPausesOldest()
+PASS   : TestChatWebM::totalCapDestroysOldest()
+PASS   : TestChatWebM::evictedVideoIsRecreatedOnToggle()
+PASS   : TestChatWebM::scalesVideoWithChatWindow()
+[opus @ 0x62e1ff8ed340] Could not update timestamps for skipped samples.
+[opus @ 0x62e1ff8ed340] Could not update timestamps for discarded samples.
+PASS   : TestChatWebM::audioDecodesToPcm()
+PASS   : TestChatWebM::pacingMath()
+PASS   : TestChatWebM::cleanupTestCase()
+Totals: 35 passed, 4 failed, 0 skipped, 0 blacklisted, 17468ms
+********* Finished testing of TestChatWebM *********
+
+      Start 32: TestServerDatabase
+ 3/46 Test #32: TestServerDatabase ...............   Passed    1.91 sec
+      Start 15: TestFileTransferManager
+ 4/46 Test #15: TestFileTransferManager ..........   Passed   61.64 sec
+      Start 17: TestFTIdentity
+ 5/46 Test #17: TestFTIdentity ...................   Passed   46.33 sec
+      Start 14: TestFileTransferMainWindow
+ 6/46 Test #14: TestFileTransferMainWindow .......   Passed   44.01 sec
+      Start 16: TestPQCrypto
+ 7/46 Test #16: TestPQCrypto .....................   Passed    3.36 sec
+      Start  4: TestDatabasePath
+ 8/46 Test  #4: TestDatabasePath .................   Passed    2.50 sec
+      Start 30: TestCryptographicRandom
+ 9/46 Test #30: TestCryptographicRandom ..........   Passed    2.16 sec
+      Start 41: TestSSLLocks
+10/46 Test #41: TestSSLLocks .....................   Passed    2.02 sec
+      Start 27: TestConnectionOutputQueue
+11/46 Test #27: TestConnectionOutputQueue ........   Passed    0.99 sec
+      Start  1: TestClientTestRunner
+12/46 Test  #1: TestClientTestRunner .............   Passed    0.77 sec
+      Start 38: TestSelfSignedCertificate
+13/46 Test #38: TestSelfSignedCertificate ........   Passed    0.83 sec
+      Start 31: TestDatabase
+14/46 Test #31: TestDatabase .....................   Passed    1.24 sec
+      Start  2: TestServerHandlerCrypt
+15/46 Test  #2: TestServerHandlerCrypt ...........   Passed    0.42 sec
+      Start 13: TestFileTransferUi
+16/46 Test #13: TestFileTransferUi ...............   Passed    0.20 sec
+      Start 43: TestTimer
+17/46 Test #43: TestTimer ........................   Passed    0.16 sec
+      Start  9: TestVideoPacketPacer
+18/46 Test  #9: TestVideoPacketPacer .............   Passed    0.14 sec
+      Start  3: TestAudioWizard
+19/46 Test  #3: TestAudioWizard ..................   Passed    0.09 sec
+      Start 21: TestSettingsJSONSerialization
+20/46 Test #21: TestSettingsJSONSerialization ....   Passed    0.07 sec
+      Start  6: TestAnimatedImages
+21/46 Test  #6: TestAnimatedImages ...............   Passed    0.08 sec
+      Start  5: TestReleaseUpdate
+22/46 Test  #5: TestReleaseUpdate ................   Passed    0.13 sec
+      Start 18: TestFileTransferSession
+23/46 Test #18: TestFileTransferSession ..........   Passed    0.03 sec
+      Start 25: TestQtLogger
+24/46 Test #25: TestQtLogger .....................   Passed    0.03 sec
+      Start 23: TestCrypt
+25/46 Test #23: TestCrypt ........................   Passed    0.03 sec
+      Start 36: TestPasswordGenerator
+26/46 Test #36: TestPasswordGenerator ............   Passed    0.02 sec
+      Start 33: TestFFDHE
+27/46 Test #33: TestFFDHE ........................   Passed    0.02 sec
+      Start 40: TestSSLCiphers
+28/46 Test #40: TestSSLCiphers ...................   Passed    0.02 sec
+      Start 11: TestVideoViewUi
+29/46 Test #11: TestVideoViewUi ..................   Passed    0.03 sec
+      Start 29: TestCryptographicHash
+30/46 Test #29: TestCryptographicHash ............   Passed    0.02 sec
+      Start 39: TestServerAddress
+31/46 Test #39: TestServerAddress ................   Passed    0.02 sec
+      Start 24: TestAudioReceiverBuffer
+32/46 Test #24: TestAudioReceiverBuffer ..........   Passed    0.02 sec
+      Start 35: TestPacketDataStream
+33/46 Test #35: TestPacketDataStream .............   Passed    0.02 sec
+      Start 37: TestMumbleProtocol
+34/46 Test #37: TestMumbleProtocol ...............   Passed    0.02 sec
+      Start 42: TestStdAbs
+35/46 Test #42: TestStdAbs .......................   Passed    0.01 sec
+      Start 44: TestUnresolvedServerAddress
+36/46 Test #44: TestUnresolvedServerAddress ......   Passed    0.01 sec
+      Start 26: TestBandwidthRecord
+37/46 Test #26: TestBandwidthRecord ..............   Passed    0.01 sec
+      Start 45: TestVersion
+38/46 Test #45: TestVersion ......................   Passed    0.01 sec
+      Start 34: TestIPCUtils
+39/46 Test #34: TestIPCUtils .....................   Passed    0.01 sec
+      Start 28: TestCaseInsensitiveQString
+40/46 Test #28: TestCaseInsensitiveQString .......   Passed    0.01 sec
+      Start  8: TestVideoFramePacketizer
+41/46 Test  #8: TestVideoFramePacketizer .........   Passed    0.01 sec
+      Start 10: TestVideoQualityProfile
+42/46 Test #10: TestVideoQualityProfile ..........   Passed    0.01 sec
+      Start 12: TestXMLTools
+43/46 Test #12: TestXMLTools .....................   Passed    0.01 sec
+      Start 22: OverlayTest
+44/46 Test #22: OverlayTest ......................***Not Run (Disabled)   0.00 sec
+      Start 46: TestServerResolver
+45/46 Test #46: TestServerResolver ...............***Failed    3.11 sec
+********* Start testing of TestServerResolver *********
+Config: Using QtTest library 6.4.2, Qt 6.4.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 13.2.0), ubuntu 24.04
+PASS   : TestServerResolver::initTestCase()
+FAIL!  : TestServerResolver::simpleSrv() Compared values are not the same
+   Actual   (records.size()): 0
+   Expected (1)             : 1
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-10-21/src/tests/TestServerResolver/TestServerResolver.cpp(49)]
+FAIL!  : TestServerResolver::srvCustomPort() Compared values are not the same
+   Actual   (records.size()): 0
+   Expected (1)             : 1
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-10-21/src/tests/TestServerResolver/TestServerResolver.cpp(97)]
+PASS   : TestServerResolver::simpleA()
+PASS   : TestServerResolver::simpleAAAA()
+PASS   : TestServerResolver::simpleCNAME()
+PASS   : TestServerResolver::cleanupTestCase()
+Totals: 5 passed, 2 failed, 0 skipped, 0 blacklisted, 3090ms
+********* Finished testing of TestServerResolver *********
+
+46/46 Test #20: TestFileTransferE2E ..............   Passed  278.22 sec
+
+93% tests passed, 3 tests failed out of 45
+
+Total Test time (real) = 286.04 sec
+
+The following tests did not run:
+	 22 - OverlayTest (Disabled)
+
+The following tests FAILED:
+	  7 - TestChatWebM (Failed)
+	 19 - TestFileTransferEngine (Subprocess aborted)
+	 46 - TestServerResolver (Failed)
+Errors while running CTest

@@ -1,0 +1,29 @@
+{
+  "master": {
+    "sha": "162f42805ce095c37ab57f1d81ba92cdb31bbac5",
+    "source_clean": true,
+    "configuration": "Linux Debug, non-unity, client/server, plugins off, tests off, warnings-as-errors on, overlay cross-compile off, LTO off",
+    "label": "official master",
+    "binaries": {
+      "mumble": "a1a8ff8b6f71b501b88ee1be96d529a41d5cde8a7b9a79a2b605d4dad2b81e86",
+      "mumble-server": "b30ec580e91b1a2c44449ae8b2feed59b55aaf9c4e0ca23fcc40a4f6686f88c5"
+    }
+  },
+  "stable": {
+    "sha": "dfbac8d3d9c967003e74b4ffc5610f7d45e8f666",
+    "source_clean": true,
+    "configuration": "Linux Debug, non-unity, client/server, plugins off, tests off, overlay cross-compile off, LTO off, BUILD_NUMBER=939",
+    "binaries": {
+      "mumble": "4f37f3db06b4811f9b373b7d7e3ab2125c3742678c56f8127ed97234a7b38fc0",
+      "mumble-server": "2f8b1012665b546b017878912e03097cebb8878e2f648a29fd1766432e5eb0b0"
+    },
+    "label": "v1.5.939"
+  },
+  "fork": {
+    "runtime_commit": "de8bfeb4e94765af48daa859181e9b5ac6982b1e",
+    "binaries": {
+      "mumble": "354b9230e569441bdfb099158dba3c8377d29a03f359175f82ac0b5300a99614",
+      "mumble-server": "f62b321221c8e82f9ff3abe8d1691da9488a369dfd09bd1f25c63a906f2d4da7"
+    }
+  }
+}

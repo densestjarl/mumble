@@ -43,8 +43,10 @@ output directory. A passing mixed connection lasts at least the requested time
 and receives another text message at the end. Fork clients must keep video/file
 sending disabled against official servers; a fork-to-fork fixture checks the
 positive capability path. File sharing is enabled in every fork client's
-settings: the automatic identity setup must prompt only on a fork server, and is
-cancelled there. Unexpected identity prompts are checked for four seconds after
+settings: fresh identities use device-key protection without a passphrase prompt.
+The fork-to-fork fixture also verifies that the client announces file capability
+and delivery receipts, proving that automatic identity setup succeeds. Unexpected
+identity prompts are checked for four seconds after
 connection, after channel operations, and throughout the soak. SIGTERM after the final measurement is intentional
 fixture cleanup, recorded separately from client liveness. A client or server
 shutdown requiring SIGKILL is recorded as `client_shutdown_timeout` or
