@@ -1,21 +1,21 @@
 [
   {
-    "elapsed_seconds": 10.08452400896931,
-    "cpu_seconds": 14.631906,
+    "elapsed_seconds": 11.176055699994322,
+    "cpu_seconds": 15.83851,
     "cxx_compilations": 2,
     "ui_generations": 0,
     "source_compilations": 2
   },
   {
-    "elapsed_seconds": 9.974156428012066,
-    "cpu_seconds": 14.477287,
+    "elapsed_seconds": 11.360867052047979,
+    "cpu_seconds": 16.533395,
     "cxx_compilations": 2,
     "ui_generations": 0,
     "source_compilations": 2
   },
   {
-    "elapsed_seconds": 9.628597216040362,
-    "cpu_seconds": 14.597517000000002,
+    "elapsed_seconds": 10.53611337899929,
+    "cpu_seconds": 15.594872000000002,
     "cxx_compilations": 2,
     "ui_generations": 0,
     "source_compilations": 2

@@ -1613,4 +1613,5 @@ get_target_property(MUMBLE_UI_FILES mumble_client_lib SOURCES)
 list(FILTER MUMBLE_UI_FILES INCLUDE REGEX "\\.ui$")
 qt6_wrap_ui(MUMBLE_UI_HEADERS ${MUMBLE_UI_FILES})
 target_sources(mumble_client_lib PRIVATE ${MUMBLE_UI_HEADERS})
-target_include_directories(mumble_client_lib PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
+# Match AUTOUIC's system-header treatment of generated code (including MSVC).
+target_include_directories(mumble_client_lib SYSTEM PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
