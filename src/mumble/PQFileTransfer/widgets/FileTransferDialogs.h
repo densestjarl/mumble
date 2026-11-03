@@ -154,7 +154,6 @@ public:
 	void dismiss(const QByteArray &transferId);
 	/// Bring a waiting transfer to the front and focus the password field.
 	void focusTransfer(const QByteArray &transferId);
-	bool isWaitingFor(const QByteArray &transferId) const;
 	void clear();
 
 signals:
