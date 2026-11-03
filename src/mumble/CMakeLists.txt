@@ -457,14 +457,14 @@ set_target_properties(mumble_client_lib
 	PROPERTIES
 		AUTOMOC ON
 		AUTORCC ON
-		AUTOUIC ON
+		AUTOUIC OFF
 )
 
 set_target_properties(mumble
 	PROPERTIES
 		AUTOMOC ON
 		AUTORCC ON
-		AUTOUIC ON
+		AUTOUIC OFF
 )
 
 if(WIN32)
@@ -1604,3 +1604,14 @@ if(packaging AND WIN32)
 		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/installer/client
 	)
 endif()
+
+# Collect forms after all platform/feature-specific target_sources() calls.
+# Explicit outputs keep each header dependent on its own form. With AUTOUIC,
+# CMake 3.28's Ninja graph makes the UI headers depend on the shared autogen
+# stamp, so editing an unrelated C++ source recompiles their consumers too.
+get_target_property(MUMBLE_UI_FILES mumble_client_lib SOURCES)
+list(FILTER MUMBLE_UI_FILES INCLUDE REGEX "\\.ui$")
+qt6_wrap_ui(MUMBLE_UI_HEADERS ${MUMBLE_UI_FILES})
+target_sources(mumble_client_lib PRIVATE ${MUMBLE_UI_HEADERS})
+# Match AUTOUIC's system-header treatment of generated code (including MSVC).
+target_include_directories(mumble_client_lib SYSTEM PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
