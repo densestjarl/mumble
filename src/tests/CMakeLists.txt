@@ -53,6 +53,10 @@ function(mumble_add_client_test test_name)
 endfunction()
 
 if(client)
+	option(video-pipeline-benchmark "Build the Linux headless video pipeline benchmark" OFF)
+	if(video-pipeline-benchmark AND screen-sharing AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		add_subdirectory("${CMAKE_SOURCE_DIR}/scripts/performance" "video-pipeline-benchmark")
+	endif()
 	# Keep test executables outside the Windows product artifact/signing globs
 	# (mumble*.exe and *client*.exe), including case-insensitive matches.
 	add_executable(TestGuiRunner)
