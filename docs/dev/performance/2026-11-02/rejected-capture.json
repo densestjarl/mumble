@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "frame_ms_mean": 14.377126053333333,
+    "cpu_percent": 37.64267843137568,
+    "large_allocation_bytes_per_frame": 31104000
+  },
+  "candidate": {
+    "frame_ms_mean": 16.93279592,
+    "cpu_percent": 45.33573461296618,
+    "large_allocation_bytes_per_frame": 16588800
+  }
+}

@@ -1,0 +1,16 @@
+diff --git a/src/mumble/ScreenCapture.cpp b/src/mumble/ScreenCapture.cpp
+index b070fe1db..473d0a231 100644
+--- a/src/mumble/ScreenCapture.cpp
++++ b/src/mumble/ScreenCapture.cpp
+@@ -435,8 +435,9 @@ void ScreenCapture::captureFrame() {
+ 		return;
+ 	}
+ 
+-	// Ensure Format_RGB888 (24-bit RGB, no alpha) for AV_PIX_FMT_RGB24 mapping.
+-	encodeImage(image.convertToFormat(QImage::Format_RGB888));
++	// The grabbers already return RGBA. Preserve it here: encodeImage() also
++	// accepts RGBA, so converting to RGB first would copy the entire frame twice.
++	encodeImage(image);
+ #endif
+ }
+ 
