@@ -82,16 +82,10 @@ constexpr qsizetype X25519KeySize = 32;
 
 // --- Limits --------------------------------------------------------------------
 
-/// Maximum payload of a FileTransferControl message (murmur enforces this too).
-constexpr qsizetype MaxControlPayload = 64 * 1024;
 /// Minimum chunk plaintext size.
 constexpr qsizetype MinChunkSize = 16 * 1024;
 /// Maximum chunk plaintext size (murmur enfaces the resulting frame size).
 constexpr qsizetype MaxChunkSize = 1024 * 1024;
-/// Default chunk plaintext size.
-constexpr qsizetype DefaultChunkSize = 256 * 1024;
-/// Default maximum accepted file size (10 GiB, PROTOCOL.md §7).
-constexpr quint64 DefaultMaxFileSize = 10ull * 1024 * 1024 * 1024;
 /// Maximum file name length in bytes (basename only, UTF-8).
 constexpr qsizetype MaxFileNameBytes = 255;
 

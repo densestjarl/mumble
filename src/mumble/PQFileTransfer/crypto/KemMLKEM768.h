@@ -22,7 +22,6 @@ public:
 	static constexpr qsizetype PublicKeySize  = 1184;
 	static constexpr qsizetype SecretKeySize  = 2400;
 	static constexpr qsizetype CiphertextSize = 1088;
-	static constexpr qsizetype SharedSecretSize = 32;
 
 	KemMLKEM768();
 	~KemMLKEM768();
