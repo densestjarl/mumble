@@ -19,6 +19,45 @@ class TestVideoFramePacketizer : public QObject {
 	Q_OBJECT
 
 private slots:
+	void preservesWireBytes_data() const {
+		QTest::addColumn< int >("size");
+		QTest::newRow("tiny") << 1;
+		QTest::newRow("below-boundary") << 899;
+		QTest::newRow("full-fragment") << 900;
+		QTest::newRow("short-tail") << 901;
+		QTest::newRow("large-keyframe") << 65536;
+	}
+
+	void preservesWireBytes() const {
+		QFETCH(int, size);
+		const QByteArray data(size, 'v');
+		for (bool keyFrame : { false, true }) {
+			const std::vector< std::vector< unsigned char > > packets =
+				Mumble::Video::packetizeFrame(42, data, 99, 1920, 1080, keyFrame);
+			QCOMPARE(packets.size(), static_cast< std::size_t >((size + 899) / 900));
+			for (std::size_t i = 0; i < packets.size(); ++i) {
+				// Fresh messages describe the original wire contract. In particular,
+				// a short final fragment must not retain a previous payload's tail.
+				MumbleUDP::Video expected;
+				expected.set_sender_session(42);
+				expected.set_codec(MumbleUDP::Video_Codec_H264);
+				expected.set_width(1920);
+				expected.set_height(1080);
+				expected.set_frame_number(99);
+				expected.set_fragment_index(static_cast< std::uint32_t >(i));
+				expected.set_fragment_count(static_cast< std::uint32_t >(packets.size()));
+				const QByteArray payload = data.mid(static_cast< qsizetype >(i) * 900, 900);
+				expected.set_video_data(payload.constData(), static_cast< std::size_t >(payload.size()));
+				expected.set_is_keyframe(keyFrame && i == 0);
+				const std::string serialized = expected.SerializeAsString();
+				QCOMPARE(packets[i].size(), serialized.size() + 1);
+				QCOMPARE(QByteArray(reinterpret_cast< const char * >(packets[i].data() + 1),
+									static_cast< qsizetype >(packets[i].size() - 1)),
+						 QByteArray(serialized.data(), static_cast< qsizetype >(serialized.size())));
+			}
+		}
+	}
+
 	void rejectsInvalidFrames() const {
 		QVERIFY(Mumble::Video::packetizeFrame(1, {}, 2, 1280, 720, false).empty());
 		QVERIFY(Mumble::Video::packetizeFrame(1, QByteArray("frame"), 2, 0, 720, false).empty());

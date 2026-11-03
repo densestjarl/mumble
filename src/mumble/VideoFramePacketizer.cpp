@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace Mumble::Video {
 
@@ -21,25 +22,29 @@ std::vector< std::vector< unsigned char > > packetizeFrame(quint32 senderSession
 		return {};
 
 	// Stay comfortably below common network MTUs after protobuf, encryption, UDP and IP overhead.
-	const int dataSize                      = static_cast< int >(encodedData.size());
-	const int fragmentCount                 = (dataSize + MaximumFragmentBytes - 1) / MaximumFragmentBytes;
+	const int dataSize      = static_cast< int >(encodedData.size());
+	const int fragmentCount = (dataSize + MaximumFragmentBytes - 1) / MaximumFragmentBytes;
 
 	std::vector< std::vector< unsigned char > > packets;
 	packets.reserve(static_cast< std::size_t >(fragmentCount));
+
+	// Reuse the payload string's capacity across fragments of this frame.
+	MumbleUDP::Video videoMsg;
+	videoMsg.set_sender_session(senderSession);
+	videoMsg.set_codec(MumbleUDP::Video_Codec_H264);
+	videoMsg.set_width(width);
+	videoMsg.set_height(height);
+	videoMsg.set_frame_number(frameNumber);
+	videoMsg.set_fragment_count(static_cast< std::uint32_t >(fragmentCount));
+	std::string &payload = *videoMsg.mutable_video_data();
 
 	for (int i = 0; i < fragmentCount; ++i) {
 		const int offset    = i * MaximumFragmentBytes;
 		const int chunkSize = std::min(MaximumFragmentBytes, dataSize - offset);
 
-		MumbleUDP::Video videoMsg;
-		videoMsg.set_sender_session(senderSession);
-		videoMsg.set_codec(MumbleUDP::Video_Codec_H264);
-		videoMsg.set_width(width);
-		videoMsg.set_height(height);
-		videoMsg.set_frame_number(frameNumber);
 		videoMsg.set_fragment_index(static_cast< std::uint32_t >(i));
-		videoMsg.set_fragment_count(static_cast< std::uint32_t >(fragmentCount));
-		videoMsg.set_video_data(encodedData.constData() + offset, static_cast< std::size_t >(chunkSize));
+		// Assign directly: protobuf's bytes setter can construct a temporary string.
+		payload.assign(encodedData.constData() + offset, static_cast< std::size_t >(chunkSize));
 		videoMsg.set_is_keyframe(isKeyFrame && i == 0);
 
 		const int msgSize = static_cast< int >(videoMsg.ByteSizeLong());

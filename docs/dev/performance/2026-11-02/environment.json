@@ -1,0 +1,25 @@
+{
+  "origin_master": "7aa4335fb3466ed98e80331c91c574e784f454f0",
+  "upstream_master": "1baeccd8b5beb7f0081d03439c5595eab0f61766",
+  "harness_commit": "16f355efcf2c2e315195cf606e2ee7fbf12bc551",
+  "jobs": 2,
+  "build_type": "Debug",
+  "unity": false,
+  "lto": false,
+  "compiler_cache": false,
+  "platform": "Linux 6.8.0-147-generic #147-Ubuntu SMP PREEMPT_DYNAMIC Thu Sep 24 11:33:16 UTC 2026 x86_64 GNU/Linux",
+  "compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "cmake": "cmake version 3.28.3",
+  "qt": "6.4.2",
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "cached_dependency_sources": "/home/agent/.cache/mumble-sync-build/2026-10-21/_deps",
+  "main_checkout_preexisting_untracked": [
+    "3rdparty/CLI11/",
+    "3rdparty/SPSCQueue/",
+    "3rdparty/nlohmann_json/",
+    "3rdparty/soci/",
+    "3rdparty/spdlog/",
+    "3rdparty/utfcpp/"
+  ],
+  "packetizer_source_sha256": "c71fcf75ec40650aced888be546ad3e9592c2553e45151553f72a7608865333b"
+}

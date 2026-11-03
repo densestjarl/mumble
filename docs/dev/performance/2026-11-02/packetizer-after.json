@@ -1,0 +1,148 @@
+{
+  "sender": {
+    "frame_ms_mean": {
+      "median": 14.046699786666666,
+      "min": 12.2760398,
+      "max": 14.064765926666666
+    },
+    "codec_ms_mean": {
+      "median": 2.0872131333333335,
+      "min": 2.0655430733333335,
+      "max": 2.1039751866666667
+    },
+    "frame_ms_p95": {
+      "median": 15.05401,
+      "min": 12.973259,
+      "max": 15.156941
+    },
+    "cpu_percent": {
+      "median": 38.08381071511577,
+      "min": 37.32607574964341,
+      "max": 38.14854395124743
+    },
+    "peak_rss_mib": {
+      "median": 188.28125,
+      "min": 181.0859375,
+      "max": 188.4296875
+    },
+    "event_loop_gap_ms_p99": {
+      "median": 20.77769,
+      "min": 16.57915,
+      "max": 21.001485
+    },
+    "packetize_ms_mean": {
+      "median": 0.03235778,
+      "min": 0.03154948666666667,
+      "max": 0.032508793333333334
+    },
+    "packetize_allocation_calls_per_frame": {
+      "median": 22.346666666666668,
+      "min": 22.326666666666668,
+      "max": 22.346666666666668
+    },
+    "packetize_allocation_bytes_per_frame": {
+      "median": 18669.013333333332,
+      "min": 18666.2,
+      "max": 18690.766666666666
+    },
+    "allocation_calls_per_frame": {
+      "median": 143.14666666666668,
+      "min": 143.07333333333332,
+      "max": 143.18
+    },
+    "allocation_bytes_per_frame": {
+      "median": 31147921.253333334,
+      "min": 31147766.066666666,
+      "max": 31147990.066666666
+    },
+    "large_allocations_per_frame": {
+      "median": 4,
+      "min": 4,
+      "max": 4
+    },
+    "large_allocation_bytes_per_frame": {
+      "median": 31104000,
+      "min": 31104000,
+      "max": 31104000
+    },
+    "encoded_bytes_per_frame": {
+      "median": 16939.62,
+      "min": 16938.353333333333,
+      "max": 16960.913333333334
+    },
+    "tunnel_bytes_per_frame": {
+      "median": 17406.113333333335,
+      "min": 17405.34,
+      "max": 17427.853333333333
+    },
+    "encoded_sha256": [
+      "405674b81d6c3870cceba1a7d649f4dd7547233d7d5176be699c6b3e8e53859d",
+      "4795e9e47f5600046f314ea6ee33a2045b1e53ebc0d15fae64b37e66d9a9ce8a",
+      "92b1d1b6cfbb9de8203962ea0a666584587d44c8f7955a90fa35cf1bc82a7bfa",
+      "fd743dda9a79f07d146cddcdb64fa7655a374f40f9490f651b1f1d431eb0bcf9",
+      "7ef9dc0c6e2a1edafd8675f349e6f9c8ad606f07c4d22d8d58bb2502ff151cec"
+    ],
+    "input_rgb_sha256": [
+      "14234984a522488cad62b8f911be727d2ca3d035d7b99cc55fcad5721b675053",
+      "14234984a522488cad62b8f911be727d2ca3d035d7b99cc55fcad5721b675053",
+      "14234984a522488cad62b8f911be727d2ca3d035d7b99cc55fcad5721b675053",
+      "14234984a522488cad62b8f911be727d2ca3d035d7b99cc55fcad5721b675053",
+      "14234984a522488cad62b8f911be727d2ca3d035d7b99cc55fcad5721b675053"
+    ]
+  },
+  "receiver": {
+    "frame_ms_mean": {
+      "median": 2.63040434,
+      "min": 2.6139219,
+      "max": 2.64907196
+    },
+    "codec_ms_mean": {
+      "median": 2.155982273333333,
+      "min": 2.146998353333333,
+      "max": 2.1682210333333334
+    },
+    "frame_ms_p95": {
+      "median": 5.613003,
+      "min": 5.555567,
+      "max": 5.786270999999999
+    },
+    "cpu_percent": {
+      "median": 5.743385239225781,
+      "min": 5.670453142075134,
+      "max": 5.767964051125217
+    },
+    "peak_rss_mib": {
+      "median": 97.3359375,
+      "min": 97.1796875,
+      "max": 97.58203125
+    },
+    "event_loop_gap_ms_p99": {
+      "median": 7.27614,
+      "min": 6.810245,
+      "max": 7.401703
+    },
+    "decoded_sha256": [
+      "48248980853e862edea52ebb02c901999b783761a10e28b4c9680907af09eaca",
+      "a2084cb72042c8c5f3e4b3cda37304db11fc7cc88df75e80d0db24df6f8f6cd1",
+      "aef169324ff109e6ac3e6adb5943323df9c391073a200cff25e3c795f6adb4c8",
+      "f43ddf6a3c82e1a9484d1d6e7e26089923525336bb5d045de1277335bc8e25c7",
+      "8c0fb73dbe24ca84bb8bd9a90434a2694708bee364e7b0d926f9a2655da43e11"
+    ]
+  },
+  "server": {
+    "cpu_percent": [
+      0.6314979533039446,
+      0.6313153224695852,
+      0.6311485371902409,
+      0.6319295317239888,
+      0.6318005250760886
+    ],
+    "rss_mib": [
+      40.85546875,
+      41.234375,
+      41.1171875,
+      41.265625,
+      41.2109375
+    ]
+  }
+}
