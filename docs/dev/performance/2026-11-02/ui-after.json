@@ -1,0 +1,23 @@
+[
+  {
+    "elapsed_seconds": 10.08452400896931,
+    "cpu_seconds": 14.631906,
+    "cxx_compilations": 2,
+    "ui_generations": 0,
+    "source_compilations": 2
+  },
+  {
+    "elapsed_seconds": 9.974156428012066,
+    "cpu_seconds": 14.477287,
+    "cxx_compilations": 2,
+    "ui_generations": 0,
+    "source_compilations": 2
+  },
+  {
+    "elapsed_seconds": 9.628597216040362,
+    "cpu_seconds": 14.597517000000002,
+    "cxx_compilations": 2,
+    "ui_generations": 0,
+    "source_compilations": 2
+  }
+]

@@ -74,6 +74,13 @@ Use `build/tests/TestGuiRunner --list` to list the compiled suites.
 The end-to-end file-transfer and server-database suites have explicit CTest costs
 so fresh CI runners start the longest work first when running tests in parallel.
 
+Client UI headers are generated with `qt6_wrap_ui`, with a separate dependency
+for each form. Add forms to `mumble_client_lib`'s sources; the build collects
+platform/feature-specific forms after all `target_sources` calls. Generated
+headers live in `build/src/mumble/ui_<form>.h`. C++ source edits leave these
+header dependencies clean; editing a form still regenerates its header and
+rebuilds its consumers.
+
 `TestDatabase` and `TestServerDatabase` share a CTest resource lock because they
 reset the same MySQL/PostgreSQL database. Keep this lock on any additional test
 that uses that database. Other tests use separate fixtures or temporary storage.
