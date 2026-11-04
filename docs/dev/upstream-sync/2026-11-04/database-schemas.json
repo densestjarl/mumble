@@ -1,0 +1,23 @@
+{
+  "master-client": {
+    "meta_columns": [
+      "meta_key",
+      "meta_value"
+    ],
+    "schema_version": "11"
+  },
+  "master-server": {
+    "meta_columns": [
+      "meta_key",
+      "meta_value"
+    ],
+    "schema_version": "11"
+  },
+  "stable-server": {
+    "meta_columns": [
+      "keystring",
+      "value"
+    ],
+    "schema_version": "9"
+  }
+}

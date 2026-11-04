@@ -1,0 +1,7 @@
+{
+  "master-to-fork": 0,
+  "fork-to-master": 0,
+  "stable-to-fork": 0,
+  "fork-to-stable": 1,
+  "master-to-stable": 1
+}

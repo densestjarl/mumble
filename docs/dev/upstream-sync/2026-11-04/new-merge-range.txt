@@ -1,0 +1,22 @@
+08ac9b7ee Merge PR #7473: FIX(macos-client): request local network permission
+13594ad60 FIX(macos-client): request local network permission
+1baeccd8b Merge PR #7469: FIX(ipc): Append UID at the end of fallback runtime directory
+e7d5aed4c FIX(ipc): Append UID at the end of fallback runtime directory
+704d1f4e3 Merge PR #7466: FIX(ipc): Fall back to temp directory when XDG_RUNTIME_DIR is not set
+a1886d581 FIX(ipc): Add current user UID at the end of Unix fallback directory
+bcae93761 FIX(ipc): Fall back to temp directory when XDG_RUNTIME_DIR is not set
+d4e96f651 Merge PR #7457: BUILD: Find protobuf in config mode
+be323b222 Merge PR #7453: DOCS: Add missing dependencies for macOS build instructions
+d706fd5b9 Merge PR #7454: REFAC(macos): Replace deprecated Q_OS_MAC macro with Q_OS_MACOS
+23b6c6638 Merge PR #7458: FIX(client): Use codesign to "ad-hoc" sign the app bundle on macOS
+9a1690940 DOCS: Add missing dependencies for macOS build instructions
+dea203144 BUILD: Find protobuf in config mode
+7fb765024 CI: Build and publish .dmg file for macos runs
+301dc3714 FIX(client): Use codesign to "ad-hoc" sign the app bundle on macOS
+df5fda6d1 Merge PR #7456: CI: Restore static Linux builds and reduce number of jobs
+b1321d19f CI(ga): Save ccache archive only for master branch
+97c07d3e5 CI(ga): Get rid of CodeQL
+72096c8c4 CI(ga): Reduce number of build variants
+2b04c3cc9 CI(ga): Restore static Linux builds
+5d20cef87 MAINT: Simplify build matrix for GitHub Actions
+2632ed16c REFAC(macos): Replace deprecated Q_OS_MAC macro with Q_OS_MACOS
