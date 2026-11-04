@@ -1,0 +1,20 @@
+{
+  "passed": 42,
+  "failed": 3,
+  "disabled": 1,
+  "wall_seconds": 246.82,
+  "failures": {
+    "TestFileTransferEngine": "Existing selectedPinSurvivesCacheRemoval empty QList assertion",
+    "TestChatWebM": "Existing four audio-clock/EOF timing failures",
+    "TestServerResolver": "External DNS fixtures return NXDOMAIN"
+  },
+  "separate_baseline_build": false,
+  "source_comparison": "baseline-source-comparison.json",
+  "prior_baseline_evidence": "../2026-10-21/README.md and docs/dev/performance/2026-11-02/test-setup.md",
+  "times": {
+    "TestFileTransferE2E": "238.983",
+    "TestServerDatabase": "1.57957",
+    "TestIPCUtils": "0.0144752",
+    "TestMumbleProtocol": "0.0133294"
+  }
+}

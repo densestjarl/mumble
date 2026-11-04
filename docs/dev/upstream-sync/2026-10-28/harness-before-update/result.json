@@ -1,0 +1,9 @@
+{
+  "pass": false,
+  "client": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble",
+  "server": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble-server",
+  "identity_prompt_shown": false,
+  "error": "AssertionError(('identity prompt', False, True))",
+  "intentional_shutdown": true,
+  "client_exit": -15
+}

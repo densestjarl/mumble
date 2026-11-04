@@ -66,6 +66,11 @@ jobs:
                 arch: x86_64
                 tests: 'ON'
                 compiler: gcc
+              - os: ubuntu-26.04
+                type: static
+                arch: x86_64
+                tests: 'ON'
+                compiler: gcc
               - os: windows-2025
                 type: static
                 arch: x86_64
@@ -167,6 +172,7 @@ jobs:
         path: |
           build/mumble
           build/Mumble.app
+          build/Mumble*.dmg
           build/mumble-server
           build/**/mumble*.msi
           build/**/mumble*.exe

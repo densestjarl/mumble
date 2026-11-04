@@ -1,0 +1,9 @@
+{
+  "origin_master": "bc1ef1ed40072d163a781284ea859996e775b104",
+  "upstream_master": "08ac9b7ee87ad996eb7b4238bc57f160d0b01fce",
+  "candidate_head": "de7bbdabf791545e8f29028fc6d60cdce907e505",
+  "original_pr_head": "843c59fb81b9cc825acf6e282eb95a273cb019c8",
+  "initial_ahead": 173,
+  "initial_behind": 40,
+  "latest_stable": "v1.5.939"
+}

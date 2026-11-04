@@ -1,0 +1,132 @@
+{
+  "interop": {
+    "master-client": {
+      "pass": true,
+      "client": "/home/agent/.cache/mumble-upstream-ref/162f42805ce095c37ab57f1d81ba92cdb31bbac5/build/mumble",
+      "server": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble-server",
+      "identity_prompt_shown": false,
+      "user_list": true,
+      "join_channel": true,
+      "text_both_directions": true,
+      "channel_moves": true,
+      "connected_seconds": 125.8,
+      "observer_frames": 58,
+      "observer_errors": [],
+      "intentional_shutdown": true,
+      "client_exit": -15
+    },
+    "master-server": {
+      "pass": true,
+      "client": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble",
+      "server": "/home/agent/.cache/mumble-upstream-ref/162f42805ce095c37ab57f1d81ba92cdb31bbac5/build/mumble-server",
+      "identity_prompt_shown": false,
+      "user_list": true,
+      "join_channel": true,
+      "text_both_directions": true,
+      "channel_moves": true,
+      "extension_controls_enabled": false,
+      "connected_seconds": 125.75,
+      "observer_frames": 58,
+      "observer_errors": [],
+      "intentional_shutdown": true,
+      "client_exit": -15
+    },
+    "stable-client": {
+      "pass": true,
+      "client": "/home/agent/.cache/mumble-upstream-ref/dfbac8d3d9c967003e74b4ffc5610f7d45e8f666/build/mumble",
+      "server": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble-server",
+      "identity_prompt_shown": false,
+      "user_list": true,
+      "join_channel": true,
+      "text_both_directions": true,
+      "channel_moves": true,
+      "connected_seconds": 125.64,
+      "observer_frames": 58,
+      "observer_errors": [],
+      "intentional_shutdown": true,
+      "client_exit": -15,
+      "server_shutdown_timeout": true
+    },
+    "stable-server": {
+      "pass": true,
+      "client": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble",
+      "server": "/home/agent/.cache/mumble-upstream-ref/dfbac8d3d9c967003e74b4ffc5610f7d45e8f666/build/mumble-server",
+      "identity_prompt_shown": false,
+      "user_list": true,
+      "join_channel": true,
+      "text_both_directions": true,
+      "channel_moves": true,
+      "extension_controls_enabled": false,
+      "connected_seconds": 125.74,
+      "observer_frames": 58,
+      "observer_errors": [],
+      "intentional_shutdown": true,
+      "client_exit": -15,
+      "server_shutdown_timeout": true
+    },
+    "fork-positive": {
+      "pass": true,
+      "client": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble",
+      "server": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble-server",
+      "identity_prompt_shown": false,
+      "file_capability_announced": true,
+      "user_list": true,
+      "join_channel": true,
+      "text_both_directions": true,
+      "channel_moves": true,
+      "extension_controls_enabled": true,
+      "connected_seconds": 125.36,
+      "observer_frames": 59,
+      "observer_errors": [],
+      "intentional_shutdown": true,
+      "client_exit": -15
+    }
+  },
+  "database": {
+    "master-to-fork": {
+      "pass": true,
+      "fixture": "/home/agent/.cache/mumble-sync-evidence/2026-10-28/interop/master-server",
+      "server": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble-server",
+      "stored_authentication_and_channel": true,
+      "integrity_check": "ok"
+    },
+    "fork-to-master": {
+      "pass": true,
+      "fixture": "/home/agent/.cache/mumble-sync-evidence/2026-10-28/interop/stable-client",
+      "server": "/home/agent/.cache/mumble-upstream-ref/162f42805ce095c37ab57f1d81ba92cdb31bbac5/build/mumble-server",
+      "stored_authentication_and_channel": true,
+      "integrity_check": "ok"
+    },
+    "stable-to-fork": {
+      "pass": true,
+      "fixture": "/home/agent/.cache/mumble-sync-evidence/2026-10-28/interop/stable-server",
+      "server": "/home/agent/.cache/mumble-sync-build/2026-10-21/mumble-server",
+      "stored_authentication_and_channel": true,
+      "integrity_check": "ok"
+    },
+    "fork-to-stable": {
+      "pass": false,
+      "fixture": "/home/agent/.cache/mumble-sync-evidence/2026-10-28/interop/stable-client",
+      "server": "/home/agent/.cache/mumble-upstream-ref/dfbac8d3d9c967003e74b4ffc5610f7d45e8f666/build/mumble-server",
+      "error": "AssertionError('Server exited at startup with 1')"
+    },
+    "master-to-stable": {
+      "pass": false,
+      "fixture": "/home/agent/.cache/mumble-sync-evidence/2026-10-28/interop/master-server",
+      "server": "/home/agent/.cache/mumble-upstream-ref/dfbac8d3d9c967003e74b4ffc5610f7d45e8f666/build/mumble-server",
+      "error": "AssertionError('Server exited at startup with 1')"
+    }
+  },
+  "ctest": {
+    "passed": 42,
+    "failed": 3,
+    "disabled": 1,
+    "seconds": 286.04,
+    "failed_suites": [
+      "TestChatWebM",
+      "TestFileTransferEngine",
+      "TestServerResolver"
+    ]
+  },
+  "new_compiler_diagnostics": []
+}

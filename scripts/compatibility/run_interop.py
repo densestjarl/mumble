@@ -144,31 +144,23 @@ def main():
         user = wait(connected, 45)
         started = time.monotonic()
         time.sleep(1)
-        # File sharing is on for every fork client. Only a relay-capable (fork) server may
-        # trigger the one-time identity setup; official servers must not.
-        prompt_expected = args.fork_client and args.fork_server
+        # Fresh identities use automatic device-key protection. Neither official
+        # nor fork servers should trigger a passphrase dialog in this fixture.
         def identity_dialog():
             return find(lambda n: n.getRoleName() == "dialog" and n.name == "File-transfer identity")
         def assert_no_identity_dialog():
             if identity_dialog():
                 result["identity_prompt_shown"] = True
                 raise AssertionError("Unexpected file-transfer identity prompt")
-        identity_prompt = None
-        if prompt_expected:
-            try:
-                identity_prompt = wait(identity_dialog, 10)
-            except AssertionError:
-                pass
-        else:
-            deadline = time.monotonic() + 4
-            while time.monotonic() < deadline:
-                assert_no_identity_dialog()
-                time.sleep(.1)
-        result["identity_prompt_shown"] = bool(identity_prompt)
-        assert bool(identity_prompt) == prompt_expected, ("identity prompt", bool(identity_prompt), prompt_expected)
-        if identity_prompt:
-            cancel = next(n for n in walk(identity_prompt) if n.getRoleName() == "push button" and n.name == "Cancel")
-            click(cancel)
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            assert_no_identity_dialog()
+            time.sleep(.1)
+        result["identity_prompt_shown"] = False
+        if args.fork_client and args.fork_server:
+            wait(lambda: peer.users[user.session].file_transfer_capable
+                 and peer.users[user.session].file_transfer_delivery_receipts)
+            result["file_capability_announced"] = True
         wait(lambda: find(lambda n: n.getRoleName() == "table cell" and "GuiInterop" in n.name))
         wait(lambda: find(lambda n: n.getRoleName() == "table cell" and "SuperUser" in n.name))
         result["user_list"] = True
@@ -200,8 +192,7 @@ def main():
         desktop_rpc.openUrl(f"mumble://GuiInterop@127.0.0.1:{port}/Interop?version=1.5.0")
         wait(lambda: peer.users[user.session].channel_id == channel.channel_id)
         result["channel_moves"] = True
-        if not prompt_expected:
-            assert_no_identity_dialog()
+        assert_no_identity_dialog()
         if args.fork_client:
             expected = args.fork_server
             for name in ("Share video…", "Send a file to the channel"):
@@ -214,14 +205,12 @@ def main():
             assert client.poll() is None, "Client exited during soak"
             assert server.poll() is None, "Server exited during soak"
             assert not peer.errors, peer.errors
-            if not prompt_expected:
-                assert_no_identity_dialog()
+            assert_no_identity_dialog()
             # A response through the real client also proves it remains usable.
             time.sleep(.5)
         peer.send(11, proto.TextMessage(session=[user.session], message="soak-complete compatibility text"))
         wait(lambda: received_text("soak-complete compatibility text"))
-        if not prompt_expected:
-            assert_no_identity_dialog()
+        assert_no_identity_dialog()
         ImageGrab.grab().save(root / "soak-complete.png")
         assert not peer.errors, peer.errors
         assert client.poll() is None and server.poll() is None, "Process exited before final verification"

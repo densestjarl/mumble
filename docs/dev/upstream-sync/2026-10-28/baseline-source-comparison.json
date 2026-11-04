@@ -1,0 +1,27 @@
+{
+  "src/tests/TestChatWebM/TestChatWebM.cpp": {
+    "origin/master": "675f6beefb3f156d26959b7a6eaef9ac7271acbc",
+    "HEAD": "675f6beefb3f156d26959b7a6eaef9ac7271acbc"
+  },
+  "src/tests/TestFileTransferEngine/TestFileTransferEngine.cpp": {
+    "origin/master": "e0064c4cc418c3a2ec2a735837909490a6ca5866",
+    "HEAD": "e0064c4cc418c3a2ec2a735837909490a6ca5866"
+  },
+  "src/tests/TestServerResolver/TestServerResolver.cpp": {
+    "origin/master": "73482eca58d3087e24fd35bd9e27fd76100160d7",
+    "HEAD": "73482eca58d3087e24fd35bd9e27fd76100160d7"
+  },
+  "src/ServerResolver.cpp": {
+    "origin/master": "a01b6c787ed6c6e48999323d945b16168c9c15f4",
+    "HEAD": "a01b6c787ed6c6e48999323d945b16168c9c15f4"
+  },
+  "src/mumble/PQFileTransfer": {
+    "origin/master": "d8b615635a449d6e0fe04740f4abfae22cadc956",
+    "HEAD": "d8b615635a449d6e0fe04740f4abfae22cadc956"
+  },
+  "src/mumble/widgets": {
+    "origin/master": "02f3cd8ac678cf7f3f907266b5c791085303ad59",
+    "HEAD": "02f3cd8ac678cf7f3f907266b5c791085303ad59"
+  },
+  "non_translation_src_diff": ""
+}

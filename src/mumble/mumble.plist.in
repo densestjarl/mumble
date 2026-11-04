@@ -43,5 +43,8 @@
 	<string>Mumble uses screen recording access when you choose to share a display or window</string>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>Mumble needs accessibility permission for global shortcuts</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Mumble needs local network access for locally hosted servers</string>
+
 </dict>
 </plist>

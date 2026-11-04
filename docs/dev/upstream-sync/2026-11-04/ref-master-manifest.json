@@ -1,0 +1,10 @@
+{
+  "sha": "08ac9b7ee87ad996eb7b4238bc57f160d0b01fce",
+  "source_clean": true,
+  "label": "official master",
+  "configuration": "Linux Debug, non-unity, client/server, plugins/tests off, warnings-as-errors on, overlay cross-compile/LTO off",
+  "binaries": {
+    "mumble": "192e666285c4c6c3520e33bf152dd7f49bd4a221710753ed5ca82dd60c95a2e3",
+    "mumble-server": "eb169f9afa8524012b8b745ac55a11e2e2d26d7928e4b8ae116f509c372c58b6"
+  }
+}

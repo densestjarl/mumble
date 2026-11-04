@@ -1,0 +1,126 @@
+{
+  "src/tests/TestFileTransferEngine": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/tests/TestChatWebM": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/tests/TestServerResolver": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/PQFileTransfer": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/database": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/Mumble.proto": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/MumbleUDP.proto": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "PROTOCOL.md": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "AGENTS.md": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  ".agents": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  ".codex": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/ChatVideoDecoder.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/ChatVideoDecoder.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/ChatVideoMixerSink.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/ChatVideoMixerSink.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/ChatVideoPlayer.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/ChatVideoPlayer.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutput.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutput.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutput.ui": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputBuffer.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputBuffer.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputCache.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputCache.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputSample.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputSample.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputSpeech.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputSpeech.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/AudioOutputToken.h": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/CustomElements.cpp": {
+    "unchanged": true,
+    "changed_files": []
+  },
+  "src/mumble/CustomElements.h": {
+    "unchanged": true,
+    "changed_files": []
+  }
+}

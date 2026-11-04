@@ -14,9 +14,6 @@
 
 #ifndef MUMBLE_TEST_WINDOWS
 #	include <cstdlib>
-#endif
-
-#ifdef MUMBLE_TEST_MACOS
 #	include <unistd.h>
 #endif
 
@@ -43,22 +40,6 @@ private:
 };
 #endif
 
-#ifdef MUMBLE_TEST_MACOS
-std::filesystem::path darwinUserTemporaryDirectory() {
-	const std::size_t pathLength = confstr(_CS_DARWIN_USER_TEMP_DIR, nullptr, 0);
-	if (pathLength == 0) {
-		return {};
-	}
-
-	QByteArray path(static_cast< int >(pathLength), '\0');
-	if (confstr(_CS_DARWIN_USER_TEMP_DIR, path.data(), pathLength) == 0) {
-		return {};
-	}
-
-	return path.constData();
-}
-#endif
-
 } // namespace
 
 class TestIPCUtils : public QObject {
@@ -66,35 +47,45 @@ class TestIPCUtils : public QObject {
 private slots:
 
 #ifndef MUMBLE_TEST_WINDOWS
-	void usesXdgRuntimeDirectoryWhenSet() {
+	void runtimeDirectory_data() {
+		QTest::addColumn< QByteArray >("xdgValue");
+		QTest::newRow("xdg-set") << QByteArray("xdg-runtime");
+		QTest::newRow("xdg-unset") << QByteArray();
+		QTest::newRow("xdg-empty") << QByteArray("");
+	}
+
+	void runtimeDirectory() {
+		QFETCH(QByteArray, xdgValue);
 		QTemporaryDir temporaryDirectory;
 		QVERIFY(temporaryDirectory.isValid());
 
 		EnvironmentVariableGuard xdgRuntimeDirGuard("XDG_RUNTIME_DIR");
-		QVERIFY(setenv("XDG_RUNTIME_DIR", temporaryDirectory.path().toUtf8().constData(), 1) == 0);
+		EnvironmentVariableGuard temporaryDirGuard("TMPDIR");
+		const QByteArray temporaryPath = temporaryDirectory.path().toUtf8();
+		QVERIFY(setenv("TMPDIR", temporaryPath.constData(), 1) == 0);
+		if (xdgValue.isNull()) {
+			QVERIFY(unsetenv("XDG_RUNTIME_DIR") == 0);
+		} else {
+			const QByteArray runtimePath = xdgValue.isEmpty() ? xdgValue : temporaryPath + '/' + xdgValue;
+			QVERIFY(setenv("XDG_RUNTIME_DIR", runtimePath.constData(), 1) == 0);
+		}
 
-		const std::filesystem::path runtimeDirectory = Mumble::getRuntimeDirectory();
-
-		QVERIFY(runtimeDirectory.parent_path() == std::filesystem::path(temporaryDirectory.path().toStdString()));
-		QVERIFY(runtimeDirectory.filename() == std::filesystem::path("info.mumble.Mumble"));
-		QVERIFY(std::filesystem::is_directory(runtimeDirectory));
-	}
-#endif
-
-#ifdef MUMBLE_TEST_MACOS
-	void usesDarwinUserTemporaryDirectoryWithoutXdgRuntimeDir() {
-		EnvironmentVariableGuard xdgRuntimeDirGuard("XDG_RUNTIME_DIR");
-		unsetenv("XDG_RUNTIME_DIR");
-
-		const std::filesystem::path expectedParent = darwinUserTemporaryDirectory();
-		QVERIFY2(!expectedParent.empty(), "Unable to determine the Darwin user temporary directory");
-
-		const std::filesystem::path runtimeDirectory = Mumble::getRuntimeDirectory();
-
-		QVERIFY(std::filesystem::weakly_canonical(runtimeDirectory.parent_path())
-				== std::filesystem::weakly_canonical(expectedParent));
-		QVERIFY(runtimeDirectory.filename() == std::filesystem::path("info.mumble.Mumble"));
-		QVERIFY(std::filesystem::is_directory(runtimeDirectory));
+		std::filesystem::path expected = temporaryDirectory.path().toStdString();
+#	ifdef MUMBLE_TEST_MACOS
+		// macOS uses its temporary directory even when XDG_RUNTIME_DIR is set.
+		expected /= "info.mumble.Mumble";
+#	else
+		if (xdgValue.isEmpty()) {
+			expected /= "info.mumble.Mumble_" + std::to_string(getuid());
+		} else {
+			expected /= xdgValue.toStdString();
+			expected /= "info.mumble.Mumble";
+		}
+#	endif
+		QVERIFY(Mumble::getRuntimeDirectory() == expected);
+		QVERIFY(std::filesystem::is_directory(expected));
+		QVERIFY(Mumble::getSocketPath("connection") == expected / "connectionSocket");
+		QVERIFY(Mumble::getOverlayPipePath() == expected / "MumbleOverlayPipe");
 	}
 #endif
 

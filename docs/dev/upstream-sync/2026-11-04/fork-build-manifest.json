@@ -1,0 +1,9 @@
+{
+  "source_head": "de7bbdabf791545e8f29028fc6d60cdce907e505",
+  "source_tree": "124d3b9dc7da96f9c59b407fbed5c659ab482f1a",
+  "configuration": "Linux Debug, non-unity, client/server/plugins/tests, screen-sharing/file-sharing/chat-webm on, warnings-as-errors on, SQLite/online tests on, MySQL/PostgreSQL tests off, LTO/overlay cross-compilation off",
+  "binaries": {
+    "mumble": "6c6e8b6adbbc5a117092dfdb5de01728472d5fdfa81e3116ab476437b412f408",
+    "mumble-server": "50471b705d5be9518c44d211dc95899b42d8f2fcc0f32ff745003c7da4c0e878"
+  }
+}
