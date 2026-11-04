@@ -11,6 +11,10 @@
 // exactly as it would in the shipped client. The dialog flows (identity
 // creation, safety-number verification) are applied directly, which is what
 // those dialogs do.
+//
+// Relay-focused cases use the normal device-protected identities. The basic
+// transfer and TestFTIdentity retain passphrase-identity coverage, and the
+// password transfer still exercises the file-password KDF.
 
 #include <QTest>
 
@@ -505,8 +509,8 @@ void TestFileTransferE2E::endToEndPasswordTransfer() {
 	QVERIFY(waitFor([&]() { return alice.peerIsCapable("dave") && bob.peerIsCapable("carol"); },
 					15000));
 
-	QVERIFY(alice.identity()->createIdentity(QStringLiteral("e2e-passphrase")));
-	QVERIFY(bob.identity()->createIdentity(QStringLiteral("e2e-passphrase")));
+	QVERIFY(alice.identity()->createDeviceIdentity());
+	QVERIFY(bob.identity()->createDeviceIdentity());
 	const QByteArray aliceFp = alice.identity()->fingerprint();
 	const QByteArray bobFp   = bob.identity()->fingerprint();
 	alice.trust()->checkAndPin(alice.serverDigest(), "dave", bobFp,
@@ -590,8 +594,8 @@ void TestFileTransferE2E::capabilityGating() {
 	QVERIFY(waitFor([&]() { return alice.knowsPeer("frank") && alice.knowsPeer("eve"); }, 15000));
 	QVERIFY(waitFor([&]() { return alice.peerIsCapable("frank"); }, 15000));
 
-	QVERIFY(alice.identity()->createIdentity(QStringLiteral("e2e-passphrase")));
-	QVERIFY(bob.identity()->createIdentity(QStringLiteral("e2e-passphrase")));
+	QVERIFY(alice.identity()->createDeviceIdentity());
+	QVERIFY(bob.identity()->createDeviceIdentity());
 	const QByteArray aliceFp = alice.identity()->fingerprint();
 	const QByteArray bobFp   = bob.identity()->fingerprint();
 	alice.trust()->checkAndPin(alice.serverDigest(), "frank", bobFp,
@@ -650,7 +654,7 @@ void TestFileTransferE2E::concurrentTargetedLargeDelivery() {
 		},
 		15000));
 	for (E2EClient *client : { &sender, &first, &second })
-		QVERIFY(client->identity()->createIdentity(QStringLiteral("large-isolated-passphrase")));
+		QVERIFY(client->identity()->createDeviceIdentity());
 	const QByteArray senderFp = sender.identity()->fingerprint();
 	for (const auto &pair :
 		 { qMakePair(&first, QStringLiteral("large-first")), qMakePair(&second, QStringLiteral("large-second")) }) {
@@ -725,7 +729,7 @@ void TestFileTransferE2E::competingSendersRetryAggregateBudget() {
 		QVERIFY(client->connectToServer());
 		QVERIFY(waitFor([&]() { return client->ownSession() != 0; }, 15000));
 		client->announceCapability();
-		QVERIFY(client->identity()->createIdentity(QStringLiteral("competing-isolated-passphrase")));
+		QVERIFY(client->identity()->createDeviceIdentity());
 	}
 	QVERIFY(waitFor(
 		[&]() {

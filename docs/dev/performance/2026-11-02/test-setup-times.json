@@ -1,0 +1,38 @@
+[
+  {
+    "run": "baseline",
+    "e2e_seconds": 276.608,
+    "ctest_seconds": 277.16,
+    "e2e_passed": true
+  },
+  {
+    "run": "screen-after",
+    "e2e_seconds": 271.651,
+    "ctest_seconds": 279.43,
+    "e2e_passed": true
+  },
+  {
+    "run": "packetizer-message-only",
+    "e2e_seconds": 270.155,
+    "ctest_seconds": 270.6,
+    "e2e_passed": true
+  },
+  {
+    "run": "packetizer-after",
+    "e2e_seconds": 276.252,
+    "ctest_seconds": 276.7,
+    "e2e_passed": true
+  },
+  {
+    "run": "ui-after",
+    "e2e_seconds": 271.902,
+    "ctest_seconds": 279.68,
+    "e2e_passed": true
+  },
+  {
+    "run": "test-setup",
+    "e2e_seconds": 238.741,
+    "ctest_seconds": 239.22,
+    "e2e_passed": true
+  }
+]
