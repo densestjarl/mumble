@@ -39,6 +39,7 @@ class FilePasswordBar;
 #define OU_QEVENT (QEvent::User + 940)
 
 class ACLEditor;
+class ChatWindow;
 class BanEditor;
 class UserEdit;
 class ServerHandler;
@@ -159,6 +160,11 @@ public:
 	GlobalShortcut *gsAdaptivePush;
 
 	DockTitleBar *dtbLogDockTitle, *dtbChatDockTitle;
+	ChatWindow *m_chatWindow = nullptr;
+	bool m_chatLogWasVisible = true;
+	bool m_chatBarWasVisible = true;
+	QByteArray m_chatWindowGeometry;
+	void restoreChatWidgets();
 
 	ACLEditor *aclEdit;
 	BanEditor *banEdit;
@@ -360,6 +366,7 @@ public slots:
 	void on_qaConfigDialog_triggered();
 	void on_qaConfigHideFrame_triggered();
 	void on_qmConfig_aboutToShow();
+	void on_qaConfigPopOutChat_triggered(bool checked);
 	void on_qaConfigMinimal_triggered();
 	void on_qaConfigCert_triggered();
 	void on_qaAudioWizard_triggered();
