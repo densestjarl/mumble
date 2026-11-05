@@ -40,6 +40,7 @@ class FilePasswordBar;
 
 class ACLEditor;
 class BanEditor;
+class ChatWindow;
 class UserEdit;
 class ServerHandler;
 class ScreenShareViewer;
@@ -90,6 +91,11 @@ class MainWindow : public QMainWindow, public Ui::MainWindow {
 	friend class UserModel;
 
 private:
+	ChatWindow *m_chatWindow = nullptr;
+	bool m_chatLogWasVisible = true;
+	bool m_chatBarWasVisible = true;
+	QByteArray m_chatWindowGeometry;
+	void restoreChatWidgets();
 
 #ifdef USE_FILE_SHARING
 	/// Live state of every transfer card shown in the log
@@ -360,6 +366,7 @@ public slots:
 	void on_qaConfigDialog_triggered();
 	void on_qaConfigHideFrame_triggered();
 	void on_qmConfig_aboutToShow();
+	void on_qaConfigPopOutChat_triggered(bool checked);
 	void on_qaConfigMinimal_triggered();
 	void on_qaConfigCert_triggered();
 	void on_qaAudioWizard_triggered();

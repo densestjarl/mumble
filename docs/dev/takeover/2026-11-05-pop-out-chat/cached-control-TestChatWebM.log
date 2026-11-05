@@ -1,0 +1,22 @@
+********* Start testing of TestChatWebM *********
+Config: Using QtTest library 6.4.2, Qt 6.4.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 13.2.0), ubuntu 24.04
+PASS   : TestChatWebM::initTestCase()
+[opus @ 0x5d2856a66380] Could not update timestamps for skipped samples.
+QINFO  : TestChatWebM::audioPlaybackAdvancesClockAndResumes() audio output: true clock: 140 queued frames: 3 decoder eof: false buffered audio: 73504
+FAIL!  : TestChatWebM::audioPlaybackAdvancesClockAndResumes() 'clockWhilePlaying >= 400' returned FALSE. ()
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-11-04/src/tests/TestChatWebM/TestChatWebM.cpp(1103)]
+[opus @ 0x5d2856ab5b40] Could not update timestamps for skipped samples.
+[opus @ 0x5d2856ab5b40] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::loopsAfterEnd() 'player->currentClockMs() > 2000' returned FALSE. (playback clock did not continue past the end of the clip (looping broken))
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-11-04/src/tests/TestChatWebM/TestChatWebM.cpp(1470)]
+[opus @ 0x5d2856a5fa00] Could not update timestamps for skipped samples.
+[opus @ 0x5d2856a5fa00] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::resumeAtClipEndRestartsImmediately() QTestLib: This test case check ("player->decoderAtEof()") failed because the requested timeout (3000 ms) was too short, 3300 ms would have been sufficient this time.
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-11-04/src/tests/TestChatWebM/TestChatWebM.cpp(1500)]
+[opus @ 0x5d2856a5e2c0] Could not update timestamps for skipped samples.
+[opus @ 0x5d2856a5e2c0] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::pauseResumeKeepsFrameSchedule() QTestLib: This test case check ("player->decoderAtEof()") failed because the requested timeout (3000 ms) was too short, 3300 ms would have been sufficient this time.
+   Loc: [/home/agent/.cache/mumble-sync-worktrees/2026-11-04/src/tests/TestChatWebM/TestChatWebM.cpp(1539)]
+PASS   : TestChatWebM::cleanupTestCase()
+Totals: 2 passed, 4 failed, 0 skipped, 0 blacklisted, 9939ms
+********* Finished testing of TestChatWebM *********

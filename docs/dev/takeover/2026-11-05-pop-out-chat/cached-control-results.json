@@ -1,0 +1,7 @@
+{
+  "note": "Pre-existing November 4 sync-cache binary; fresh master source was not rebuilt here. Relevant test/engine/player source blobs at the documented sync revision match current master.",
+  "results": {
+    "TestFileTransferEngine": -6,
+    "TestChatWebM": 4
+  }
+}

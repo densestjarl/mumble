@@ -1,0 +1,199 @@
+Internal ctest changing into directory: /home/agent/.cache/mumble-takeover-build/2026-11-05-chat
+Test project /home/agent/.cache/mumble-takeover-build/2026-11-05-chat
+      Start 21: TestFileTransferE2E
+      Start 33: TestServerDatabase
+ 1/46 Test #33: TestServerDatabase ...............   Passed    1.95 sec
+      Start  2: TestChatWindow
+ 2/46 Test  #2: TestChatWindow ...................   Passed    0.06 sec
+      Start  1: TestClientTestRunner
+ 3/46 Test  #1: TestClientTestRunner .............   Passed    0.82 sec
+      Start  3: TestServerHandlerCrypt
+ 4/46 Test  #3: TestServerHandlerCrypt ...........   Passed    0.65 sec
+      Start  4: TestAudioWizard
+ 5/46 Test  #4: TestAudioWizard ..................   Passed    0.08 sec
+      Start  5: TestDatabasePath
+ 6/46 Test  #5: TestDatabasePath .................   Passed    2.29 sec
+      Start  6: TestReleaseUpdate
+ 7/46 Test  #6: TestReleaseUpdate ................   Passed    0.03 sec
+      Start  7: TestAnimatedImages
+ 8/46 Test  #7: TestAnimatedImages ...............   Passed    0.07 sec
+      Start  8: TestChatWebM
+ 9/46 Test  #8: TestChatWebM .....................***Failed   17.06 sec
+********* Start testing of TestChatWebM *********
+Config: Using QtTest library 6.4.2, Qt 6.4.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 13.2.0), ubuntu 24.04
+PASS   : TestChatWebM::initTestCase()
+PASS   : TestChatWebM::acceptsWebmFileDrop()
+PASS   : TestChatWebM::routesOversizedWebm()
+PASS   : TestChatWebM::videoToImgRejectsGarbage()
+PASS   : TestChatWebM::videoToImgBudgetTooLarge()
+PASS   : TestChatWebM::oversizedDeviceIsNotRead()
+PASS   : TestChatWebM::growingDeviceReadIsBounded()
+PASS   : TestChatWebM::deviceEncodingPreservesBudgetBoundary()
+PASS   : TestChatWebM::deviceRejectsNegativeBudgetWithoutReading()
+PASS   : TestChatWebM::deviceZeroBudgetRemainsUnlimited()
+PASS   : TestChatWebM::mixedDropRespectsFileTransferSetting(file-sharing-disabled)
+PASS   : TestChatWebM::mixedDropRespectsFileTransferSetting(file-sharing-enabled)
+PASS   : TestChatWebM::invalidWebmDoesNotBecomeFileTransfer()
+PASS   : TestChatWebM::droppedVideoRespectsCompleteMessageBudget()
+[matroska,webm @ 0x5ca97e1b4e80] File ended prematurely at pos. 8 (0x8)
+[matroska,webm @ 0x5ca97e1b4e80] EBML header parsing failed
+PASS   : TestChatWebM::placeholderForUndecodableWebm()
+[matroska,webm @ 0x5ca97e1b4e80] File ended prematurely at pos. 8 (0x8)
+[matroska,webm @ 0x5ca97e1b4e80] EBML header parsing failed
+PASS   : TestChatWebM::validationDocumentCreatesNoPlayers()
+PASS   : TestChatWebM::posterDoesNotAutoplay()
+PASS   : TestChatWebM::clickTogglesPlayback()
+[opus @ 0x5ca97e248040] Could not update timestamps for skipped samples.
+QINFO  : TestChatWebM::audioPlaybackAdvancesClockAndResumes() audio output: true clock: 140 queued frames: 3 decoder eof: false buffered audio: 73504
+FAIL!  : TestChatWebM::audioPlaybackAdvancesClockAndResumes() 'clockWhilePlaying >= 400' returned FALSE. ()
+   Loc: [/home/agent/.t3/worktrees/mumble/takeover-pop-out-chat-20261105/src/tests/TestChatWebM/TestChatWebM.cpp(1103)]
+[opus @ 0x5ca97e2250c0] Could not update timestamps for skipped samples.
+[opus @ 0x5ca97e2250c0] Could not update timestamps for discarded samples.
+PASS   : TestChatWebM::audioRefillPreservesUpcomingVideoFrames()
+PASS   : TestChatWebM::mixerSinkConsumesStereo(48000)
+PASS   : TestChatWebM::mixerSinkConsumesStereo(44100)
+PASS   : TestChatWebM::mixerSinkReportsDetach()
+PASS   : TestChatWebM::mixerSinkPreallocatesBackendMaximum()
+PASS   : TestChatWebM::idleAudioRecoveryPreservesQueuedPcm()
+[opus @ 0x5ca97e223e00] Could not update timestamps for skipped samples.
+FAIL!  : TestChatWebM::loopsAfterEnd() 'player->currentClockMs() > 2000' returned FALSE. (playback clock did not continue past the end of the clip (looping broken))
+   Loc: [/home/agent/.t3/worktrees/mumble/takeover-pop-out-chat-20261105/src/tests/TestChatWebM/TestChatWebM.cpp(1470)]
+[opus @ 0x5ca97e221340] Could not update timestamps for skipped samples.
+[opus @ 0x5ca97e221340] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::resumeAtClipEndRestartsImmediately() QTestLib: This test case check ("player->decoderAtEof()") failed because the requested timeout (3000 ms) was too short, 3300 ms would have been sufficient this time.
+   Loc: [/home/agent/.t3/worktrees/mumble/takeover-pop-out-chat-20261105/src/tests/TestChatWebM/TestChatWebM.cpp(1500)]
+[opus @ 0x5ca97e25d7c0] Could not update timestamps for skipped samples.
+[opus @ 0x5ca97e25d7c0] Could not update timestamps for discarded samples.
+FAIL!  : TestChatWebM::pauseResumeKeepsFrameSchedule() QTestLib: This test case check ("player->decoderAtEof()") failed because the requested timeout (3000 ms) was too short, 3300 ms would have been sufficient this time.
+   Loc: [/home/agent/.t3/worktrees/mumble/takeover-pop-out-chat-20261105/src/tests/TestChatWebM/TestChatWebM.cpp(1539)]
+PASS   : TestChatWebM::silentVideoPacesOnWallClock()
+PASS   : TestChatWebM::releasesPlayerOnClear()
+PASS   : TestChatWebM::retainsPlayerUntilLastReferenceIsRemoved()
+PASS   : TestChatWebM::releasesPlayerOnMaximumBlockEviction()
+PASS   : TestChatWebM::playingCapPausesOldest()
+PASS   : TestChatWebM::totalCapDestroysOldest()
+PASS   : TestChatWebM::evictedVideoIsRecreatedOnToggle()
+PASS   : TestChatWebM::scalesVideoWithChatWindow()
+[opus @ 0x5ca97e2f3480] Could not update timestamps for skipped samples.
+[opus @ 0x5ca97e2f3480] Could not update timestamps for discarded samples.
+PASS   : TestChatWebM::audioDecodesToPcm()
+PASS   : TestChatWebM::pacingMath()
+PASS   : TestChatWebM::cleanupTestCase()
+Totals: 35 passed, 4 failed, 0 skipped, 0 blacklisted, 17002ms
+********* Finished testing of TestChatWebM *********
+
+      Start  9: TestVideoFramePacketizer
+10/46 Test  #9: TestVideoFramePacketizer .........   Passed    0.01 sec
+      Start 10: TestVideoPacketPacer
+11/46 Test #10: TestVideoPacketPacer .............   Passed    0.13 sec
+      Start 11: TestVideoQualityProfile
+12/46 Test #11: TestVideoQualityProfile ..........   Passed    0.01 sec
+      Start 12: TestVideoViewUi
+13/46 Test #12: TestVideoViewUi ..................   Passed    0.02 sec
+      Start 13: TestXMLTools
+14/46 Test #13: TestXMLTools .....................   Passed    0.01 sec
+      Start 14: TestFileTransferUi
+15/46 Test #14: TestFileTransferUi ...............   Passed    0.19 sec
+      Start 15: TestFileTransferMainWindow
+16/46 Test #15: TestFileTransferMainWindow .......   Passed   31.17 sec
+      Start 16: TestFileTransferManager
+17/46 Test #16: TestFileTransferManager ..........   Passed   62.34 sec
+      Start 17: TestPQCrypto
+18/46 Test #17: TestPQCrypto .....................   Passed    3.20 sec
+      Start 18: TestFTIdentity
+19/46 Test #18: TestFTIdentity ...................   Passed   35.06 sec
+      Start 19: TestFileTransferSession
+20/46 Test #19: TestFileTransferSession ..........   Passed    0.03 sec
+      Start 20: TestFileTransferEngine
+21/46 Test #20: TestFileTransferEngine ...........Subprocess aborted***Exception:   7.12 sec
+********* Start testing of TestFileTransferEngine *********
+Config: Using QtTest library 6.4.2, Qt 6.4.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 13.2.0), ubuntu 24.04
+PASS   : TestFileTransferEngine::initTestCase()
+PASS   : TestFileTransferEngine::relayRetriesKeepCiphertextAndRequireAdmission()
+PASS   : TestFileTransferEngine::synchronousRelayAdmissionCompletes()
+PASS   : TestFileTransferEngine::incompleteRecipientHandshakeSendsNoContent()
+PASS   : TestFileTransferEngine::missingReceiptReportsPartialDelivery()
+PASS   : TestFileTransferEngine::peerResetKeepsUnrelatedReadyFileAndRetiresPrompt()
+PASS   : TestFileTransferEngine::privateReceiveStorage(plaintext)
+PASS   : TestFileTransferEngine::privateReceiveStorage(password-spool)
+PASS   : TestFileTransferEngine::predictableReceivePathCannotRedirectWrites()
+PASS   : TestFileTransferEngine::earlyChunksKeepTheirTransferIdentity()
+PASS   : TestFileTransferEngine::unrelatedChunksDoNotExtendPendingReceive()
+PASS   : TestFileTransferEngine::sendReceiveRoundTrip()
+PASS   : TestFileTransferEngine::incomingIdentitySurvivesPeerRename()
+QFATAL : TestFileTransferEngine::selectedPinSurvivesCacheRemoval() ASSERT: "!isEmpty()" in file /usr/include/x86_64-linux-gnu/qt6/QtCore/qlist.h, line 607
+FAIL!  : TestFileTransferEngine::selectedPinSurvivesCacheRemoval() Received a fatal error.
+   Loc: [/usr/include/x86_64-linux-gnu/qt6/QtCore/qlist.h(607)]
+Totals: 13 passed, 1 failed, 0 skipped, 0 blacklisted, 5989ms
+********* Finished testing of TestFileTransferEngine *********
+Received signal 6 (SIGABRT)
+         selectedPinSurvivesCacheRemoval function time: 1ms, total time: 5989ms
+
+=== Stack trace ===
+Could not attach to process.  If your uid matches the uid of the target
+process, check the setting of /proc/sys/kernel/yama/ptrace_scope, or try
+again as the root user.  For more details, see /etc/sysctl.d/10-ptrace.conf
+ptrace: Inappropriate ioctl for device.
+=== End of stack trace ===
+
+      Start 22: TestSettingsJSONSerialization
+22/46 Test #22: TestSettingsJSONSerialization ....   Passed    0.07 sec
+      Start 23: OverlayTest
+23/46 Test #23: OverlayTest ......................***Not Run (Disabled)   0.00 sec
+      Start 24: TestCrypt
+24/46 Test #24: TestCrypt ........................   Passed    0.03 sec
+      Start 25: TestAudioReceiverBuffer
+25/46 Test #25: TestAudioReceiverBuffer ..........   Passed    0.02 sec
+      Start 26: TestQtLogger
+26/46 Test #26: TestQtLogger .....................   Passed    0.03 sec
+      Start 27: TestBandwidthRecord
+27/46 Test #27: TestBandwidthRecord ..............   Passed    0.01 sec
+      Start 28: TestConnectionOutputQueue
+28/46 Test #28: TestConnectionOutputQueue ........   Passed    1.00 sec
+      Start 29: TestCaseInsensitiveQString
+29/46 Test #29: TestCaseInsensitiveQString .......   Passed    0.01 sec
+      Start 30: TestCryptographicHash
+30/46 Test #30: TestCryptographicHash ............   Passed    0.02 sec
+      Start 31: TestCryptographicRandom
+31/46 Test #31: TestCryptographicRandom ..........   Passed    2.03 sec
+      Start 32: TestDatabase
+32/46 Test #32: TestDatabase .....................   Passed    0.93 sec
+      Start 34: TestFFDHE
+33/46 Test #34: TestFFDHE ........................   Passed    0.02 sec
+      Start 35: TestIPCUtils
+34/46 Test #35: TestIPCUtils .....................   Passed    0.02 sec
+      Start 36: TestPacketDataStream
+35/46 Test #36: TestPacketDataStream .............   Passed    0.02 sec
+      Start 37: TestPasswordGenerator
+36/46 Test #37: TestPasswordGenerator ............   Passed    0.03 sec
+      Start 38: TestMumbleProtocol
+37/46 Test #38: TestMumbleProtocol ...............   Passed    0.02 sec
+      Start 39: TestSelfSignedCertificate
+38/46 Test #39: TestSelfSignedCertificate ........   Passed    0.51 sec
+      Start 40: TestServerAddress
+39/46 Test #40: TestServerAddress ................   Passed    0.02 sec
+      Start 41: TestSSLCiphers
+40/46 Test #41: TestSSLCiphers ...................   Passed    0.02 sec
+      Start 42: TestSSLLocks
+41/46 Test #42: TestSSLLocks .....................   Passed    2.02 sec
+      Start 43: TestStdAbs
+42/46 Test #43: TestStdAbs .......................   Passed    0.02 sec
+      Start 44: TestTimer
+43/46 Test #44: TestTimer ........................   Passed    0.16 sec
+      Start 45: TestUnresolvedServerAddress
+44/46 Test #45: TestUnresolvedServerAddress ......   Passed    0.02 sec
+      Start 46: TestVersion
+45/46 Test #46: TestVersion ......................   Passed    0.01 sec
+46/46 Test #21: TestFileTransferE2E ..............   Passed  238.52 sec
+
+96% tests passed, 2 tests failed out of 45
+
+Total Test time (real) = 238.98 sec
+
+The following tests did not run:
+	 23 - OverlayTest (Disabled)
+
+The following tests FAILED:
+	  8 - TestChatWebM (Failed)
+	 20 - TestFileTransferEngine (Subprocess aborted)
+Errors while running CTest

@@ -1,0 +1,23 @@
+{
+  "pass": true,
+  "client": "/home/agent/.cache/mumble-takeover-build/2026-11-05-chat/mumble",
+  "server": "/home/agent/.cache/mumble-takeover-build/2026-11-05-chat/mumble-server",
+  "identity_prompt_shown": false,
+  "user_list": true,
+  "join_channel": true,
+  "text_both_directions": true,
+  "pop_out_chat": {
+    "message_both_directions": true,
+    "tab_and_shift_tab": true,
+    "escape_keeps_open": true,
+    "draft_and_history_preserved": true,
+    "repeat_cycle": true
+  },
+  "channel_moves": true,
+  "extension_controls_enabled": true,
+  "connected_seconds": 30.25,
+  "observer_frames": 28,
+  "observer_errors": [],
+  "intentional_shutdown": true,
+  "client_exit": -15
+}

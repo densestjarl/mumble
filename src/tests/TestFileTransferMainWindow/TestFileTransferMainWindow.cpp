@@ -1,5 +1,8 @@
 // Copyright The Mumble Developers. All rights reserved.
 // BSD-style license: see LICENSE at the source root.
+#include "ACL.h"
+#include "Channel.h"
+#include "ChatWindow.h"
 #include "ClientTest.h"
 #include "ClientUser.h"
 #include "CustomElements.h"
@@ -187,6 +190,108 @@ static int mainWindowChild(const std::function< int(Global &, MainWindow &, int 
 	global.db = nullptr;
 	checkpoint("complete");
 	return result;
+}
+
+
+// Exercise the actual action/slots and persisted layout, rather than a second
+// implementation of MainWindow's dock handling. Keep its global state isolated.
+static int chatWindowChild() {
+	return mainWindowChild([](Global &global, MainWindow &window, int &) {
+		const auto check = [](bool passed, const char *message) {
+			if (!passed) {
+				qWarning("Chat pop-out: %s", message);
+			}
+			return passed;
+		};
+		// Model a connected user so normal placeholder updates do not force the
+		// disconnected "Not connected" text over the fixture draft.
+		global.sh                      = std::make_shared< ServerHandler >();
+		Channel::get(0)->uiPermissions = ChanACL::All;
+		ClientUser *self               = window.pmModel->addUser(1, QStringLiteral("Chat fixture"));
+		global.uiSession               = self->uiSession;
+		global.s.bChatBarUseSelection  = false;
+		window.updateChatBar();
+		QWidget *chatContents = window.qdwChat->widget();
+		window.qteLog->setPlainText(QStringLiteral("existing history"));
+		QTest::qWait(20);
+		window.activateWindow();
+		window.qteLog->setFocus();
+		window.qteChat->setFocus();
+		QTest::keyClicks(window.qteChat, "unsent draft");
+		if (!check(window.qteChat->toPlainText() == QStringLiteral("unsent draft"), "fixture draft setup failed")) {
+			return 10;
+		}
+		for (bool logVisible : { false, true }) {
+			for (bool barVisible : { false, true }) {
+				window.qdwLog->setVisible(logVisible);
+				window.qdwChat->setVisible(barVisible);
+				window.qaConfigPopOutChat->trigger();
+				QApplication::processEvents();
+				auto *chat = dynamic_cast< ChatWindow * >(window.qteChat->window());
+				if (!check(chat && chat->isVisible(), "action did not open chat")
+					|| !check(window.qteLog->window() == chat && window.qtbSendFile->window() == chat,
+							  "dock contents did not move together")) {
+					return 1;
+				}
+				chat->activateWindow();
+				window.qteChat->setFocus();
+				QTest::qWait(20);
+				QTest::keyClick(window.qteChat, Qt::Key_Tab);
+				if (!check(QApplication::focusWidget() && QApplication::focusWidget() != window.qteChat
+							   && QApplication::focusWidget()->window() == chat,
+						   "Tab left the chat window or failed to advance")) {
+					return 2;
+				}
+				window.qteChat->setFocus();
+				QTest::keyClick(window.qteChat, Qt::Key_Backtab, Qt::ShiftModifier);
+				if (!check(QApplication::focusWidget() && QApplication::focusWidget() != window.qteChat
+							   && QApplication::focusWidget()->window() == chat,
+						   "Shift+Tab left the chat window or failed to advance")) {
+					return 3;
+				}
+				QTest::keyClick(window.qteChat, Qt::Key_Escape);
+				if (!check(chat->isVisible(), "Escape closed chat")) {
+					return 4;
+				}
+				window.storeState(false);
+				if (!check(window.qdwLog->isHidden() && window.qdwChat->isHidden(),
+						   "saving state exposed empty docks")) {
+					return 5;
+				}
+				// Close while minimal, then return to the saved normal layout.
+				window.qaConfigMinimal->trigger();
+				QApplication::processEvents();
+				if (!check(global.s.bMinimalView && chat->isVisible(), "minimal view hid chat")) {
+					return 6;
+				}
+				chat->close();
+				if (!check(!window.qaConfigPopOutChat->isChecked() && window.qdwChat->widget() == chatContents,
+						   "close did not restore the chat container/action")) {
+					return 7;
+				}
+				window.qaConfigMinimal->trigger();
+				// Qt window-flag changes hide this top-level fixture.
+				window.show();
+				QApplication::processEvents();
+				if (!check(window.qdwLog->isVisible() == logVisible && window.qdwChat->isVisible() == barVisible,
+						   "saved normal dock visibility changed")
+					|| !check(window.qteLog->toPlainText() == QStringLiteral("existing history")
+								  && window.qteChat->toPlainText() == QStringLiteral("unsent draft"),
+							  "history or draft changed")
+					|| !check(window.qtbSendFile->window() == &window, "send-file button was lost")) {
+					return 8;
+				}
+				// Unchecking the action must perform the same restoration as WM close.
+				window.qaConfigPopOutChat->trigger();
+				window.qaConfigPopOutChat->trigger();
+				if (!check(window.qteChat->window() == &window && window.qdwChat->widget() == chatContents,
+						   "unchecking did not restore chat")) {
+					return 9;
+				}
+			}
+		}
+		return 0;
+	});
 }
 
 #ifdef MUMBLE_TEST_MURMUR_BINARY
@@ -679,6 +784,23 @@ private:
 	}
 #endif
 private slots:
+	void popOutChatPreservesKeyboardAndLayout() {
+		QProcess child;
+		child.setProcessChannelMode(QProcess::MergedChannels);
+		child.start(QCoreApplication::applicationFilePath(),
+					clientTestArguments({ QStringLiteral("-platform"), QGuiApplication::platformName(),
+										  QStringLiteral("--chat-window-child") }));
+		QVERIFY(child.waitForStarted(5000));
+		const bool finished = child.waitForFinished(20000);
+		if (!finished) {
+			child.kill();
+			child.waitForFinished(5000);
+		}
+		const QByteArray diagnostics = child.readAllStandardOutput();
+		QVERIFY2(finished, diagnostics.constData());
+		QVERIFY2(child.exitStatus() == QProcess::NormalExit && child.exitCode() == 0, diagnostics.constData());
+	}
+
 	void transferUpdatesKeepGuiResponsive() {
 		QProcess child;
 		child.setProcessChannelMode(QProcess::MergedChannels);
@@ -714,6 +836,11 @@ int mumbleTestMain_TestFileTransferMainWindow(int argc, char **argv) {
 #endif
 	if (application.arguments().contains(QStringLiteral("--main-window-child"))) {
 		const int result        = mainWindowChild();
+		Global::g_global_struct = nullptr;
+		return result;
+	}
+	if (application.arguments().contains(QStringLiteral("--chat-window-child"))) {
+		const int result        = chatWindowChild();
 		Global::g_global_struct = nullptr;
 		return result;
 	}
