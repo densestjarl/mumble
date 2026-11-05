@@ -1,0 +1,13 @@
+{
+  "registered": 46,
+  "passed": 43,
+  "failed": [
+    "TestChatWebM",
+    "TestFileTransferEngine"
+  ],
+  "disabled": [
+    "OverlayTest"
+  ],
+  "wall_seconds": 238.98,
+  "file_transfer_e2e_seconds": 238.52
+}

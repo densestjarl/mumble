@@ -1,0 +1,10 @@
+{
+  "comparison_ref": "de7bbdabf791545e8f29028fc6d60cdce907e505",
+  "comparison": "documented cached-sync source revision vs origin/master; source worktree has already been removed",
+  "identical": {
+    "src/tests/TestFileTransferEngine/TestFileTransferEngine.cpp": true,
+    "src/tests/TestChatWebM/TestChatWebM.cpp": true,
+    "src/mumble/PQFileTransfer/engine/FileTransferEngine.cpp": true,
+    "src/mumble/ChatVideoPlayer.cpp": true
+  }
+}

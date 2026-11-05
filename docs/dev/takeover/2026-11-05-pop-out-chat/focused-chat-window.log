@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /home/agent/.cache/mumble-takeover-build/2026-11-05-chat
+Test project /home/agent/.cache/mumble-takeover-build/2026-11-05-chat
+    Start 2: TestChatWindow
+1/1 Test #2: TestChatWindow ...................   Passed    0.06 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.08 sec

@@ -1,0 +1,19 @@
+{
+  "warnings": 12,
+  "identical_to_november_4_baseline": true,
+  "new_warnings": [],
+  "diagnostics": [
+    "plugins/amongus/Game.cpp:30:72: warning: conversion from \u2018procptr_t\u2019 {aka \u2018long unsigned int\u2019} to \u2018ptr_t\u2019 {aka \u2018unsigned int\u2019} may change value [-Wconversion]",
+    "plugins/amongus/Game.cpp:37:34: warning: conversion from \u2018procptr_t\u2019 {aka \u2018long unsigned int\u2019} to \u2018ptr_t\u2019 {aka \u2018unsigned int\u2019} may change value [-Wconversion]",
+    "plugins/mumble_positional_audio_utils.h:95:31: warning: conversion from \u2018int\u2019 to \u2018char\u2019 may change value [-Wconversion]",
+    "plugins/mumble_positional_audio_utils.h:157:42: warning: conversion from \u2018double\u2019 to \u2018float\u2019 changes value from \u20181.7453292519943295e-2\u2019 to \u20181.74532924e-2f\u2019 [-Wfloat-conversion]",
+    "plugins/mumble_positional_audio_utils.h:95:31: warning: conversion from \u2018int\u2019 to \u2018char\u2019 may change value [-Wconversion]",
+    "plugins/mumble_positional_audio_utils.h:157:42: warning: conversion from \u2018double\u2019 to \u2018float\u2019 changes value from \u20181.7453292519943295e-2\u2019 to \u20181.74532924e-2f\u2019 [-Wfloat-conversion]",
+    "plugins/HostLinux.cpp:31:43: warning: conversion from \u2018procid_t\u2019 {aka \u2018long unsigned int\u2019} to \u2018pid_t\u2019 {aka \u2018int\u2019} may change value [-Wconversion]",
+    "plugins/mumble_positional_audio_utils.h:95:31: warning: conversion from \u2018int\u2019 to \u2018char\u2019 may change value [-Wconversion]",
+    "plugins/mumble_positional_audio_utils.h:157:42: warning: conversion from \u2018double\u2019 to \u2018float\u2019 changes value from \u20181.7453292519943295e-2\u2019 to \u20181.74532924e-2f\u2019 [-Wfloat-conversion]",
+    "plugins/mumble_positional_audio_linux.h:194:42: warning: conversion from \u2018procid_t\u2019 {aka \u2018long unsigned int\u2019} to \u2018pid_t\u2019 {aka \u2018int\u2019} may change value [-Wconversion]",
+    "plugins/mumble_positional_audio_linux.h:303:29: warning: conversion from \u2018int\u2019 to \u2018int8_t\u2019 {aka \u2018signed char\u2019} may change value [-Wconversion]",
+    "plugins/ut99/ut99.cpp:60:28: warning: conversion from \u2018double\u2019 to \u2018float\u2019 may change value [-Wfloat-conversion]"
+  ]
+}
