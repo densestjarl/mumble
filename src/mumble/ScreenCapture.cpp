@@ -409,8 +409,6 @@ QImage ScreenCapture::convertPreviewFrame(int width, int height, const uint8_t *
 	int dstStride[1]    = { static_cast< int >(img.bytesPerLine()) };
 	sws_scale(m_previewSwsCtx, data, linesize, 0, height, dstData, dstStride);
 
-	m_previewWidth  = dstW;
-	m_previewHeight = dstH;
 	return img;
 }
 
@@ -419,8 +417,6 @@ void ScreenCapture::freePreviewScaler() {
 		sws_freeContext(m_previewSwsCtx);
 		m_previewSwsCtx = nullptr;
 	}
-	m_previewWidth  = 0;
-	m_previewHeight = 0;
 }
 
 #endif // USE_SCREEN_SHARING

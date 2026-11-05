@@ -187,14 +187,12 @@ private:
 	struct SendJob {
 		QByteArray transferId;
 		quint64 sendContext = 0;
-		QString sourcePath;
 		QString fileName;
 		QString mimeType;
 		bool passwordMode  = false;
 		QByteArray password;   // zeroized once the wrap is done
 		QList< SendPeer > peers;
 		QByteArray fileKey;
-		QVector< QByteArray > chunkDigests;
 		::QFile *file = nullptr;           // kept open until the send finishes
 		QByteArray merkleRoot;
 		quint64 fileSize		= 0;
@@ -292,7 +290,7 @@ private:
 	void drainSpooledChunks(std::shared_ptr< ReceiveJob > jobPtr);
 	bool openSpool(ReceiveJob &job);
 	bool tryCompleteReceive(std::shared_ptr< ReceiveJob > jobPtr);
-	void cleanupSend(SendJob &job, bool keepCard);
+	void cleanupSend(SendJob &job);
 	/// Removes the job from the map first (dropping the map's owning
 	/// reference) and keeps it alive through the pointer for the rest of the
 	/// teardown — reading job fields after the erase used to be a

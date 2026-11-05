@@ -84,7 +84,6 @@ private:
 		SwsContext *swsCtx            = nullptr;
 		int swsWidth                  = 0;
 		int swsHeight                 = 0;
-		MumbleUDP::Video::Codec codec = MumbleUDP::Video::H264;
 		/// Drop P-frames until the decoder has seen at least one IDR keyframe.
 		bool gotKeyFrame = false;
 	};
@@ -92,8 +91,8 @@ private:
 
 	bool ensureDecoder(quint32 session, MumbleUDP::Video::Codec codec);
 	void destroyDecoder(quint32 session);
-	void decodeCompleteFrame(quint32 session, const QByteArray &encodedData, quint32 width, quint32 height,
-							 bool isKeyFrame, MumbleUDP::Video::Codec codec);
+	void decodeCompleteFrame(quint32 session, const QByteArray &encodedData, bool isKeyFrame,
+							 MumbleUDP::Video::Codec codec);
 #endif
 };
 

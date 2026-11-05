@@ -43,22 +43,9 @@ ScreenShareReceiver::ScreenShareReceiver(QObject *parent) : QObject(parent) {
 
 ScreenShareReceiver::~ScreenShareReceiver() {
 #ifdef USE_SCREEN_SHARING
-	// Tear down all decoders.
 	std::lock_guard< std::mutex > lock(m_mutex);
-	for (std::pair< const unsigned int, DecoderState > &kv : m_decoders) {
-		DecoderState &ds = kv.second;
-		if (ds.swsCtx) {
-			sws_freeContext(ds.swsCtx);
-		}
-		if (ds.frame) {
-			av_frame_free(&ds.frame);
-		}
-		if (ds.packet) {
-			av_packet_free(&ds.packet);
-		}
-		if (ds.codecCtx) {
-			avcodec_free_context(&ds.codecCtx);
-		}
+	while (!m_decoders.empty()) {
+		destroyDecoder(m_decoders.begin()->first);
 	}
 #endif
 }
@@ -143,15 +130,12 @@ void ScreenShareReceiver::handleVideoPacket(const Mumble::Protocol::VideoData &v
 	}
 
 	// Capture frame metadata
-	const quint32 fw                    = pf.width;
-	const quint32 fh                    = pf.height;
 	const bool isKeyFrm                 = pf.isKeyFrame;
 	const MumbleUDP::Video::Codec codec = pf.codec;
 
 	// Cleanup old frames for this session
 	std::map< unsigned long long, PendingFrame > &senderMap = m_fragmentBuffer[session];
 
-	// Using auto here as type because this is an iterator
 	for (auto it = senderMap.begin(); it != senderMap.end();) {
 		if (it->first <= frameNum)
 			it = senderMap.erase(it);
@@ -159,7 +143,7 @@ void ScreenShareReceiver::handleVideoPacket(const Mumble::Protocol::VideoData &v
 			++it;
 	}
 
-	decodeCompleteFrame(session, complete, fw, fh, isKeyFrm, codec);
+	decodeCompleteFrame(session, complete, isKeyFrm, codec);
 #endif
 }
 
@@ -187,7 +171,6 @@ bool ScreenShareReceiver::ensureDecoder(quint32 session, MumbleUDP::Video::Codec
 		return false;
 
 	DecoderState ds;
-	ds.codec    = protoCodec;
 	ds.codecCtx = avcodec_alloc_context3(codec);
 	if (!ds.codecCtx)
 		return false;
@@ -224,8 +207,8 @@ void ScreenShareReceiver::destroyDecoder(quint32 session) {
 	m_decoders.erase(it);
 }
 
-void ScreenShareReceiver::decodeCompleteFrame(quint32 session, const QByteArray &encodedData, quint32 /*width*/,
-											  quint32 /*height*/, bool isKeyFrame, MumbleUDP::Video::Codec codec) {
+void ScreenShareReceiver::decodeCompleteFrame(quint32 session, const QByteArray &encodedData, bool isKeyFrame,
+											  MumbleUDP::Video::Codec codec) {
 	if (!ensureDecoder(session, codec))
 		return;
 

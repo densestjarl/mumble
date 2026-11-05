@@ -532,10 +532,6 @@ int FilePasswordBar::indexOf(const QByteArray &transferId) const {
 	return -1;
 }
 
-bool FilePasswordBar::isWaitingFor(const QByteArray &transferId) const {
-	return indexOf(transferId) >= 0;
-}
-
 void FilePasswordBar::request(const QByteArray &transferId, const QString &fileName, const QString &senderName,
 							  bool retry) {
 	const int index = indexOf(transferId);
