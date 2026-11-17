@@ -1,0 +1,44 @@
+--- a/BenchmarkVideoPipeline.cpp
++++ b/BenchmarkVideoPipeline.cpp
+@@ -80,6 +80,7 @@
+ 	QCryptographicHash encodedHash(QCryptographicHash::Sha256), decodedHash(QCryptographicHash::Sha256),
+ 		inputHash(QCryptographicHash::Sha256);
+ 	QElapsedTimer operation, elapsed, gap;
++	std::array< std::uint64_t, 6 > pendingAllocations{};
+ 	double cpuStart            = 0;
+ 	double decodeMS            = 0;
+ 	using Begin                = void (*)();
+@@ -145,6 +146,10 @@
+ 		decodeMS += static_cast< double >(operation.nsecsElapsed()) / 1e6;
+ 		std::array< std::uint64_t, 6 > counts{};
+ 		allocationEnd(counts.data());
++		for (std::size_t i = 0; i < counts.size(); ++i) {
++			counts[i] += pendingAllocations[i];
++		}
++		pendingAllocations = {};
+ 		if (frames >= WarmupFrames) {
+ 			frameMS.append(decodeMS);
+ 			QJsonArray row;
+@@ -287,6 +292,9 @@
+ 				std::array< std::uint64_t, 6 > counts{};
+ 				allocationEnd(counts.data());
+ 				if (before == frames) {
++					for (std::size_t i = 0; i < counts.size(); ++i) {
++						pendingAllocations[i] += counts[i];
++					}
+ 					decodeMS += static_cast< double >(operation.nsecsElapsed()) / 1e6;
+ 				}
+ 				if (frames == TotalFrames) {
+--- a/run_video_pipeline.py
++++ b/run_video_pipeline.py
+@@ -109,6 +109,10 @@
+             "peak_rss_mib": [row["peak_rss_kib"] / 1024 for row in data],
+             "event_loop_gap_ms_p99": [sorted(row["event_loop_gap_ms"])[int(.99 * (len(row["event_loop_gap_ms"]) - 1))] for row in data],
+         }
++        values.update({
++            "allocation_calls_per_frame": [statistics.mean(a[0] for a in row["allocations"]) for row in data],
++            "allocation_bytes_per_frame": [statistics.mean(a[1] for a in row["allocations"]) for row in data],
++        })
+         if role == "sender":
+             values.update({
+                 "packetize_ms_mean": [statistics.mean(row["packetize_ms"]) for row in data],
