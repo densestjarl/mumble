@@ -121,6 +121,7 @@
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "widgets/EventFilters.h"
 
@@ -1469,14 +1470,21 @@ void MainWindow::openUrl(const QUrl &url) {
 		}
 	}
 
+	// Remember the link's server so that it is still there the next time Mumble starts.
+	m_linkedServer = LinkedServer{ name.isEmpty() ? host : name, host, port };
+
 	Global::get().db->fuzzyMatch(name, user, pw, host, port);
 
 	if (user.isEmpty()) {
 		bool ok;
-		user = QInputDialog::getText(this, tr("Connecting to %1").arg(url.toString()), tr("Enter username"),
-									 QLineEdit::Normal, Global::get().s.qsUsername, &ok);
-		if (!ok || user.isEmpty())
+		// The link may contain the server password, so do not show it in full.
+		user = QInputDialog::getText(this, tr("Connecting to %1").arg(m_linkedServer->name), tr("Enter username"),
+									 QLineEdit::Normal, Global::get().s.qsUsername, &ok)
+				   .trimmed();
+		if (!ok || user.isEmpty()) {
+			m_linkedServer.reset();
 			return;
+		}
 		Global::get().s.qsUsername = user;
 	}
 
@@ -4288,6 +4296,7 @@ void MainWindow::openServerConnectDialog(bool autoconnect) {
 
 	if (res == QDialog::Accepted) {
 		recreateServerHandler();
+		m_linkedServer.reset();
 		qsDesiredChannel = QString();
 		rtLast           = MumbleProto::Reject_RejectType_None;
 		bRetryServer     = true;
@@ -4329,6 +4338,24 @@ void MainWindow::addServerAsFavorite() {
 	qaServerAddToFavorites->setEnabled(false);
 	Global::get().l->log(Log::Information,
 						 tr("Added %1 to favorites.").arg(Log::msgColor(host.toHtmlEscaped(), Log::Server)));
+}
+
+void MainWindow::saveLinkedServerAsFavorite() {
+	const std::optional< LinkedServer > linked = std::exchange(m_linkedServer, std::nullopt);
+	if (!linked || Global::get().uiSession == 0) {
+		return;
+	}
+	QString host, username, password;
+	unsigned short port;
+	Global::get().sh->getConnectionInfo(host, port, username, password);
+	// The user may have connected elsewhere through the connect dialog in the meantime.
+	if (host != linked->host || port != linked->port || Global::get().db->isFavorite(host, port)) {
+		return;
+	}
+	Global::get().db->addFavorite(ServerItem(linked->name, host, port, username, password).toFavoriteServer());
+	updateFavoriteButton();
+	Global::get().l->log(Log::Information,
+						 tr("Added %1 to favorites.").arg(Log::msgColor(linked->name.toHtmlEscaped(), Log::Server)));
 }
 
 void MainWindow::openServerInformationDialog() {
