@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+Copyright The Mumble Developers. All rights reserved.
+Use of this source code is governed by a BSD-style license
+that can be found in the LICENSE file at the root of the
+Mumble source tree or at <https://www.mumble.info/LICENSE>.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy"
+	content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
+<title>Join a Mumble server</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+	<section id="invite" hidden>
+		<p class="eyebrow">Mumble voice chat</p>
+		<h1 id="invite-title">You are invited</h1>
+		<p class="address">Server: <code id="invite-address"></code></p>
+
+		<ol class="steps">
+			<li id="install-step">
+				<h2>Install Mumble</h2>
+				<p id="install-intro">You only need to do this once.</p>
+				<p><a class="button secondary" id="download" href="#" rel="noopener">Download</a></p>
+				<p class="hint" id="download-requires"></p>
+				<p class="hint" id="download-warning"></p>
+				<p class="hint"><a id="all-downloads" href="#" rel="noopener">All downloads</a></p>
+			</li>
+			<li>
+				<h2>Join the server</h2>
+				<p><a class="button" id="join" href="#">Join now</a></p>
+				<p class="hint" id="join-hint" hidden>Did nothing happen? Install Mumble first, then press Join again.</p>
+			</li>
+		</ol>
+
+		<details>
+			<summary>Connect by hand</summary>
+			<p>In Mumble, choose <b>Server → Connect → Add New</b> and enter:</p>
+			<dl>
+				<dt>Address</dt><dd><code id="manual-host"></code></dd>
+				<dt>Port</dt><dd><code id="manual-port"></code></dd>
+			</dl>
+		</details>
+	</section>
+
+	<section id="builder" hidden>
+		<p class="eyebrow">Mumble voice chat</p>
+		<h1>Create an invite link</h1>
+		<p id="builder-error" class="error" hidden>That link has no usable server address. Create a new one below.</p>
+		<p>People who open the link get the right download and a button that joins your server.</p>
+		<form id="builder-form">
+			<label>Server address <input id="b-host" required autocomplete="off" placeholder="voice.example.com"></label>
+			<label>Port <input id="b-port" inputmode="numeric" autocomplete="off" placeholder="64738"></label>
+			<label>Channel <span class="optional">optional</span>
+				<input id="b-channel" autocomplete="off" placeholder="Lobby"></label>
+			<label>Community name <span class="optional">optional</span>
+				<input id="b-title" autocomplete="off" maxlength="80"></label>
+			<label>Server password <span class="optional">optional</span>
+				<input id="b-password" autocomplete="off"></label>
+			<p class="hint">A password becomes part of the link. Anyone with the link can join.</p>
+		</form>
+		<p class="error" id="b-error" hidden>Enter a valid server address and port.</p>
+		<div id="b-result" hidden>
+			<input id="b-link" readonly aria-label="Invite link">
+			<button class="button" id="b-copy" type="button">Copy link</button>
+		</div>
+	</section>
+
+	<noscript><p>This page needs JavaScript to read the invite link.</p></noscript>
+</main>
+<script src="join.js"></script>
+<script src="page.js"></script>
+</body>
+</html>
