@@ -57,6 +57,7 @@ signals:
 	void frameDecoded(quint32 senderSession, QImage frame);
 
 private:
+	friend class TestScreenShareReceiver;
 #ifdef USE_SCREEN_SHARING
 	struct PendingFrame {
 		quint32 fragmentCount = 0;
