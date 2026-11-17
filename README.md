@@ -27,8 +27,8 @@ release notes, and the exact source commit. Tags use `v1.7.<build number>`; prev
 remain available for rollback.
 
 The client checks this fork for updates at startup when update checks are enabled, and through
-**Help → Check for update**. It offers release notes and the appropriate download; installation
-is manual and preserves your settings. Older clients need one manual upgrade to gain this checker.
+**Help → Check for update**. It offers release notes and can download and verify the appropriate package; on Windows and
+Ubuntu it then starts the installation, which preserves your settings. Older clients need one manual upgrade to gain this checker.
 See [release and update maintenance](docs/dev/ClientUpdates.md) for channel and publishing details.
 
 These builds are intended for testing and may be unstable. The Windows installer is unsigned, and the macOS application is ad-hoc signed and not

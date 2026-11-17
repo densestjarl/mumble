@@ -69,6 +69,8 @@ Result parse(const QByteArray &json, const QString &assetName, bool includePrevi
 		}
 		const QString downloadBase = base + QLatin1String("download/") + tag + QLatin1Char('/');
 		QUrl download;
+		QByteArray sha256;
+		qint64 size       = 0;
 		bool hasChecksums = false;
 		for (const QJsonValue &assetValue : object.value(QLatin1String("assets")).toArray()) {
 			const QJsonObject asset = assetValue.toObject();
@@ -83,11 +85,19 @@ Result parse(const QByteArray &json, const QString &assetName, bool includePrevi
 			}
 			if (!assetName.isEmpty() && name == assetName) {
 				download = QUrl(downloadBase + name);
+				// GitHub computes the digest when the asset is uploaded.
+				static const QRegularExpression digestPattern(QStringLiteral("^sha256:([0-9a-f]{64})$"));
+				const auto digest  = digestPattern.match(asset.value(QLatin1String("digest")).toString());
+				const double bytes = asset.value(QLatin1String("size")).toDouble();
+				if (digest.hasMatch() && bytes <= static_cast< double >(MaximumDownloadSize)) {
+					sha256 = QByteArray::fromHex(digest.captured(1).toLatin1());
+					size   = static_cast< qint64 >(bytes);
+				}
 			}
 		}
 		// Ignore incomplete releases for platforms on which we ship a package.
 		if (hasChecksums && (assetName.isEmpty() || !download.isEmpty())) {
-			result.release = { version, notes, download, preview };
+			result.release = { version, notes, download, sha256, size, preview };
 		}
 	}
 	return result;

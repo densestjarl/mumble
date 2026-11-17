@@ -44,15 +44,33 @@ bound response size, honor the configured proxy and OS privacy preference, and d
 upload the client executable. Unsupported platforms receive a release-notes link instead of
 an incompatible installer. The Ubuntu download is only offered on Ubuntu 24.04 amd64; the macOS ARM64 download requires macOS 15 or newer.
 
-Downloads open in the browser and require manual installation. The current Windows installer
-is unsigned and the macOS bundle is ad-hoc signed; unattended replacement should wait for a
-signed and verified update mechanism. Older clients must be updated manually once to receive
-the new checker. To roll back, install a previous version from the releases page.
+## Installing an update
+
+When the user chooses **Install update**, the client downloads the package itself into its cache
+directory and compares its size and SHA-256 with the values GitHub reports for the asset in the
+release feed. A package that does not match is deleted and never offered for installation. The
+download is always started by the user; nothing is installed unattended.
+
+| Platform | After verification |
+| --- | --- |
+| Windows | Starts the installer with `/passive /norestart` and quits Mumble. Windows asks for elevation. |
+| Ubuntu | Runs `pkexec apt-get install` on the package and asks to restart Mumble. Without a working authentication prompt it shows the package path and the command instead. |
+| macOS | Shows the verified archive in Finder. Replacing the application remains manual. |
+
+The digest comes from the same GitHub release as the package. It protects against a damaged or
+swapped download, not against a compromised release: the current Windows installer is unsigned
+and the macOS bundle is ad-hoc signed. Fully unattended replacement should wait for signed
+builds. If the feed carries no digest for a package, the client opens the download in the browser
+as before.
+
+Older clients must be updated manually once to receive the new checker. To roll back, install a
+previous version from the releases page.
 
 ## Validation
 
 `TestReleaseUpdate` exercises channel filtering, numeric ordering, asset selection, malformed
-feeds, hostile download links, persistent caching, and request backoff. The standalone target
+feeds, hostile download links, persistent caching, request backoff, and package verification
+(changed, truncated, oversized, and unavailable downloads). The standalone target
 uses the same Qt string-builder definitions as full builds. It runs with the client CTest suite. Run the publisher tests
 without contacting GitHub:
 
