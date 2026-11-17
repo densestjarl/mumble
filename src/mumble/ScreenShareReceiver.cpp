@@ -125,12 +125,13 @@ void ScreenShareReceiver::handleVideoPacket(const Mumble::Protocol::VideoData &v
 		pf.fragments[fragIdx] = QByteArray(reinterpret_cast< const char * >(videoData.payload.data()),
 										   static_cast< int >(payloadSize));
 		pf.receivedBytes += payloadSize;
+		++pf.receivedFragments;
 	}
 
-	// Early exit until complete
-	for (const QByteArray &frag : pf.fragments) {
-		if (frag.isEmpty())
-			return;
+	// Count only newly stored fragments: duplicates must not complete a frame.
+	// Scanning the array after every packet makes ordered delivery quadratic.
+	if (pf.receivedFragments != pf.fragmentCount) {
+		return;
 	}
 
 	QByteArray complete;
