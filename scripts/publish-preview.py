@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Publish a complete, versioned preview. Reruns may repair drafts, never published releases."""
+"""Publish a complete, versioned preview. Reruns may repair drafts, never published releases.
+
+`publish-preview.py promote v1.7.<n>` marks a published preview as the stable release."""
 
 import hashlib
 import json
@@ -7,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 
 ASSETS = (
@@ -92,7 +95,32 @@ def publish(repo, sha, version, dist, run_url):
     print(f"Published https://github.com/{repo}/releases/tag/{tag}")
 
 
+def promote(repo, tag):
+    """Mark a published preview as the latest stable release. Its tag and assets stay untouched."""
+    if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag):
+        raise ValueError("Expected a release tag such as v1.7.123")
+    release = gh("release", "view", tag, "--repo", repo, "--json", "isDraft,assets,body",
+                 missing="release not found")
+    if release is None:
+        raise ValueError(f"{tag} has not been published")
+    release = json.loads(release)
+    if release["isDraft"]:
+        raise ValueError(f"{tag} is an unfinished draft")
+    # Clients ignore releases that lack their package or the checksums.
+    missing = {*ASSETS, "SHA256SUMS.txt"} - {asset["name"] for asset in release["assets"]}
+    if missing:
+        raise ValueError(f"{tag} lacks release assets: {', '.join(sorted(missing))}")
+    body = release["body"].replace(f"Preview **{tag[1:]}**", f"Release **{tag[1:]}**")
+    body = body.replace("These previews may be unstable. ", "")
+    gh("release", "edit", tag, "--repo", repo, "--prerelease=false", "--latest",
+       "--title", f"Mumble {tag[1:]}", "--notes", body)
+    print(f"Promoted https://github.com/{repo}/releases/tag/{tag}")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["promote"]:
+        promote(os.environ["GITHUB_REPOSITORY"], *sys.argv[2:])
+        sys.exit()
     base = subprocess.check_output(["python3", "scripts/mumble-version.py"], text=True).strip()
     publish(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"],
             f"{base}.{os.environ['GITHUB_RUN_NUMBER']}", "dist",

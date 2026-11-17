@@ -1,0 +1,26 @@
+name: Promote stable release
+
+# Marks an already published preview as the latest stable release. The packages and the tag
+# stay exactly as they were tested; only the release's channel, title and notes change.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published preview to promote, for example v1.7.150
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_publish_preview.py'
+      - run: python3 scripts/publish-preview.py promote "$RELEASE_TAG"

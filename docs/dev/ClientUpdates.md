@@ -27,7 +27,14 @@ compiled into the client, not the displayed release title or publication date.
 Preview builds accept both prereleases and stable releases. For a stable-only build, configure
 `-Dupdate-prereleases=OFF`. Stable releases use the same numeric tag format with GitHub's
 prerelease flag unset. Publishing or promoting a stable release is a maintainer decision;
-merges never automatically enter the stable channel. Stable-only builds use GitHub's latest
+merges never automatically enter the stable channel.
+
+To promote a published preview, run the **Promote stable release** workflow with its tag, or
+`GITHUB_REPOSITORY=<owner>/<repo> python3 scripts/publish-preview.py promote v1.7.<n>`. It
+refuses drafts and releases with missing packages, then clears the prerelease flag, marks the
+release as GitHub's latest, and removes the preview wording from its title and notes. The tag
+and the packages are not touched. The published packages are preview builds, so a client
+installed from a promoted release still offers later previews as updates. Stable-only builds use GitHub's latest
 stable release endpoint, so previews cannot hide a stable release.
 
 A persistent cache stores each channel's validated response and ETag. Conditional requests reuse

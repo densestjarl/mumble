@@ -105,6 +105,55 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
 
+class PromotionTests(unittest.TestCase):
+    def setUp(self):
+        self.release = {
+            "isDraft": False,
+            "body": "Preview **1.7.123** of `master`.\n\nThese previews may be unstable. The Windows installer is unsigned.",
+            "assets": [{"name": name} for name in (*publisher.ASSETS, "SHA256SUMS.txt")],
+        }
+        self.calls = []
+        patch.object(publisher, "gh", side_effect=self.gh).start()
+        self.addCleanup(patch.stopall)
+
+    def gh(self, *args, **kwargs):
+        self.calls.append(args)
+        if args[:2] == ("release", "view"):
+            return json.dumps(self.release) if self.release else None
+        return ""
+
+    def edits(self):
+        return [c for c in self.calls if c[:2] != ("release", "view")]
+
+    def test_complete_preview_becomes_latest_stable_release(self):
+        publisher.promote("test/repo", "v1.7.123")
+        (edit,) = self.edits()
+        self.assertEqual(edit[:3], ("release", "edit", "v1.7.123"))
+        self.assertIn("--prerelease=false", edit)
+        self.assertIn("--latest", edit)
+        self.assertEqual(edit[edit.index("--title") + 1], "Mumble 1.7.123")
+        notes = edit[edit.index("--notes") + 1]
+        self.assertEqual(notes, "Release **1.7.123** of `master`.\n\nThe Windows installer is unsigned.")
+
+    def test_unusable_releases_are_not_promoted(self):
+        for change, error in [
+            (lambda: self.release.update(isDraft=True), "draft"),
+            (lambda: self.release["assets"].pop(0), "lacks release assets"),
+            (lambda: setattr(self, "release", None), "not been published"),
+        ]:
+            self.setUp()
+            change()
+            with self.assertRaisesRegex(ValueError, error):
+                publisher.promote("test/repo", "v1.7.123")
+            self.assertEqual(self.edits(), [])
+
+    def test_only_versioned_tags_are_accepted(self):
+        for tag in ["1.7.123", "master-preview", "v1.7", "v1.7.123 --draft", ""]:
+            with self.assertRaisesRegex(ValueError, "Expected a release tag"):
+                publisher.promote("test/repo", tag)
+        self.assertEqual(self.calls, [])
+
+
 class GitHubErrors(unittest.TestCase):
     def test_auth_and_network_errors_are_not_treated_as_missing(self):
         for error in ["HTTP 403 Forbidden", "connection reset", "HTTP 500"]:
