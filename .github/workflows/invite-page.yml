@@ -1,0 +1,24 @@
+name: Invite page
+
+on:
+  pull_request:
+    paths:
+      - 'web/join/**'
+      - '.github/workflows/invite-page.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'web/join/**'
+      - '.github/workflows/invite-page.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      # The runner image already provides Node.js.
+      - run: node --test web/join/join.test.js

@@ -1,0 +1,121 @@
+/* Copyright The Mumble Developers. All rights reserved.
+   Use of this source code is governed by a BSD-style license
+   that can be found in the LICENSE file at the root of the
+   Mumble source tree or at <https://www.mumble.info/LICENSE>. */
+
+:root {
+	color-scheme: light dark;
+	--bg: #f4f5f7;
+	--card: #ffffff;
+	--text: #16181d;
+	--muted: #5b6270;
+	--line: #dcdfe5;
+	--accent: #1f6feb;
+	--accent-text: #ffffff;
+	--error: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #111317;
+		--card: #1a1d23;
+		--text: #eceef2;
+		--muted: #a0a7b4;
+		--line: #2c313a;
+		--accent: #4c8dff;
+		--accent-text: #0b0d10;
+		--error: #ff8a7a;
+	}
+}
+
+* { box-sizing: border-box; }
+
+body {
+	margin: 0;
+	padding: 32px 16px;
+	background: var(--bg);
+	color: var(--text);
+	font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+main {
+	max-width: 520px;
+	margin: 0 auto;
+	padding: 28px;
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 14px;
+}
+
+[hidden] { display: none !important; }
+
+h1 { margin: 0 0 8px; font-size: 1.7rem; line-height: 1.2; overflow-wrap: anywhere; }
+h2 { margin: 0 0 4px; font-size: 1.05rem; }
+p { margin: 8px 0; }
+.eyebrow { margin: 0 0 4px; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.address, .hint, .optional { color: var(--muted); }
+.hint, .optional { font-size: 0.875rem; }
+.error { color: var(--error); }
+code { font: 0.95em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+
+.steps { margin: 24px 0; padding: 0; list-style: none; counter-reset: step; }
+.steps li { position: relative; padding: 0 0 20px 44px; counter-increment: step; }
+.steps li::before {
+	content: counter(step);
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 28px;
+	height: 28px;
+	border: 1px solid var(--line);
+	border-radius: 50%;
+	color: var(--muted);
+	font-size: 0.875rem;
+	font-weight: 600;
+	line-height: 26px;
+	text-align: center;
+}
+
+.button {
+	display: inline-block;
+	padding: 11px 20px;
+	border: 1px solid var(--accent);
+	border-radius: 9px;
+	background: var(--accent);
+	color: var(--accent-text);
+	font: inherit;
+	font-weight: 600;
+	text-decoration: none;
+	cursor: pointer;
+}
+.button.secondary { background: transparent; color: var(--accent); }
+.button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+details { padding-top: 16px; border-top: 1px solid var(--line); }
+summary { color: var(--muted); cursor: pointer; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 8px 0 0; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+
+label { display: block; margin: 14px 0 0; font-weight: 600; }
+input {
+	display: block;
+	width: 100%;
+	margin-top: 4px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--bg);
+	color: var(--text);
+	font: inherit;
+	font-weight: 400;
+}
+#b-result { display: flex; gap: 8px; margin-top: 20px; }
+#b-result input { margin: 0; }
+#b-result .button { flex: none; }
+
+@media (max-width: 420px) {
+	main { padding: 20px; }
+	#b-result { flex-direction: column; }
+}
