@@ -157,13 +157,13 @@ private slots:
 		QTest::addColumn< int >("declaredSize");
 		QTest::addColumn< bool >("matchingDigest");
 		QTest::addColumn< int >("error");
-		const QByteArray package(700 * 1024, 'x');
-		QTest::newRow("verified") << package << int(package.size()) << true << -1;
-		QTest::newRow("changed content") << package << int(package.size()) << false
+		const QByteArray payload(700 * 1024, 'x');
+		QTest::newRow("verified") << payload << int(payload.size()) << true << -1;
+		QTest::newRow("changed content") << payload << int(payload.size()) << false
 										 << int(ReleaseUpdate::Download::Error::Mismatch);
 		QTest::newRow("longer than declared")
-			<< package << int(package.size()) - 1 << true << int(ReleaseUpdate::Download::Error::Mismatch);
-		QTest::newRow("truncated") << package << int(package.size()) + 1 << true
+			<< payload << int(payload.size()) - 1 << true << int(ReleaseUpdate::Download::Error::Mismatch);
+		QTest::newRow("truncated") << payload << int(payload.size()) + 1 << true
 								   << int(ReleaseUpdate::Download::Error::Mismatch);
 		QTest::newRow("unavailable") << QByteArray() << 10 << true << int(ReleaseUpdate::Download::Error::Network);
 	}
