@@ -65,21 +65,32 @@ test('detects the platform', () => {
 });
 
 test('picks the newest complete release and prefers stable ones', () => {
-	const asset = 'Mumble-Windows-x64.exe';
+	const asset = ['Mumble-Windows-x64.exe'];
 	assert.equal(join.pickDownload([release('1.7.9'), release('1.7.100'), release('1.7.11')], asset).name, '1.7.100');
 	assert.equal(join.pickDownload([release('1.7.100'), release('1.7.50', false), release('1.7.40', false)], asset).name,
 		'1.7.50');
 	assert.equal(join.pickDownload([release('1.7.100', true, 'Mumble-macOS-arm64.zip'), release('1.7.9')], asset).name,
 		'1.7.9');
-	assert.equal(join.pickDownload([release('1.7.9')], asset).url, base + 'download/v1.7.9/' + asset);
+	assert.equal(join.pickDownload([release('1.7.9')], asset).url, base + 'download/v1.7.9/' + asset[0]);
+});
+
+test('uses the first listed package a release offers', () => {
+	const assets = join.PACKAGES.macos.assets;
+	const both = release('1.7.20', true, assets[0]);
+	both.assets.push(release('1.7.20', true, assets[1]).assets[0]);
+	assert.equal(join.pickDownload([both], assets).asset, 'Mumble-macOS-arm64.dmg');
+	assert.equal(join.pickDownload([release('1.7.9', true, assets[1])], assets).asset, 'Mumble-macOS-arm64.zip');
+	// A stable release with only the archive still beats a preview with the disk image.
+	const picked = join.pickDownload([both, release('1.7.9', false, assets[1])], assets);
+	assert.deepEqual([picked.name, picked.asset], ['1.7.9', 'Mumble-macOS-arm64.zip']);
 });
 
 test('ignores drafts, odd tags and foreign download links', () => {
-	const asset = 'Mumble-Windows-x64.exe';
+	const asset = ['Mumble-Windows-x64.exe'];
 	const draft = { ...release('1.7.9'), draft: true };
 	const legacy = { ...release('1.7.9'), tag_name: 'master-preview' };
 	const foreign = release('1.7.9');
-	foreign.assets[0].browser_download_url = 'https://evil.example/' + asset;
+	foreign.assets[0].browser_download_url = 'https://evil.example/' + asset[0];
 	const pending = release('1.7.9');
 	pending.assets[0].state = 'new';
 	for (const feed of [[draft], [legacy], [foreign], [pending], [], null, { message: 'rate limit' }, [null]]) {

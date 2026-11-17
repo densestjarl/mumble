@@ -29,7 +29,8 @@ everyone who receives the link.
 Copy `index.html`, `style.css`, `join.js` and `page.js` to any static web host; there is no
 build step. The page loads no third-party code. Its only network request reads this
 repository's public release list from the GitHub API to find the newest package. It prefers
-stable releases and falls back to the release page when the request fails.
+stable releases, prefers the macOS disk image over the archive once releases carry one, and
+falls back to the release page when the request fails.
 
 `REPOSITORY` and `PACKAGES` in `join.js` must match `ReleaseUpdate.cpp` in the client.
 

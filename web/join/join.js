@@ -18,11 +18,16 @@
 	const RELEASES_API = 'https://api.github.com/repos/' + REPOSITORY + '/releases?per_page=30';
 	const DEFAULT_PORT = 64738;
 
-	// Mirrors ReleaseUpdate::assetForPlatform in the client.
+	// Mirrors ReleaseUpdate::assetForPlatform in the client. Where several packages are listed,
+	// the first one a release offers is used; releases gained the macOS disk image later.
 	const PACKAGES = {
-		windows: { asset: 'Mumble-Windows-x64.exe', label: 'Windows', requires: 'Windows 10 or newer, 64-bit' },
-		macos: { asset: 'Mumble-macOS-arm64.zip', label: 'macOS', requires: 'Apple Silicon, macOS 15 or newer' },
-		linux: { asset: 'Mumble-Ubuntu-24.04-amd64.deb', label: 'Ubuntu', requires: 'Ubuntu 24.04, 64-bit' },
+		windows: { assets: ['Mumble-Windows-x64.exe'], label: 'Windows', requires: 'Windows 10 or newer, 64-bit' },
+		macos: {
+			assets: ['Mumble-macOS-arm64.dmg', 'Mumble-macOS-arm64.zip'],
+			label: 'macOS',
+			requires: 'Apple Silicon, macOS 15 or newer',
+		},
+		linux: { assets: ['Mumble-Ubuntu-24.04-amd64.deb'], label: 'Ubuntu', requires: 'Ubuntu 24.04, 64-bit' },
 	};
 
 	const INVITE = /^(?::([^@/?#]*)@)?(\[[0-9A-Fa-f:.]+\]|[^:/?#@[\]\s]+)(?::([0-9]{1,5}))?(\/[^?#]*)?(?:\?([^#]*))?$/;
@@ -119,22 +124,23 @@
 		return false;
 	}
 
-	// Picks the newest release that has the package, preferring stable releases over previews.
-	// Like the client, it only accepts download links below this repository's release page.
-	function pickDownload(releases, asset) {
+	// Picks the newest release that has one of the packages, preferring stable releases over
+	// previews. Within a release, the first listed package wins. Like the client, it only
+	// accepts download links below this repository's release page.
+	function pickDownload(releases, assets) {
 		let best = null;
 		for (const release of Array.isArray(releases) ? releases : []) {
 			const version = release && release.draft === false ? parseVersion(release.tag_name) : null;
 			if (!version) {
 				continue;
 			}
-			const url = RELEASES_PAGE + '/download/' + release.tag_name + '/' + asset;
-			const found = (Array.isArray(release.assets) ? release.assets : [])
-				.some((item) => item && item.name === asset && item.state === 'uploaded'
-					&& item.browser_download_url === url);
+			const base = RELEASES_PAGE + '/download/' + release.tag_name + '/';
+			const offered = Array.isArray(release.assets) ? release.assets : [];
+			const asset = assets.find((name) => offered.some((item) => item && item.name === name
+				&& item.state === 'uploaded' && item.browser_download_url === base + name));
 			const stable = release.prerelease === false;
-			if (found && (!best || (stable && !best.stable) || (stable === best.stable && newer(version, best.version)))) {
-				best = { version, stable, url, name: version.join('.') };
+			if (asset && (!best || (stable && !best.stable) || (stable === best.stable && newer(version, best.version)))) {
+				best = { version, stable, asset, url: base + asset, name: version.join('.') };
 			}
 		}
 		return best;

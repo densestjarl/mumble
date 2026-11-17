@@ -14,7 +14,7 @@
 	// The packages are not signed yet, so each system asks for confirmation on first start.
 	const WARNINGS = {
 		windows: 'If Windows shows “Windows protected your PC”, choose More info, then Run anyway.',
-		macos: 'Unzip it and move Mumble to Applications. If macOS blocks the first start, open '
+		macos: 'Open the download and move Mumble to Applications. If macOS blocks the first start, open '
 			+ 'System Settings → Privacy & Security and choose Open Anyway.',
 		linux: 'Install it with: sudo apt install ./Mumble-Ubuntu-24.04-amd64.deb',
 	};
@@ -41,7 +41,7 @@
 			fetch(join.RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } })
 				.then((response) => (response.ok ? response.json() : null))
 				.then((releases) => {
-					const download = join.pickDownload(releases, pack.asset);
+					const download = join.pickDownload(releases, pack.assets);
 					if (download) {
 						$('download').href = download.url;
 						$('download').textContent = 'Download for ' + pack.label + ' (' + download.name + ')';
