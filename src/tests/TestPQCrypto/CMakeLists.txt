@@ -5,12 +5,6 @@
 
 add_executable(TestPQCrypto
 	TestPQCrypto.cpp
-	"${CMAKE_SOURCE_DIR}/src/mumble/PQFileTransfer/crypto/Argon2Wrap.cpp"
-	"${CMAKE_SOURCE_DIR}/src/mumble/PQFileTransfer/crypto/CanonicalCBOR.cpp"
-	"${CMAKE_SOURCE_DIR}/src/mumble/PQFileTransfer/crypto/CryptoUtils.cpp"
-	"${CMAKE_SOURCE_DIR}/src/mumble/PQFileTransfer/crypto/KemMLKEM768.cpp"
-	"${CMAKE_SOURCE_DIR}/src/mumble/PQFileTransfer/crypto/Merkle.cpp"
-	"${CMAKE_SOURCE_DIR}/src/mumble/PQFileTransfer/crypto/SigMLDSA65.cpp"
 )
 
 set_target_properties(TestPQCrypto PROPERTIES AUTOMOC ON)
@@ -22,7 +16,7 @@ target_include_directories(TestPQCrypto PRIVATE
 )
 
 target_link_libraries(TestPQCrypto PRIVATE shared Qt6::Test)
-target_link_libraries(TestPQCrypto PRIVATE oqs argon2)
+target_link_libraries(TestPQCrypto PRIVATE mumble_file_transfer_test_support)
 
 add_test(NAME TestPQCrypto COMMAND $<TARGET_FILE:TestPQCrypto>)
 set_tests_properties(TestPQCrypto PROPERTIES TIMEOUT 300)
