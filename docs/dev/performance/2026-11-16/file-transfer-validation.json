@@ -1,0 +1,15 @@
+{
+  "initial_full_clean_build_seconds": 364.03,
+  "candidate_full_clean_build_seconds": 288.73,
+  "baseline_full_ctest_seconds": 242.61,
+  "candidate_full_ctest_seconds": 248.63,
+  "candidate_passed": 42,
+  "candidate_baseline_failures": 2,
+  "candidate_pre_disabled": 1,
+  "known_failure_engine_other_invocations_passed": 61,
+  "baseline_passed_including_independent_receiver_fixture": 43,
+  "baseline_pre_disabled": 1,
+  "baseline_failed": 2,
+  "compiler_warnings_baseline": 12,
+  "compiler_warnings_candidate": 12
+}
