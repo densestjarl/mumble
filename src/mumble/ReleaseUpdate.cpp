@@ -13,7 +13,7 @@
 namespace ReleaseUpdate {
 
 QString repository() {
-	return QStringLiteral("gavmac11/mumble");
+	return QStringLiteral("densestjarl/mumble");
 }
 
 QString assetForPlatform(const QString &os, const QString &architecture, const QString &osVersion) {

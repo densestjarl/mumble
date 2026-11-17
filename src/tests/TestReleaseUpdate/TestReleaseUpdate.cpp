@@ -16,7 +16,7 @@
 namespace {
 const QString package = QStringLiteral("Mumble-Windows-x64.exe");
 QJsonObject release(const QString &version, bool preview = true) {
-	const QString base = QStringLiteral("https://github.com/gavmac11/mumble/releases/");
+	const QString base = QStringLiteral("https://github.com/densestjarl/mumble/releases/");
 	const QString tag  = QLatin1Char('v') + version;
 	QJsonArray assets;
 	for (const QString &name : { package, QStringLiteral("SHA256SUMS.txt") }) {
@@ -74,12 +74,15 @@ private slots:
 		auto badNotes        = release("1.7.101");
 		badNotes["html_url"] = "https://github.com/another/repo/releases/tag/v1.7.101";
 		QVERIFY(parse({ badNotes }).release.version.isNull());
+		// The repository's former location must not be trusted: its name could be reused by someone else.
+		badNotes["html_url"] = "https://github.com/gavmac11/mumble/releases/tag/v1.7.101";
+		QVERIFY(parse({ badNotes }).release.version.isNull());
 		for (const QString &url :
 			 { QStringLiteral("https://evil.example/Mumble-Windows-x64.exe"),
 			   QStringLiteral("https://github.com/another/repo/releases/download/v1.7.101/Mumble-Windows-x64.exe"),
-			   QStringLiteral("http://github.com/gavmac11/mumble/releases/download/v1.7.101/Mumble-Windows-x64.exe"),
+			   QStringLiteral("http://github.com/densestjarl/mumble/releases/download/v1.7.101/Mumble-Windows-x64.exe"),
 			   QStringLiteral(
-				   "https://github.com/gavmac11/mumble/releases/download/v1.7.100/Mumble-Windows-x64.exe") }) {
+				   "https://github.com/densestjarl/mumble/releases/download/v1.7.100/Mumble-Windows-x64.exe") }) {
 			auto badDownload              = release("1.7.101");
 			auto assets                   = badDownload["assets"].toArray();
 			auto asset                    = assets[0].toObject();

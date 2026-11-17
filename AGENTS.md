@@ -22,7 +22,7 @@ are evaluated on correctness, maintainability, and evidence of working behavior.
 - Check the current branch, worktrees, and local changes before editing. Preserve
   unrelated changes, including dirty submodules; use an isolated worktree when
   the current checkout belongs to other work.
-- `origin` is `gavmac11/mumble`; `upstream` is `mumble-voip/mumble`. Add the
+- `origin` is `densestjarl/mumble`; `upstream` is `mumble-voip/mumble`. Add the
   upstream remote if it is missing and fetch both before preparing a sync.
 - Bring upstream `master` into a sync branch based on `origin/master` using a
   merge. Check for an existing sync PR before creating another. Preserve the

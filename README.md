@@ -21,7 +21,7 @@ while the server should work on anything Qt can be installed on.
 ## Preview builds
 
 Versioned previews of successfully built `master` commits are available on the
-[releases page](https://github.com/gavmac11/mumble/releases) for Windows x64, macOS ARM64,
+[releases page](https://github.com/densestjarl/mumble/releases) for Windows x64, macOS ARM64,
 Ubuntu 24.04 amd64 (client), and Debian 12 amd64 (server). Each release includes checksums,
 release notes, and the exact source commit. Tags use `v1.7.<build number>`; previous releases
 remain available for rollback.

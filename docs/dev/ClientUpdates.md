@@ -19,7 +19,7 @@ release is retained as history and is no longer refreshed.
 
 ## Client behavior
 
-The checker uses the public GitHub releases API for `gavmac11/mumble`. For previews, it selects the highest
+The checker uses the public GitHub releases API for `densestjarl/mumble`. For previews, it selects the highest
 numeric `vMAJOR.MINOR.PATCH` version among the 100 most recent releases, ignoring drafts,
 legacy tags, incomplete packages, and unrelated download URLs. It compares against the version
 compiled into the client, not the displayed release title or publication date.
