@@ -9,6 +9,10 @@
 #include <QByteArray>
 #include <QObject>
 
+namespace ReleaseUpdate {
+struct Release;
+}
+
 class VersionCheck : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(VersionCheck)
@@ -18,6 +22,7 @@ private:
 	QByteArray m_response;
 	void performRequest();
 	void showResult();
+	void downloadUpdate(const ReleaseUpdate::Release &release);
 
 public:
 	VersionCheck(bool autocheck, QObject *parent = nullptr);

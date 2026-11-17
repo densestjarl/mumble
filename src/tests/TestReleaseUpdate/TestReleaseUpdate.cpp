@@ -5,18 +5,21 @@
 
 #include "ReleaseUpdate.h"
 #include "ReleaseUpdateCache.h"
+#include "ReleaseUpdateDownload.h"
 
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
 namespace {
 const QString package = QStringLiteral("Mumble-Windows-x64.exe");
 QJsonObject release(const QString &version, bool preview = true) {
-	const QString base = QStringLiteral("https://github.com/gavmac11/mumble/releases/");
+	const QString base = QStringLiteral("https://github.com/densestjarl/mumble/releases/");
 	const QString tag  = QLatin1Char('v') + version;
 	QJsonArray assets;
 	for (const QString &name : { package, QStringLiteral("SHA256SUMS.txt") }) {
@@ -24,6 +27,7 @@ QJsonObject release(const QString &version, bool preview = true) {
 			{ "name", name },
 			{ "state", "uploaded" },
 			{ "size", 42 },
+			{ "digest", QString(QStringLiteral("sha256:") + QString(64, QLatin1Char('a'))) },
 			{ "browser_download_url", QString(base + QStringLiteral("download/") + tag + QLatin1Char('/') + name) } });
 	}
 	return { { "tag_name", tag },
@@ -74,12 +78,15 @@ private slots:
 		auto badNotes        = release("1.7.101");
 		badNotes["html_url"] = "https://github.com/another/repo/releases/tag/v1.7.101";
 		QVERIFY(parse({ badNotes }).release.version.isNull());
+		// The repository's former location must not be trusted: its name could be reused by someone else.
+		badNotes["html_url"] = "https://github.com/gavmac11/mumble/releases/tag/v1.7.101";
+		QVERIFY(parse({ badNotes }).release.version.isNull());
 		for (const QString &url :
 			 { QStringLiteral("https://evil.example/Mumble-Windows-x64.exe"),
 			   QStringLiteral("https://github.com/another/repo/releases/download/v1.7.101/Mumble-Windows-x64.exe"),
-			   QStringLiteral("http://github.com/gavmac11/mumble/releases/download/v1.7.101/Mumble-Windows-x64.exe"),
+			   QStringLiteral("http://github.com/densestjarl/mumble/releases/download/v1.7.101/Mumble-Windows-x64.exe"),
 			   QStringLiteral(
-				   "https://github.com/gavmac11/mumble/releases/download/v1.7.100/Mumble-Windows-x64.exe") }) {
+				   "https://github.com/densestjarl/mumble/releases/download/v1.7.100/Mumble-Windows-x64.exe") }) {
 			auto badDownload              = release("1.7.101");
 			auto assets                   = badDownload["assets"].toArray();
 			auto asset                    = assets[0].toObject();
@@ -118,6 +125,114 @@ private slots:
 			ReleaseUpdate::parse(QJsonDocument(QJsonArray{ release("1.7.100") }).toJson(), {}, true);
 		QVERIFY(unsupported.release.download.isEmpty());
 		QVERIFY(!unsupported.release.notes.isEmpty());
+	}
+	void readsPackageDigestAndSize() {
+		const auto verified = parse({ release("1.7.100") }).release;
+		QVERIFY(verified.verifiable());
+		QCOMPARE(verified.size, qint64(42));
+		QCOMPARE(verified.sha256, QByteArray(32, '\xaa'));
+		// Without a usable digest the release is still offered, but only as a browser download.
+		for (const QJsonValue &digest : { QJsonValue(), QJsonValue("sha256:abc"), QJsonValue("md5:" + QString(64, 'a')),
+										  QJsonValue("sha256:" + QString(64, 'A')), QJsonValue(7) }) {
+			auto object       = release("1.7.100");
+			auto assets       = object["assets"].toArray();
+			auto asset        = assets[0].toObject();
+			asset["digest"]   = digest;
+			assets[0]         = asset;
+			object["assets"]  = assets;
+			const auto result = parse({ object }).release;
+			QVERIFY(!result.download.isEmpty());
+			QVERIFY(!result.verifiable());
+		}
+		auto huge      = release("1.7.100");
+		auto assets    = huge["assets"].toArray();
+		auto asset     = assets[0].toObject();
+		asset["size"]  = 2.0 * static_cast< double >(ReleaseUpdate::MaximumDownloadSize);
+		assets[0]      = asset;
+		huge["assets"] = assets;
+		QVERIFY(!parse({ huge }).release.verifiable());
+	}
+	void downloadsOnlyVerifiedPackages_data() {
+		QTest::addColumn< QByteArray >("served");
+		QTest::addColumn< int >("declaredSize");
+		QTest::addColumn< bool >("matchingDigest");
+		QTest::addColumn< int >("error");
+		const QByteArray payload(700 * 1024, 'x');
+		QTest::newRow("verified") << payload << int(payload.size()) << true << -1;
+		QTest::newRow("changed content") << payload << int(payload.size()) << false
+										 << int(ReleaseUpdate::Download::Error::Mismatch);
+		QTest::newRow("longer than declared")
+			<< payload << int(payload.size()) - 1 << true << int(ReleaseUpdate::Download::Error::Mismatch);
+		QTest::newRow("truncated") << payload << int(payload.size()) + 1 << true
+								   << int(ReleaseUpdate::Download::Error::Mismatch);
+		QTest::newRow("unavailable") << QByteArray() << 10 << true << int(ReleaseUpdate::Download::Error::Network);
+	}
+	void downloadsOnlyVerifiedPackages() {
+		QFETCH(QByteArray, served);
+		QFETCH(int, declaredSize);
+		QFETCH(bool, matchingDigest);
+		QFETCH(int, error);
+		QTemporaryDir source, target;
+		QVERIFY(source.isValid() && target.isValid());
+		if (!served.isEmpty()) {
+			QFile file(source.filePath(package));
+			QVERIFY(file.open(QIODevice::WriteOnly) && file.write(served) == served.size());
+		}
+		// A stale package from an earlier release must never survive a failed download.
+		const QString path = target.filePath(package);
+		{
+			QFile stale(path);
+			QVERIFY(stale.open(QIODevice::WriteOnly) && stale.write("stale") == 5);
+		}
+		ReleaseUpdate::Release release;
+		release.download = QUrl::fromLocalFile(source.filePath(package));
+		release.size     = declaredSize;
+		release.sha256 =
+			QCryptographicHash::hash(matchingDigest ? served : QByteArray("other"), QCryptographicHash::Sha256);
+		QNetworkAccessManager manager;
+		ReleaseUpdate::Download download(&manager, release, target.path());
+		QSignalSpy finished(&download, &ReleaseUpdate::Download::finished);
+		QSignalSpy failed(&download, &ReleaseUpdate::Download::failed);
+		download.start();
+		QTRY_COMPARE_WITH_TIMEOUT(finished.count() + failed.count(), 1, 10000);
+		QVERIFY(!QFile::exists(path + ".part"));
+		if (error < 0) {
+			QCOMPARE(finished.first().first().toString(), path);
+			QFile file(path);
+			QVERIFY(file.open(QIODevice::ReadOnly));
+			QCOMPARE(file.readAll(), served);
+		} else {
+			QCOMPARE(failed.count(), 1);
+			QCOMPARE(int(failed.first().first().value< ReleaseUpdate::Download::Error >()), error);
+			QVERIFY(!QFile::exists(path));
+		}
+	}
+	void refusesUnverifiableAndCancelledDownloads() {
+		QTemporaryDir source, target;
+		QVERIFY(source.isValid() && target.isValid());
+		QFile file(source.filePath(package));
+		QVERIFY(file.open(QIODevice::WriteOnly) && file.write("data") == 4);
+		file.close();
+		ReleaseUpdate::Release release;
+		release.download = QUrl::fromLocalFile(file.fileName());
+		QNetworkAccessManager manager;
+		{
+			ReleaseUpdate::Download download(&manager, release, target.path());
+			QSignalSpy failed(&download, &ReleaseUpdate::Download::failed);
+			download.start();
+			QTRY_COMPARE(failed.count(), 1);
+		}
+		release.size   = 4;
+		release.sha256 = QCryptographicHash::hash("data", QCryptographicHash::Sha256);
+		{
+			ReleaseUpdate::Download download(&manager, release, target.path());
+			QSignalSpy finished(&download, &ReleaseUpdate::Download::finished);
+			download.start();
+			download.cancel();
+			QTest::qWait(200);
+			QCOMPARE(finished.count(), 0);
+		}
+		QVERIFY(QDir(target.path()).isEmpty());
 	}
 	void persistsConditionalResponsesAndSeparatesFeeds() {
 		QTemporaryDir dir;

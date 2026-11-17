@@ -2,5 +2,5 @@ AI-assisted contributions are welcome. Describe the change, relevant checks, and
 
 ### Checks
 
-- [ ] My commits follow the [commit guidelines](https://github.com/gavmac11/mumble/blob/master/COMMIT_GUIDELINES.md)
+- [ ] My commits follow the [commit guidelines](https://github.com/densestjarl/mumble/blob/master/COMMIT_GUIDELINES.md)
 

@@ -13,11 +13,20 @@
 
 namespace ReleaseUpdate {
 
+/// Larger packages are not downloaded by the client.
+constexpr qint64 MaximumDownloadSize = Q_INT64_C(1024) * 1024 * 1024;
+
 struct Release {
 	QVersionNumber version;
 	QUrl notes;
 	QUrl download;
+	/// SHA-256 and size of the download as reported by GitHub. Empty and 0 when the feed lacks them,
+	/// in which case the package cannot be verified and must not be installed from within the client.
+	QByteArray sha256;
+	qint64 size  = 0;
 	bool preview = false;
+
+	bool verifiable() const { return !download.isEmpty() && sha256.size() == 32 && size > 0; }
 };
 
 struct Result {
