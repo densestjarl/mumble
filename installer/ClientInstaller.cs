@@ -150,6 +150,8 @@ public class ClientInstaller : MumbleInstall {
 		this.Version = new Version(version);
 		this.OutFileName = "mumble_client-" + this.Version + "-" + arch;
 		this.Media.First().Cabinet = "Mumble.cab";
+		// The client payload is several hundred megabytes; LZX yields a noticeably smaller download than the default.
+		this.Media.First().CompressionLevel = CompressionLevel.high;
 
 		var progsDir = new Dir(@"%ProgramFiles%");
 		var productDir = new Dir("Mumble");
