@@ -8,7 +8,6 @@
 #endif
 #include "AudioInput.h"
 #include "AudioOutput.h"
-#include "AudioWizard.h"
 #include "Cert.h"
 #include "Database.h"
 #include "DeveloperConsole.h"
@@ -845,10 +844,12 @@ int main(int argc, char **argv) {
 	a.setQuitOnLastWindowClosed(false);
 
 	if (!Global::get().s.audioWizardShown) {
-		auto wizard = std::make_unique< AudioWizard >(Global::get().mw);
-		wizard->exec();
-
+		// A first start must not stand between a new user and the server they were invited to.
+		// The default devices and voice activation work on most systems, so only point at the wizard.
 		Global::get().s.audioWizardShown = true;
+		Global::get().l->log(Log::Information,
+							 MainWindow::tr("Mumble uses your default microphone and speakers. If others cannot hear "
+											"you well, run <b>Configure → Audio Wizard</b>."));
 	}
 
 	if (!CertWizard::validateCert(Global::get().s.kpCertificate)) {
@@ -860,16 +861,12 @@ int main(int argc, char **argv) {
 				Global::get().s.kpCertificate = kp;
 		}
 		if (!CertWizard::validateCert(Global::get().s.kpCertificate)) {
-			CertWizard *cw = new CertWizard(Global::get().mw);
-			cw->exec();
-			delete cw;
-
-			if (!CertWizard::validateCert(Global::get().s.kpCertificate)) {
-				Global::get().s.kpCertificate = CertWizard::generateNewCert();
-				if (qf.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Unbuffered)) {
-					qf.write(CertWizard::exportCert(Global::get().s.kpCertificate));
-					qf.close();
-				}
+			// Create the certificate without asking. Importing or replacing one remains possible
+			// through Configure → Certificate Wizard.
+			Global::get().s.kpCertificate = CertWizard::generateNewCert();
+			if (qf.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Unbuffered)) {
+				qf.write(CertWizard::exportCert(Global::get().s.kpCertificate));
+				qf.close();
 			}
 		}
 	}

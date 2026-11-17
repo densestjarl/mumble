@@ -166,6 +166,7 @@ void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
 	AudioInput::setMaxBandwidth(static_cast< int >(msg.max_bandwidth()));
 
 	findDesiredChannel();
+	saveLinkedServerAsFavorite();
 
 	QString host, uname, pw;
 	unsigned short port;

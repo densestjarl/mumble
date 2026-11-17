@@ -189,6 +189,15 @@ public:
 	bool bRetryServer;
 	QString qsDesiredChannel;
 
+	/// A server opened through a mumble:// link that is saved as a favorite once the connection succeeds.
+	struct LinkedServer {
+		QString name;
+		QString host;
+		unsigned short port;
+	};
+	std::optional< LinkedServer > m_linkedServer;
+	void saveLinkedServerAsFavorite();
+
 	bool forceQuit;
 	/// Restart the client after shutdown
 	bool restartOnQuit;
