@@ -11,8 +11,9 @@ PRs also consume run numbers, so gaps are expected. Concurrent pushes may cancel
 builds; only completed builds are released. Minor/major version changes remain deliberate.
 The numeric components must fit in 16 bits; bump the version series before exhausting it.
 
-The publisher creates a tag at the exact built commit, creates a draft, uploads all four
-packages and SHA-256 checksums, then publishes. Rerunning the same workflow can finish an
+The publisher creates a tag at the exact built commit, creates a draft, uploads all
+packages and SHA-256 checksums, then publishes. The macOS client is published twice: as a disk
+image for people installing by hand, and as the archive that installed clients look for. Rerunning the same workflow can finish an
 interrupted draft. It never moves a tag or replaces assets in an already published release.
 Authentication errors and tag collisions fail publication. The legacy `master-preview`
 release is retained as history and is no longer refreshed.

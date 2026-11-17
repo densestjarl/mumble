@@ -12,6 +12,7 @@ import subprocess
 ASSETS = (
     "Mumble-Windows-x64.exe",
     "Mumble-macOS-arm64.zip",
+    "Mumble-macOS-arm64.dmg",
     "Mumble-Ubuntu-24.04-amd64.deb",
     "Mumble-Debian-12-amd64.deb",
 )
@@ -75,7 +76,8 @@ def publish(repo, sha, version, dist, run_url):
     notes.write_text(
         f"Preview **{version}** of `master` at [`{sha[:8]}`](https://github.com/{repo}/commit/{sha}).\n\n"
         f"[Build and package checks]({run_url}).\n\n"
-        "Download the package for your platform below. Close Mumble before installing; "
+        "Download the package for your platform below; on macOS, the `.dmg` is the one to install by hand. "
+        "Close Mumble before installing; "
         "your existing settings are preserved. Verify downloads with `SHA256SUMS.txt`.\n\n"
         "These previews may be unstable. The Windows installer is unsigned. The macOS ARM64 "
         "application requires macOS 15 or newer and is ad-hoc signed, not notarized. "

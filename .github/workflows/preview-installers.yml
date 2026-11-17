@@ -350,6 +350,40 @@ jobs:
             shasum -a 256 "$(basename "${archive}")" > "$(basename "${archive}").sha256"
           )
 
+      # New users expect a disk image with the drag-to-Applications layout. The archive stays,
+      # because installed clients look for it when they check for updates.
+      - name: Stage client disk image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${GITHUB_WORKSPACE}/dist/Mumble-macOS-arm64.dmg"
+          staging="$(mktemp -d)"
+          ditto "${GITHUB_WORKSPACE}/build/Mumble.app" "${staging}/Mumble.app"
+          ln -s /Applications "${staging}/Applications"
+
+          # hdiutil intermittently reports "Resource busy" on hosted runners.
+          for attempt in 1 2 3 4 5; do
+            if hdiutil create -volname "Mumble" -srcfolder "${staging}" -fs HFS+ -format UDZO -ov "${image}"; then
+              break
+            fi
+            if [[ "${attempt}" == 5 ]]; then
+              echo "Could not create the disk image." >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+          # The application inside the image must be the one that was verified above.
+          mount="$(mktemp -d)"
+          hdiutil attach "${image}" -nobrowse -readonly -mountpoint "${mount}"
+          trap 'hdiutil detach "${mount}" -force >/dev/null 2>&1 || true' EXIT
+          codesign --verify --deep --strict --verbose=2 "${mount}/Mumble.app"
+          [[ "$(readlink "${mount}/Applications")" == "/Applications" ]]
+          diff -r "${GITHUB_WORKSPACE}/build/Mumble.app" "${mount}/Mumble.app"
+          hdiutil detach "${mount}"
+          trap - EXIT
+          ls -l "${GITHUB_WORKSPACE}/dist"
+
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
@@ -359,6 +393,7 @@ jobs:
           path: |
             dist/Mumble-macOS-arm64.zip
             dist/Mumble-macOS-arm64.zip.sha256
+            dist/Mumble-macOS-arm64.dmg
 
       - name: Save dependency cache
         if: github.event_name != 'pull_request' && steps.dependency-cache.outputs.cache-hit != 'true'
@@ -747,6 +782,7 @@ jobs:
           mkdir -p dist
           cp artifacts/windows/Mumble-Windows-x64.exe dist/
           cp artifacts/macos/Mumble-macOS-arm64.zip dist/
+          cp artifacts/macos/Mumble-macOS-arm64.dmg dist/
           cp artifacts/ubuntu/Mumble-Ubuntu-24.04-amd64.deb dist/
           cp artifacts/debian/Mumble-Debian-12-amd64.deb dist/
 
