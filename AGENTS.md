@@ -56,6 +56,15 @@ in [cmake_options.md](docs/dev/build-instructions/cmake_options.md). Use CMake
 3.28 or newer. Initialize required submodules in a clean checkout with
 `git submodule update --init --recursive`; preserve existing local submodule work.
 
+For a repeatable Linux setup, use the
+[agent workflow](docs/dev/build-instructions/agent_linux.md):
+`scripts/dev/build-linux.sh build-agent`, then
+`CTEST_PARALLEL_LEVEL=2 .github/workflows/test.sh build-agent Debug`.
+The helper enables shared ccache reuse when installed. Use
+`python3 scripts/dev/headless-smoke.py build-agent /tmp/mumble-smoke-new`
+to verify a real loopback client/server connection under Xvfb and retain logs
+and a screenshot. Report media/device and platform coverage separately.
+
 A Linux Debug configuration for client/server work, once dependencies are installed:
 
 ```sh
