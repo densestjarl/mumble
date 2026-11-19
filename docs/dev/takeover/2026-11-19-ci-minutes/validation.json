@@ -1,0 +1,126 @@
+{
+  "build": {
+    "base": "bc1ef1ed40072d163a781284ea859996e775b104",
+    "implementation": "8df239d734fb562d233dfd2a01b56aafae841bdf",
+    "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+    "configuration": {
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_UNITY_BUILD": "OFF",
+      "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "cmake/mumble_dependency_provider.cmake",
+      "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+      "client": "ON",
+      "server": "ON",
+      "plugins": "ON",
+      "tests": "ON",
+      "warnings-as-errors": "ON",
+      "database-sqlite-tests": "ON",
+      "database-mysql-tests": "OFF",
+      "database-postgresql-tests": "OFF",
+      "online-tests": "OFF",
+      "overlay-xcompile": "OFF",
+      "lto": "OFF",
+      "screen-sharing": "ON",
+      "chat-webm": "ON"
+    },
+    "cmake": "cmake version 3.28.3",
+    "compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "submodules": [
+      " 62358ba2123abd17fccf2a108a301d4b52c01a7c 3rdparty/argon2 (62358ba)",
+      " c0e8552d47be4270a1c31b0be693c43faff51537 3rdparty/cmake-compiler-flags (v2.0.0)",
+      " 38dbe5f294c9692804d3516d617b3dd991c17ecc 3rdparty/flag-icons (v7.2.1-1-g38dbe5f2)",
+      " 5a1a854b0dc9f2141bdc771c555ee60c37950183 3rdparty/liboqs (5a1a854b)",
+      " 8b972409bd85f851b280f5334c16aecb7f131e76 3rdparty/minhook (heads/master)",
+      " d98345814b0531e61bf10d463be21fa94b352f9c 3rdparty/rnnoise-src (v0.2-14-gd983458)",
+      " 738e17905e1ca2a1fa932ddd9c2a85d089f4e845 3rdparty/speexdsp (SpeexDSP-1.2.1-8-g738e179)",
+      " 897aec5b062664d2485f4f9a213715d2e527e0ca 3rdparty/tracy (v0.9.1)"
+    ],
+    "native_source_diff_empty": true,
+    "native_tree_blobs": {
+      "src": {
+        "origin/master": "6f24909c3504937407e40e48bd5ad73e7cec2941",
+        "HEAD": "6f24909c3504937407e40e48bd5ad73e7cec2941"
+      },
+      "cmake": {
+        "origin/master": "6736ca4294449930f3ed4d549b0a6d1733d71ddc",
+        "HEAD": "6736ca4294449930f3ed4d549b0a6d1733d71ddc"
+      },
+      "3rdparty": {
+        "origin/master": "474c0dc3f9119d9585b8b275331a8edb402f7cfa",
+        "HEAD": "474c0dc3f9119d9585b8b275331a8edb402f7cfa"
+      },
+      "CMakeLists.txt": {
+        "origin/master": "3742c42f73613a9d80ef7d68ecc6a31b33fc17df",
+        "HEAD": "3742c42f73613a9d80ef7d68ecc6a31b33fc17df"
+      }
+    },
+    "mumble_sha256": "2b439e47da4b8fc8583b3de534446db89a0e401890704efb5a6afcd57c3e4dba",
+    "mumble-server_sha256": "5a161dc98fcff9418e2a403da1af485ba5d97ee6010b13cff696e4cd8879d86d",
+    "compiler_warnings": 12
+  },
+  "ctest": {
+    "registered": 45,
+    "failed": 2,
+    "disabled": 1,
+    "elapsed_seconds": 247.0,
+    "passed": 42,
+    "failed_suites": [
+      "TestChatWebM",
+      "TestFileTransferEngine"
+    ],
+    "disabled_suites": [],
+    "selected_suite_seconds": {
+      "TestReleaseUpdate": 0.0560038,
+      "TestFileTransferMainWindow": 33.787,
+      "TestFileTransferE2E": 246.966,
+      "TestDatabase": 0.917405,
+      "TestServerDatabase": 2.00225
+    }
+  },
+  "workflow_invariants": {
+    "main_platform_matrix_unchanged": true,
+    "all_package_and_qr_steps_preserved": true,
+    "publication_gates_preserved": true,
+    "one_analysis_and_both_historical_jobs_preserved": true,
+    "seven_day_artifact_retention_complete": true
+  },
+  "live_selector": [
+    {
+      "pr": "https://github.com/densestjarl/mumble/pull/69",
+      "head": "9dced11c82434fa9769566a7bfbe724300a895e6",
+      "build": false,
+      "reason": "No installer inputs changed; packaging skipped. Add ci:installers to request every installer."
+    },
+    {
+      "scenario": "same source PR with simulated ci:installers event",
+      "build": true,
+      "reason": "The ci:installers label requests every installer."
+    },
+    {
+      "pr": "https://github.com/densestjarl/mumble/pull/67",
+      "head": "9ce0640939723b5a8b9048d90cf7f0c853b2101d",
+      "build": true,
+      "reason": "Packaging, dependency, build, or workflow inputs changed."
+    }
+  ],
+  "runtime": {
+    "pass": true,
+    "client": "/home/agent/.cache/mumble-takeover-ci-20261119/build/mumble",
+    "server": "/home/agent/.cache/mumble-takeover-ci-20261119/build/mumble-server",
+    "identity_prompt_shown": false,
+    "user_list": true,
+    "join_channel": true,
+    "text_both_directions": true,
+    "channel_moves": true,
+    "connected_seconds": 30.57,
+    "observer_frames": 27,
+    "observer_errors": [],
+    "intentional_shutdown": true,
+    "client_exit": -15
+  },
+  "focused_checks": {
+    "selector_tests": 109,
+    "publication_tests": 8,
+    "actionlint": "1.7.12; shellcheck and pyflakes disabled (unavailable)",
+    "whitespace": "passed"
+  }
+}

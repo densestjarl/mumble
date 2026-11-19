@@ -1,0 +1,7 @@
+1:  17a2baa84 = 1:  20087ef66 CI(security): Reuse CodeQL analysis for comparison checks
+2:  25b3cea4d = 2:  ec2c6dd2b CI: Select preview installers for pull requests
+3:  79dd38e29 = 3:  7c6f16784 CI: Limit workflow artifact retention to seven days
+4:  1e7a2f28f = 4:  60c0d571a DOCS(ci): Explain workflow selection and artifact retention
+5:  4e599dadf = 5:  cdebe9819 CI: Check bundled plugin and overlay installer changes
+6:  f7dfa502f = 6:  16e8a6642 CI: Ignore unrelated label events without cancelling builds
+7:  2f68ceb68 = 7:  8df239d73 DOCS(ci): State the single-leg CodeQL artifact constraint
