@@ -1,5 +1,8 @@
 # Building on Linux
 
+For isolated worktrees, a repeatable Debug build, compiler caching and a real
+client/server smoke test under Xvfb, see the [Linux agent workflow](agent_linux.md).
+
 These are instructions for performing a regular build using the libraries that are shipped with your distribution. For instructions to build a static
 version of Mumble, checkout [this file](build_static.md).
 
