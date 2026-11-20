@@ -77,14 +77,18 @@ mapping. When invoking `cmake --build` directly, export the same settings:
 
 ```sh
 export CCACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/mumble/ccache"
-export CCACHE_BASEDIR="$PWD" CCACHE_NOHASHDIR=true
+export CCACHE_BASEDIR="$PWD"
 ccache --show-stats
 ```
 
 Compiler flags, generated files and dependency paths can still cause misses;
-measure hits instead of assuming every object will be reused. Do not share one
-CMake build directory across different source worktrees: it stores absolute
-source paths. Compiler cache storage can be shared.
+measure hits instead of assuming every object will be reused. Keep ccache's
+default directory hashing enabled: ccache handles mapped Debug paths itself,
+and must distinguish build directories when those paths are not mapped. Extra
+CMake options that replace the Debug flags or select another build type may
+reduce cache reuse. Do not share one CMake build directory across different
+source worktrees: it stores absolute source paths. Compiler cache storage can
+be shared.
 
 ## Real client/server smoke test
 

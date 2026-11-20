@@ -30,8 +30,6 @@ cache_args=()
 if command -v ccache >/dev/null; then
 	export CCACHE_DIR="${CCACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mumble/ccache}"
 	export CCACHE_BASEDIR="$source_dir"
-	# Debug paths are mapped below, so hashing the build directory is unnecessary.
-	export CCACHE_NOHASHDIR=true
 	mkdir -p "$CCACHE_DIR"
 	echo "Compiler cache: ${CCACHE_DIR}"
 	cache_args=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
